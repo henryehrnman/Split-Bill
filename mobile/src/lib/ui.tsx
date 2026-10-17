@@ -4,10 +4,23 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {router} from 'expo-router';
 import Feather from '@expo/vector-icons/Feather';
 import {useStore} from './store';
-import type {User} from './domain';
+import type {Standing, User} from './domain';
 
 export const C = {ink: '#171a20', dark: '#171e2d', muted: '#626a78', line: '#e8ebf0', bg: '#f5f6f8', blue: '#2459e8', softBlue: '#edf2ff', success: '#17794c', softSuccess: '#eef7f1', warn: '#9a6420', softWarn: '#fbf5e9', danger: '#b52d37', softDanger: '#fdf0f1'};
-const TONES = [['#e2eaff', '#2c4b98'], ['#f4dfd7', '#8b5142'], ['#e8e2f2', '#67518a'], ['#dcefe6', '#2f6b4f']];
+const TONES = [['#e2eaff', '#2c4b98'], ['#f4dfd7', '#8b5142'], ['#e8e2f2', '#67518a'], ['#dcefe6', '#2f6b4f'], ['#f6ead0', '#7a5a14']];
+
+export const periodLabel = (days: number) => (days === 7 ? 'every week' : days === 14 ? 'every 2 weeks' : days === 30 ? 'every month' : `every ${days} days`);
+
+export function StandingPill({standing}: {standing: Standing}) {
+  const map: Record<Standing, [string, 'success' | 'blue' | 'warn' | 'danger' | 'muted']> = {
+    'on-track': ['On track', 'success'],
+    low: ['Below share', 'blue'],
+    restricted: ['Restricted', 'warn'],
+    suspended: ['Suspended', 'danger'],
+    invited: ['Invited', 'muted'],
+  };
+  return <Pill label={map[standing][0]} tone={map[standing][1]} />;
+}
 
 export function T({children, style, ...props}: TextProps & {children: React.ReactNode; style?: StyleProp<TextStyle>}) {
   const f = StyleSheet.flatten(style) || {};

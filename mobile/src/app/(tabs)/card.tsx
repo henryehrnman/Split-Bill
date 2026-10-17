@@ -6,7 +6,7 @@ import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents} from '../../lib/money';
 import {SAMPLE_PURCHASES} from '../../lib/fakeOcr';
-import {cardFor, inGoodStanding, isActive, purchaseBlocker, spendLimit} from '../../lib/domain';
+import {cardFor, isActive, purchaseBlocker, spendLimit, standing} from '../../lib/domain';
 import type {Wallet} from '../../lib/domain';
 
 export default function Card() {
@@ -21,8 +21,8 @@ export default function Card() {
         <GroupPicker />
         <EmptyState
           icon="credit-card"
-          title={group ? 'Make your first deposit' : 'No group yet'}
-          body={group ? 'Your card is issued once you deposit your share of the group’s buying power.' : 'Create or join a group to get a card.'}
+          title={group ? 'Accept your invite first' : 'No group yet'}
+          body={group ? 'Your card is issued once you accept the invite and deposit your share of the budget.' : 'Create or join a group to get a card.'}
           action={<Button title="Go home" onPress={() => router.push('/')} />}
         />
       </Page>
@@ -31,7 +31,7 @@ export default function Card() {
 
   const limit = spendLimit(db, group.id, viewer.id);
   const blocker = purchaseBlocker(db, group.id, viewer.id);
-  const good = inGoodStanding(group, viewer.id);
+  const st = standing(group, viewer.id);
   const buy = (m: string, a: number) =>
     run(x => api.purchase(x, group.id, {merchant: m, amount: a}), `${money(a)} at ${m} approved. Agree on the split before the next purchase.`).then(ok => {
       if (ok) router.push('/split');
@@ -49,11 +49,9 @@ export default function Card() {
         <T style={s.caption}>Demo virtual card</T>
       </Row>
       {blocker && <T style={{color: C.warn, fontSize: 13, lineHeight: 19, marginBottom: 6}}>{blocker}</T>}
-      {isActive(group) && !group.frozen && (
+      {isActive(group) && !group.frozen && (st === 'on-track' || st === 'low') && (
         <T style={s.small}>
-          {good
-            ? 'You’re topped up, so you can spend up to everything in the group fund.'
-            : 'Your balance is below your share, so you can only spend your own balance until you top up.'}
+          You can spend up to everything in the group fund. Your share is settled after each purchase; if it takes you below $0, the difference is charged to your bank.
         </T>
       )}
 

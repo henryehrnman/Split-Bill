@@ -1,20 +1,23 @@
 import React, {useState} from 'react';
 import {View, Pressable, TextInput} from 'react-native';
 import {router} from 'expo-router';
-import {Page, T, Button, Avatar, Icon, Pill, Segmented, Field, GroupPicker, EmptyState, Row, ago, s, C} from '../../lib/ui';
+import {Page, T, Button, Avatar, Icon, Pill, Segmented, Field, GroupPicker, EmptyState, Row, StandingPill, ago, periodLabel, s, C} from '../../lib/ui';
 import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents, toInput} from '../../lib/money';
-import {availableFunds, currentProposal, inGoodStanding, isActive, openBuyingPowerProposal, pendingCharge, requiredBalances, userById, waitingOn} from '../../lib/domain';
-import type {Group} from '../../lib/domain';
+import {DAY, availableFunds, currentProposal, isActive, itemBoardStatus, memberOf, nextPeriodAt, openBudgetProposal, pendingCharge, shares, standing, userById, waitingOn} from '../../lib/domain';
+import type {Charge, Db, Group} from '../../lib/domain';
 
 export default function Home() {
   const {viewer, group} = useStore();
+  const invited = group ? memberOf(group, viewer.id).status === 'invited' : false;
   return (
-    <Page title={`Hey, ${viewer.name}`} subtitle="A little less settling up." footer={group ? <HomeFooter group={group} /> : undefined}>
+    <Page title={`Hey, ${viewer.name}`} subtitle="A little less settling up." footer={group && !invited ? <HomeFooter group={group} /> : undefined}>
       <GroupPicker allowNew />
       {!group ? (
-        <EmptyState icon="users" title="No groups yet" body="Start a group with roommates or friends. Everyone deposits an equal share, then any member can pay with the group card." action={<Button title="Create a group" onPress={() => router.push('/new-group')} />} />
+        <EmptyState icon="users" title="No groups yet" body="Create a group, set a budget for each period, and invite people. Everyone deposits an equal share and gets their own card on the group fund." action={<Button title="Create a group" onPress={() => router.push('/new-group')} />} />
+      ) : invited ? (
+        <Invite group={group} />
       ) : isActive(group) ? (
         <ActiveGroup group={group} />
       ) : (
@@ -25,51 +28,97 @@ export default function Home() {
 }
 
 function HomeFooter({group}: {group: Group}) {
-  const {db, viewer, run} = useStore();
-  const me = group.members.find(m => m.userId === viewer.id)!;
-  if (!me.joined) {
-    const need = requiredBalances(group)[viewer.id];
-    return <Button title={`Deposit ${money(need)} to join`} onPress={() => run(a => api.joinGroup(a, group.id), `You joined ${group.name}. Your group card is ready to add to a wallet.`)} />;
-  }
+  const {db} = useStore();
   const pending = pendingCharge(db, group.id);
   return <Button title={pending ? 'Review pending split' : 'Open your group card'} onPress={() => router.push(pending ? '/split' : '/card')} />;
 }
 
-function FormingGroup({group}: {group: Group}) {
-  const {db} = useStore();
-  const required = requiredBalances(group);
-  const joined = group.members.filter(m => m.joined).length;
+function MemberRows({group}: {group: Group}) {
+  const {db, viewer} = useStore();
+  const owed = shares(group);
+  return (
+    <>
+      {group.members.map(m => {
+        const user = userById(db, m.userId);
+        return (
+          <View key={m.userId} style={s.listRow}>
+            <Avatar user={user} size={36} />
+            <View style={{flex: 1}}>
+              <T style={{fontWeight: '500'}}>{user.name}{m.userId === viewer.id ? ' (you)' : ''}</T>
+              <T style={s.caption}>
+                {m.status === 'invited' ? `Share ${money(owed[m.userId])} per period` : `Balance ${money(m.balance)} of ${money(owed[m.userId])}${m.autoDeposit ? ' · auto-refill' : ''}`}
+              </T>
+            </View>
+            <StandingPill standing={standing(group, m.userId)} />
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
+function Invite({group}: {group: Group}) {
+  const {db, viewer, run} = useStore();
+  const share = shares(group)[viewer.id];
   return (
     <>
       <View style={s.box}>
-        <Pill label="Waiting for deposits" tone="warn" />
+        <Pill label="Invitation" tone="blue" />
         <T style={{fontSize: 20, fontWeight: '700', marginTop: 16}}>{group.name}</T>
-        <T style={[s.small, {marginTop: 4}]}>Created by {userById(db, group.createdBy).name}</T>
-        <T style={[s.money, {marginTop: 14}]}>{money(group.buyingPower)}</T>
-        <T style={s.small}>Group buying power · {joined} of {group.members.length} deposited</T>
+        <T style={[s.small, {marginTop: 4}]}>{userById(db, group.createdBy).name} invited you to join</T>
+        <T style={[s.money, {marginTop: 14}]}>{money(group.budget)}</T>
+        <T style={s.small}>Group budget {periodLabel(group.periodDays)}</T>
+        <View style={s.divider} />
+        <Row><T style={s.small}>Your deposit to join</T><T style={s.strong}>{money(share)}</T></Row>
+        <T style={[s.caption, {marginTop: 8}]}>
+          At the start of each period you’re topped back up to {money(share)} (automatically, unless you turn auto-refill off). You get your own card on the group fund. Splits need agreement from everyone involved.
+        </T>
       </View>
       <T style={s.section}>Members</T>
-      {group.members.map(m => (
-        <View key={m.userId} style={s.listRow}>
-          <Avatar user={userById(db, m.userId)} size={36} />
-          <View style={{flex: 1}}>
-            <T style={{fontWeight: '500'}}>{userById(db, m.userId).name}</T>
-            <T style={s.caption}>Initial deposit {money(required[m.userId])}</T>
-          </View>
-          <Pill label={m.joined ? 'Deposited' : 'Pending'} tone={m.joined ? 'success' : 'muted'} />
-        </View>
-      ))}
-      <T style={[s.caption, {marginTop: 16}]}>Cards activate once everyone has made their first deposit. Deposits are simulated.</T>
+      <MemberRows group={group} />
+      <Row style={{marginTop: 18}}>
+        <View style={{flex: 1}}><Button secondary title="Decline" onPress={() => run(a => api.respondInvite(a, group.id, false), `You declined ${group.name}.`)} /></View>
+        <View style={{flex: 1.4}}><Button title={`Join · deposit ${money(share)}`} onPress={() => run(a => api.respondInvite(a, group.id, true), `You joined ${group.name}. Add your card to a wallet to start paying.`)} /></View>
+      </Row>
     </>
   );
+}
+
+function FormingGroup({group}: {group: Group}) {
+  const pendingInvites = group.members.filter(m => m.status === 'invited').length;
+  return (
+    <>
+      <View style={s.box}>
+        <Pill label="Waiting for invites" tone="warn" />
+        <T style={{fontSize: 20, fontWeight: '700', marginTop: 16}}>{group.name}</T>
+        <T style={[s.money, {marginTop: 14}]}>{money(group.budget)}</T>
+        <T style={s.small}>Budget {periodLabel(group.periodDays)} · {pendingInvites} {pendingInvites === 1 ? 'invite' : 'invites'} pending</T>
+      </View>
+      <T style={s.section}>Members</T>
+      <MemberRows group={group} />
+      <T style={[s.caption, {marginTop: 16}]}>Cards can be used once everyone invited has accepted or declined. Deposits are simulated.</T>
+    </>
+  );
+}
+
+function pendingLine(db: Db, c: Charge, viewerId: string) {
+  const r = c.receipt;
+  if (r) {
+    const st = itemBoardStatus(c);
+    if (r.edits.some(e => e.targetId === viewerId)) return 'an item edit needs your answer';
+    if (st.unclaimed.length) return `${st.unclaimed.length} ${st.unclaimed.length === 1 ? 'item' : 'items'} unclaimed`;
+    if (st.unlocked.includes(viewerId)) return 'lock in your items';
+  }
+  const waiting = waitingOn(currentProposal(c));
+  if (waiting.includes(viewerId)) return 'needs your OK';
+  return `waiting on ${waiting.map(id => userById(db, id).name).join(', ')}`;
 }
 
 function ActiveGroup({group}: {group: Group}) {
   const {db, viewer, now, run} = useStore();
   const pending = pendingCharge(db, group.id);
-  const bpp = openBuyingPowerProposal(db, group.id);
-  const required = requiredBalances(group);
-  const available = availableFunds(db, group);
+  const proposal = openBudgetProposal(db, group.id);
+  const daysLeft = Math.max(0, Math.ceil((nextPeriodAt(group) - now) / DAY));
   const status = group.frozen ? (['Frozen', 'danger'] as const) : pending ? (['Split pending', 'warn'] as const) : (['Card ready', 'success'] as const);
 
   return (
@@ -82,70 +131,47 @@ function ActiveGroup({group}: {group: Group}) {
           <Pill label={status[0]} tone={status[1]} />
         </Row>
         <T style={{fontSize: 20, fontWeight: '700', marginTop: 18, letterSpacing: -0.4}}>{group.name}</T>
-        <T style={[s.small, {marginTop: 4}]}>{group.members.length} members · {money(group.buyingPower)} buying power</T>
-        <T style={[s.money, {marginTop: 14}]}>{money(Math.max(0, available))}</T>
-        <T style={s.small}>Available in the group fund{pending ? ` (after ${pending.merchant})` : ''}</T>
+        <T style={[s.small, {marginTop: 4}]}>{money(group.budget)} {periodLabel(group.periodDays)} · resets in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}</T>
+        <T style={[s.money, {marginTop: 14}]}>{money(Math.max(0, availableFunds(db, group)))}</T>
+        <T style={s.small}>Available in the group fund</T>
+        {pending && (
+          <Pressable accessibilityRole="button" onPress={() => router.push('/split')} style={{marginTop: 16, backgroundColor: C.softWarn, borderRadius: 12, padding: 14}}>
+            <Row>
+              <View style={{flex: 1}}>
+                <T style={s.caption}>PENDING SPLIT</T>
+                <T style={{fontWeight: '700', marginTop: 2}}>{pending.merchant} · {money(pending.amount)}</T>
+                <T style={[s.small, {marginTop: 2}]}>Paid by {userById(db, pending.cardholderId).name} {ago(now, pending.createdAt)} · {pendingLine(db, pending, viewer.id)}</T>
+              </View>
+              <Icon name="chevron-right" color={C.muted} size={18} />
+            </Row>
+          </Pressable>
+        )}
         {group.frozen && <T style={{color: C.danger, fontSize: 13, marginTop: 12}}>Frozen: {group.frozen.reason} Escalated to the dispute center.</T>}
       </View>
 
-      {pending && (
-        <Pressable accessibilityRole="button" onPress={() => router.push('/split')} style={[s.box, {backgroundColor: C.softWarn, borderColor: C.softWarn}]}>
-          <Row>
-            <View style={{flex: 1}}>
-              <T style={{fontWeight: '700'}}>{pending.merchant} · {money(pending.amount)}</T>
-              <T style={[s.small, {marginTop: 4}]}>
-                Paid by {userById(db, pending.cardholderId).name} {ago(now, pending.createdAt)} ·{' '}
-                {(() => {
-                  const waiting = waitingOn(currentProposal(pending));
-                  if (waiting.includes(viewer.id)) return 'needs your OK';
-                  return `waiting on ${waiting.map(id => userById(db, id).name).join(', ')}`;
-                })()}
-              </T>
-            </View>
-            <Icon name="chevron-right" color={C.muted} size={18} />
-          </Row>
-        </Pressable>
-      )}
-
-      {bpp && (
+      {proposal && (
         <View style={s.box}>
           <T style={{fontWeight: '700'}}>
-            {userById(db, bpp.authorId).name} proposed {bpp.amount > group.buyingPower ? 'raising' : 'lowering'} buying power to {money(bpp.amount)}
+            {userById(db, proposal.authorId).name} proposed {proposal.amount > group.budget ? 'raising' : 'lowering'} the budget to {money(proposal.amount)} {periodLabel(group.periodDays)}
           </T>
           <T style={[s.small, {marginTop: 4}]}>
-            {bpp.amount > group.buyingPower
-              ? `Everyone would keep ${money(requiredBalances(group, bpp.amount)[viewer.id])} on deposit. Auto top-up members are charged the difference.`
-              : 'Balances stay as they are; each person only needs to stay topped up to the lower amount.'}{' '}
-            Accepted by {bpp.acceptedBy.length} of {group.members.length}.
+            {proposal.amount > group.budget
+              ? `Your share would be ${money(shares(group, proposal.amount)[viewer.id])}. The difference is collected at the start of the next period.`
+              : 'Balances stay as they are; any surplus is kept.'}{' '}
+            Accepted by {proposal.acceptedBy.length} of {group.members.length}.
           </T>
-          {!bpp.acceptedBy.includes(viewer.id) && (
+          {!proposal.acceptedBy.includes(viewer.id) && (
             <Row style={{marginTop: 10}}>
-              <View style={{flex: 1}}><Button secondary title="Decline" onPress={() => run(a => api.respondBuyingPower(a, bpp.id, false), 'Proposal declined.')} /></View>
-              <View style={{flex: 1}}><Button title="Accept" onPress={() => run(a => api.respondBuyingPower(a, bpp.id, true), 'You accepted the new buying power.')} /></View>
+              <View style={{flex: 1}}><Button secondary title="Decline" onPress={() => run(a => api.respondBudget(a, proposal.id, false), 'Proposal declined.')} /></View>
+              <View style={{flex: 1}}><Button title="Accept" onPress={() => run(a => api.respondBudget(a, proposal.id, true), 'You accepted the new budget.')} /></View>
             </Row>
           )}
         </View>
       )}
 
       <T style={s.section}>Members</T>
-      {group.members.map(m => {
-        const user = userById(db, m.userId);
-        const good = inGoodStanding(group, m.userId);
-        return (
-          <View key={m.userId} style={s.listRow}>
-            <Avatar user={user} size={36} />
-            <View style={{flex: 1}}>
-              <T style={{fontWeight: '500'}}>{user.name}{m.userId === viewer.id ? ' (you)' : ''}</T>
-              <T style={s.caption}>
-                Balance {money(m.balance)} of {money(required[m.userId])}
-                {m.autoDeposit ? ' · auto top-up' : ''}
-              </T>
-            </View>
-            <Pill label={good ? 'On track' : 'Restricted'} tone={good ? 'success' : 'warn'} />
-          </View>
-        );
-      })}
-      <T style={[s.caption, {marginTop: 10}]}>Members below their share can only spend their own balance until they top up.</T>
+      <MemberRows group={group} />
+      <T style={[s.caption, {marginTop: 10}]}>Anyone at $0 or below can’t use the card until they add funds or the next period starts.</T>
 
       <GroupSettings key={group.id} group={group} />
     </>
@@ -158,7 +184,7 @@ function GroupSettings({group}: {group: Group}) {
   const [percents, setPercents] = useState<Record<string, string>>(() =>
     Object.fromEntries(group.members.map(m => [m.userId, group.defaultSplit.method === 'percent' ? String(group.defaultSplit.percents[m.userId] ?? 0) : (100 / group.members.length).toFixed(2)])),
   );
-  const [power, setPower] = useState(toInput(group.buyingPower));
+  const [budget, setBudget] = useState(toInput(group.budget));
   const total = Object.values(percents).reduce((a, b) => a + (Number(b) || 0), 0);
   const changed = method !== group.defaultSplit.method || method === 'percent';
 
@@ -189,17 +215,12 @@ function GroupSettings({group}: {group: Group}) {
         />
       )}
 
-      <T style={s.section}>Buying power</T>
-      <T style={[s.small, {marginBottom: 4}]}>Changing it needs everyone’s OK. Raising it asks each person to deposit their equal share of the increase.</T>
+      <T style={s.section}>Budget</T>
+      <T style={[s.small, {marginBottom: 4}]}>Changing it needs everyone’s OK. A higher budget raises each person’s share from the next period; a lower one keeps any surplus.</T>
       <Row style={{alignItems: 'flex-end'}}>
-        <Field label="New buying power ($)" value={power} onChange={setPower} />
+        <Field label={`New budget ${periodLabel(group.periodDays)} ($)`} value={budget} onChange={setBudget} />
         <View style={{flex: 1}}>
-          <Button
-            secondary
-            title="Propose"
-            disabled={cents(power) === null}
-            onPress={() => run(a => api.proposeBuyingPower(a, group.id, cents(power) ?? 0), 'Proposal sent to the group.')}
-          />
+          <Button secondary title="Propose" disabled={cents(budget) === null} onPress={() => run(a => api.proposeBudget(a, group.id, cents(budget) ?? 0), 'Proposal sent to the group.')} />
         </View>
       </Row>
     </>

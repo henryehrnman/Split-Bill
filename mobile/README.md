@@ -10,7 +10,7 @@ React Native / Expo application. Tabs: Home, Split, Card, Activity; stack screen
 ## Code layout
 - `src/app/` — routes (Expo Router). `(tabs)/` holds the tab screens.
 - `src/lib/split.ts` — split math for any group size.
-- `src/lib/domain.ts` — backend rules (groups, deposits, cards, purchases, proposals, settlement, standing, buying power, disputes). Pure TypeScript, intended to run server-side later.
+- `src/lib/domain.ts` — backend rules (groups, invites, budget periods, deposits, cards, purchases, claim board, proposals, settlement, debt recovery, disputes). Pure TypeScript, intended to run server-side later.
 - `src/lib/api.ts` — fake backend: async API over `domain.ts` with simulated latency, persisted to AsyncStorage. Replace the method bodies with HTTP calls when the real backend exists.
 - `src/lib/fakeOcr.ts`, `src/lib/seed.ts` — simulated receipt scanning and demo data.
 - `src/lib/store.tsx` — client session (current demo user, selected group, notices).

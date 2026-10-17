@@ -37,32 +37,37 @@ npm test
 
 ## How the product works
 
-1. **Setup.** Someone creates a group with a buying power, e.g. $300 for 3 people. Each member deposits an equal share ($100) to join. Cards are issued when members join and work once everyone has deposited.
-2. **Purchase.** Any member pays with their card. The charge comes out of the group fund and opens a split using the group's default (equal unless changed). Only one charge can be open at a time; the card is locked until the split is settled.
-3. **Split.** Members accept the split or propose a new one (equal, percentages, exact amounts, or by receipt item). A new proposal resets acceptances. Everyone with a non-zero share must accept; people who weren't part of the purchase don't need to. Splits always cover every cent.
-4. **Settle.** Once accepted, each person's balance drops by their share. Members with auto top-up are refilled to their share of the buying power; others top up manually.
-5. **Standing.** A member whose balance is below their share can only spend up to their own balance until they top up. Failed top-ups leave the balance (and group buying power) reduced.
-6. **Buying power changes.** Any member can propose raising or lowering it; everyone must accept. Raising asks each person to deposit their share of the increase; lowering keeps balances (surplus stays).
-7. **Disputes.** A split not agreed within 7 days freezes the group and escalates to a dispute center. A chargeback on a settled charge also freezes the group. The dispute center itself is out of scope.
-8. **Receipts and tracking.** Members can scan a receipt to pull in line items and claim what they had; tax and tip follow each person's item total. Activity shows monthly and all-time group spend; Profile shows each person's balance, spend, charges, and funding history.
+1. **Setup.** Someone creates a group with a budget per period, e.g. $300 every 2 weeks, and invites people by username, email, or phone. Each invitee sees the group details and either joins (depositing their equal share, here $100 for 3 people) or declines. Cards work once every invite has been answered and there are at least 2 members.
+2. **Periods.** At the start of each period, members with auto-refill are charged back up to their share (with $40 left you're charged $60); others add funds themselves.
+3. **Purchase.** Any member pays with their card. The charge comes out of the group fund and opens a split using the group's default (equal unless changed). The pending split shows on the home screen under the fund amount. Only one charge can be open at a time.
+4. **Split by item.** Scan the receipt. Each person claims their items and locks in their selection. Others can suggest edits to someone's items, which that person approves or rejects. Once every item is claimed, everyone who claimed has locked, and no edits are pending, the split confirms. Tax and tip follow each person's item total.
+5. **Split by percent or amount.** Members propose or accept a split (equal, percentages, exact amounts). A new proposal resets acceptances. Everyone with a non-zero share must accept. Splits always cover every cent.
+6. **Settle and standing.** Each person's balance drops by their share. Anyone can spend beyond their own balance (trust model), but at $0 or below they're restricted until they add funds or the next period starts. If a split takes someone below $0, their bank is charged back to $0; if that fails they're suspended and the group carries the debt until repaid. Withdrawals are allowed only when no split is pending.
+7. **Budget changes.** Any member can propose raising or lowering the budget; everyone must accept. A raise is collected at the next period start; a cut keeps balances (surplus stays).
+8. **Disputes.** A split not agreed within 7 days freezes the group and escalates to a dispute center. A chargeback on a settled charge also freezes the group. The dispute center itself is out of scope.
+9. **Tracking.** Activity shows monthly and all-time group spend; Profile shows each person's balance, spend this period, charges, and funding history.
+
+Ideas for generative AI, and the ones we decided against, are listed in section 6 of [`schema.txt`](schema.txt).
 
 ## Current state
 
 Built in the app (simulated by the fake backend):
 
-- Groups with equal initial deposits, per-member cards, Apple/Google Wallet setup (simulated), card freeze.
-- Purchases from the group fund, one open charge at a time, spend limits based on standing.
-- Iterative split proposals and acceptances across equal / percent / amount / item modes, with exact-cent allocation for any group size.
-- Default split per group (equal or custom percentages).
-- Balances, deposits, withdrawals, auto top-up, simulated failed top-ups, restricted spending.
-- Buying power change proposals with unanimous acceptance.
-- Simulated receipt scanning for the demo merchants (Juniper, Trader Joe's, Shell); other merchants return a single editable line.
+- Group creation with a budget and period, invite search by username/email/phone, accept or decline invites with the group details shown.
+- Per-member cards, Apple/Google Wallet setup (simulated), card freeze.
+- Period rollover with auto-refill (or manual top-up), simulated failed refills.
+- Purchases from the group fund, one open charge at a time, pending split shown on the home screen.
+- Itemized claim board: claim items, lock in, suggest edits to others' items, approve/reject edits, fix scan mistakes; confirms automatically when complete.
+- Percent / amount / equal proposals with acceptances, exact-cent allocation for any group size; default split per group.
+- $0 restriction, automatic bank charge for negative balances, suspension when that fails, withdrawals locked while a split is pending.
+- Budget change proposals with unanimous acceptance.
+- Simulated receipt scanning for the demo merchants (Juniper, Trader Joe's, Shell); other merchants return a single line to fix by hand.
 - 7-day split deadline freeze, chargeback freeze, and a demo "support resolves dispute" action.
-- Activity (group month/all-time spend, charge details) and Profile (balance, spend, charges, funding history).
-- **Demo user switcher** — tap the "Demo · Name" badge or use Profile to act as Henry, Maya, Jordan, or Connor. This stands in for each person using their own phone.
-- Demo controls: skip ahead 7 days, reset demo data.
+- Activity (group month/all-time spend, charge details) and Profile (balance, period spend, charges, funding history).
+- **Demo user switcher**: tap the "Demo · Name" badge or use Profile to act as Henry, Maya, Jordan, Connor, or Saahil. This stands in for each person using their own phone. Henry has a pending invite to Connor's "Tahoe ski trip".
+- Demo controls: skip to the next budget period, skip ahead 7 days, simulate bank declines, reset demo data.
 
-Verified: TypeScript, lint, and unit tests for split math and all backend rules pass. The main flows (scan receipt, propose an item split, accept as each member, settle, purchase) were clicked through in the web preview.
+Verified: TypeScript, lint, and unit tests for split math and all backend rules (invites, periods, restriction, debt recovery, suspension, claim board) pass, and the web bundle exports. The October 17 schema update has not yet been clicked through in a browser.
 
 Not yet verified: physical iOS/Android devices, user testing.
 
@@ -73,7 +78,7 @@ All business rules live in plain TypeScript so they can move to a real server un
 | File | Role |
 |---|---|
 | `mobile/src/lib/split.ts` | Split math for any number of members (equal, percent, amount, items + tax/tip) |
-| `mobile/src/lib/domain.ts` | Backend rules: groups, deposits, cards, purchases, proposals, settlement, standing, buying power, disputes |
+| `mobile/src/lib/domain.ts` | Backend rules: groups, invites, budget periods, deposits, cards, purchases, claim board, proposals, settlement, debt recovery, disputes |
 | `mobile/src/lib/api.ts` | **Fake backend**: async API with simulated latency, persists to device storage. Replace with HTTP calls later |
 | `mobile/src/lib/fakeOcr.ts` | Stand-in for receipt OCR |
 | `mobile/src/lib/seed.ts` | Demo users and history, built through the same rules |
@@ -87,15 +92,16 @@ Backend and APIs (next phase):
 
 1. Real accounts and authentication; replace the demo user switcher.
 2. Server running `domain.ts` behind the `api` surface, with a database, idempotency keys, and an audit log.
-3. Real receipt OCR service.
-4. Push notifications for new charges, proposals, and buying power changes.
+3. Real receipt OCR service (vision model, validated against the charge total; see `schema.txt` section 6).
+4. Push notifications for invites, new charges, proposals, item edits, and budget changes.
+5. A scheduled job for period rollover (the fake backend runs it on every request).
 
 Payments (gated on partner access):
 
-5. Card issuer and funding rails (e.g. Stripe Issuing test mode), wallet provisioning, real deposits and top-ups.
-6. Dispute center workflow and chargeback handling.
+6. Card issuer and funding rails (e.g. Stripe Issuing test mode), wallet provisioning, real deposits, refills, and debt recovery.
+7. Dispute center workflow and chargeback handling.
 
 Product:
 
-7. Group invites and leaving a group; settling up balances when someone leaves.
-8. Physical-device QA, signed internal builds via EAS, and a short demo script.
+8. Leaving a group and settling up balances when someone leaves; inviting people to an existing group.
+9. Physical-device QA, signed internal builds via EAS, and a short demo script.
