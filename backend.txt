@@ -5,15 +5,15 @@ Backend plan (draft for discussion; nothing here is built yet)
   0) at a glance
     i) Server: TypeScript API (Hono) that imports domain.ts and split.ts unchanged, hosted on Vercel / Railway / Fly.io.
     ii) Database, sign-in, live updates, receipt storage: Supabase (Postgres + Auth + Realtime + Storage). Live updates matter for the claim board so locks and suggested edits show up on everyone's phone right away. [Alternative: Neon + Clerk + Ably.]
-    iii) Cards: Stripe Issuing in test mode. Each card tap is sent to us in real time and we approve or decline within about 2 seconds; that is where the $0 restriction, suspension, one-pending-split and frozen-group rules are enforced. [Alternative: Lithic, quicker sandbox access.]
-    iv) Pulling money from members' banks (deposits, period refills, the bank charge when someone goes negative): Stripe Financial Connections + ACH. [Alternative: Plaid.]
+    iii) Cards: Stripe Issuing in test mode. Each card tap is sent to us in real time and we approve or decline within about 2 seconds; that is where the share-not-added limit (own balance only), suspension, one-pending-split and frozen-group rules are enforced. [Alternative: Lithic, quicker sandbox access.]
+    iv) Pulling money from members' banks (deposits, period refills): Stripe Financial Connections + ACH. [Alternative: Plaid.] When a confirmed split takes someone below $0, their personal card on file is charged back to $0 (schema 3.iii): a Stripe PaymentIntent on a saved card, which succeeds or fails in seconds instead of days.
     v) Ledger: our own append-only table of balance changes in Postgres; balances are calculated from it, never edited directly.
     vi) Scheduled jobs (period rollover, 7-day deadline, retrying failed charges): Inngest or Trigger.dev. [Simpler: Vercel Cron.]
     vii) Receipt scanning: a vision model (OpenAI, Claude or Gemini) returning structured JSON, checked against the charge total. [Alternative: AWS Textract.]
     viii) Notifications and invites: Expo Push, Resend (email), Twilio (SMS).
     ix) Two real-world problems the design must handle:
       a) Final amounts differ from the tap. Restaurants and gas stations often capture a different amount than they authorized (tips, holds), so the pending split updates when the final amount arrives, and acceptances/locks reset if it changed (3.ii).
-      b) Bank debits are slow and can bounce. ACH takes 1-4 business days and can be returned after looking successful; a return feeds into the bank-charge-or-suspend rule (3.iii).
+      b) Bank debits are slow and can bounce. ACH takes 1-4 business days and can be returned after looking successful; a return feeds into the card-charge-or-suspend rule (3.iii).
     x) Biggest open decisions: Supabase vs separate services; Stripe vs Lithic; and pooled group money likely counts as money transmission, which is fine to ignore for the demo but needs a partner bank and legal review before a real launch (section 7).
 
   1) recommended stack (hackathon-friendly; alternatives in brackets)
@@ -22,9 +22,9 @@ Backend plan (draft for discussion; nothing here is built yet)
     iii) Auth: Supabase Auth or Clerk (both have Expo SDKs). Sign in with phone OTP or email. The signed-in user replaces the demo user switcher. [Phone OTP alternative: Twilio Verify.]
     iv) Realtime updates: Supabase Realtime (Postgres changes) so the claim board, locks, item edits and proposals update live on everyone's phone. [Alternatives: Ably, Pusher.]
     v) Card issuing: Stripe Issuing in test mode. One virtual card per member per group, with real-time authorization webhooks (see 3.i) so our rules approve or decline each tap. Apple/Google Wallet push provisioning needs extra approval from Stripe. [Alternatives: Lithic (good sandbox, developer-friendly), Marqeta, Highnote; Unit or Synctera if we want a bank-as-a-service partner that bundles accounts + cards.]
-    vi) Bank linking and pulling funds (deposits, period refills, debt recovery): Stripe Financial Connections + ACH Direct Debit, so cards and funding are in one Stripe account. [Alternative: Plaid Auth + Balance for linking, then ACH through Stripe, Dwolla or Modern Treasury.]
+    vi) Bank linking and pulling funds (deposits, period refills): Stripe Financial Connections + ACH Direct Debit, so cards and funding are in one Stripe account. [Alternative: Plaid Auth + Balance for linking, then ACH through Stripe, Dwolla or Modern Treasury.] Debt recovery charges the member's saved personal card (Stripe SetupIntent at sign-up, PaymentIntent when needed).
     vii) Ledger: our own double-entry ledger tables in Postgres (section 4). Every balance change is a ledger entry; member balances are derived, never edited directly. [Alternatives if this grows: Modern Treasury Ledgers, Formance, TigerBeetle.]
-    viii) Scheduled and background jobs: period rollover, 7-day split deadline, retrying failed bank charges. Use Inngest or Trigger.dev (durable steps + retries). [Simpler: Vercel Cron or pg_cron calling an endpoint every few minutes.]
+    viii) Scheduled and background jobs: period rollover, 7-day split deadline, retrying failed bank and card charges, sending stale draft splits. Use Inngest or Trigger.dev (durable steps + retries). [Simpler: Vercel Cron or pg_cron calling an endpoint every few minutes.]
     ix) Receipt OCR (schema.txt 6.i.a): a vision LLM with structured JSON output (OpenAI, Anthropic Claude or Google Gemini), validated against the charge total. [Receipt-specific alternatives: AWS Textract AnalyzeExpense, Google Document AI, Veryfi, Mindee, Taggun.]
     x) Receipt image storage: Supabase Storage, S3 or Vercel Blob, private bucket, signed URLs.
     xi) Push notifications: Expo Push Notifications (works for both iOS and Android from the Expo app).
@@ -62,29 +62,32 @@ Backend plan (draft for discussion; nothing here is built yet)
       POST /charges/:id/lock  /charges/:id/unlock
       POST /charges/:id/item-edits               {itemId, targetId}
       POST /charges/:id/item-edits/:editId/respond {accept}
-      POST /charges/:id/proposals                {method, ...}   percent / amount / equal
+      POST /charges/:id/proposals                {method, ...}   percent / amount / equal; while the charge is a draft only the cardholder can call this, and it sends the first proposal
+      POST /charges/:id/send-default             cardholder sends the group's default split (also sent by the app when they leave, and by a job after 10 minutes); no-op once anything was sent
       POST /charges/:id/accept
+      GET  /me/notifications                     recent proposal / receipt notifications (also delivered by push)
       POST /charges/:id/chargeback
     v) Internal (not callable by the app)
       POST /webhooks/stripe                      issuing authorizations, captures/transactions, ACH payment results, disputes
-      POST /jobs/roll-periods  /jobs/enforce-deadlines   called by the scheduler
+      POST /jobs/roll-periods  /jobs/enforce-deadlines  /jobs/send-stale-drafts   called by the scheduler
 
   3) how schema rules map to the backend
-    i) Approving a card tap (schema 2.iv, 2.v): Stripe sends issuing_authorization.request in real time and we must answer within about 2 seconds. The handler runs purchaseBlocker() and spendLimit() from domain.ts: decline if the group is frozen, a split is already pending, the member is restricted (balance <= $0) or suspended, or the amount exceeds the group fund. Approve otherwise and create the pending charge.
+    i) Approving a card tap (schema 2.iv, 2.v): Stripe sends issuing_authorization.request in real time and we must answer within about 2 seconds. The handler runs purchaseBlocker() and spendLimit() from domain.ts: decline if the group is frozen, a split is already pending, the member is suspended, the amount exceeds the group fund, or the member hasn't added their share this period and the amount exceeds their own balance. Approve otherwise and create the pending charge as the cardholder's draft (sent_at null); nobody else is notified until the cardholder sends the first proposal or the default split goes out.
     ii) Authorization vs final amount: restaurants and gas stations often capture a different amount than they authorized (tips, pre-auth holds). The pending charge starts at the authorized amount; when the final transaction arrives we update the charge amount and, if it changed, reset acceptances and locks. Refunds create a credit split back by the agreed shares.
     iii) Deposits and refills (schema 1.i, 1.iii): ACH debits take 1-4 business days and can be returned (e.g. insufficient funds) after looking successful. For the MVP, credit the member's balance when the debit is initiated, and treat a later return like a failed charge (balance drops back; if negative, start debt recovery / suspension). Record both events in the ledger.
-    iv) Settling a split (schema 3.i-3.iii): one database transaction: lock the group row, apply each share as a ledger entry, and if anyone goes negative start a debt-recovery ACH debit. If that debit fails or is returned, mark the member suspended (they stay in the group; the group carries the debt).
-    v) Period rollover (schema 1.iii): a scheduled job finds groups whose period ended, starts refill debits for auto-refill members up to their share, and advances the period. Idempotent per group + period so a rerun can't charge twice.
+    iv) Settling a split (schema 3.i-3.iii): one database transaction: lock the group row, apply each share as a ledger entry, and if anyone goes negative charge their saved personal card the amount needed to bring them to $0. If that charge fails, mark the member suspended (they stay in the group; the group carries the debt).
+    v) Period rollover (schema 1.iii): a scheduled job finds groups whose period ended, starts refill debits for auto-refill members up to their share (leftover balance counts), and advances the period. Members whose balance reaches their share are marked funded for that period (memberships.funded_period); unfunded members can only spend their own balance. Idempotent per group + period so a rerun can't charge twice.
     vi) 7-day deadline and chargebacks (schema 4.i, 4.ii): the deadline job freezes groups with a pending split older than 7 days. Stripe Issuing dispute / chargeback webhooks freeze the group. Freezing also blocks authorizations immediately (3.i).
     vii) Claim board (schema 5.i): claims, locks and edits are rows; every change broadcasts over Realtime. When the last lock/edit resolves, the server confirms the split and settles in the same transaction, so two people locking at the same moment can't settle it twice.
+    viii) First proposal and notifications (schema 2.i): a new charge is a draft until the cardholder sends a proposal, sends the default, or scans the receipt. The app calls send-default when the cardholder leaves the split screen or backgrounds the app; /jobs/send-stale-drafts sends it after 10 minutes as a fallback. Each sent proposal notifies only the members with a share (receipt scans notify everyone), via a notifications row + Expo push.
 
   4) data model (Postgres tables)
     users(id, name, handle unique, email unique, phone unique, created_at)
     groups(id, name, created_by, budget_cents, period_days, period_start, default_split jsonb, frozen_reason, frozen_at)
-    memberships(group_id, user_id, status invited|joined, auto_refill, suspended, joined_at)  -- balance is derived from ledger
+    memberships(group_id, user_id, status invited|joined, auto_refill, suspended, funded_period, joined_at)  -- balance is derived from ledger
     cards(id, group_id, user_id, issuer_card_id, last4, frozen, wallet_status)
     bank_accounts(id, user_id, provider, provider_account_id, last4, status)
-    charges(id, group_id, cardholder_id, issuer_authorization_id, merchant, amount_cents, status pending|settled|disputed, created_at, settled_at)
+    charges(id, group_id, cardholder_id, issuer_authorization_id, merchant, amount_cents, status pending|settled|disputed, created_at, sent_at, settled_at)
     receipts(charge_id, image_path, tax_cents, tip_cents, itemized, scanned_at)
     receipt_items(id, charge_id, name, amount_cents)
     item_claims(item_id, user_id)
@@ -94,6 +97,8 @@ Backend plan (draft for discussion; nothing here is built yet)
     proposal_acceptances(proposal_id, user_id)
     budget_proposals(id, group_id, author_id, amount_cents, created_at) + budget_acceptances
     ledger_entries(id, group_id, user_id, kind, amount_cents, charge_id, external_ref, created_at)  -- append-only
+    notifications(id, user_id, group_id, charge_id, text, created_at, read_at)
+    payment_methods(id, user_id, provider_payment_method_id, brand, last4)  -- personal card used for debt recovery
     payment_attempts(id, user_id, group_id, purpose deposit|refill|debt_recovery, amount_cents, provider_ref, status pending|succeeded|failed|returned)
     idempotency_keys(key, user_id, response, created_at)
     audit_events(id, actor_id, action, payload jsonb, created_at)
@@ -108,7 +113,7 @@ Backend plan (draft for discussion; nothing here is built yet)
   6) build order
     i) Phase 1 (no money): Postgres schema, auth, the endpoints in section 2 running domain.ts, Realtime for the claim board, and the app switched from the fake API to HTTP. Deposits are still simulated. This alone makes multi-phone demos real.
     ii) Phase 2: scheduler (period rollover, 7-day deadline), Expo push notifications, invite emails/SMS, receipt upload + vision OCR.
-    iii) Phase 3 (test mode money): Stripe Issuing test cards + real-time authorization webhook, Financial Connections + ACH test debits for deposits, refills and debt recovery, ledger reconciliation against Stripe.
+    iii) Phase 3 (test mode money): Stripe Issuing test cards + real-time authorization webhook, Financial Connections + ACH test debits for deposits and refills, saved-card charges for debt recovery, ledger reconciliation against Stripe.
     iv) Phase 4 (only with a partner): wallet push provisioning, KYC, live mode.
 
   7) open questions for the team
@@ -140,7 +145,7 @@ Backend plan (draft for discussion; nothing here is built yet)
       7. App: sign-in screen, HTTP api.ts, subscribe to Realtime for the selected group and refetch on changes; remove the demo switcher when the real backend is on.
       8. Demo check: two phones (or a phone + web) in the same group, claiming items and locking in live.
     iv) Phase 2 (about 2-3 days): Inngest jobs for period rollover and the 7-day deadline (idempotent per group + period); Expo push tokens table + notifications for invites, new charges, item edits, proposals; invite email/SMS; receipt upload to Storage + vision OCR endpoint with a JSON schema, total check, and a fallback to a single editable line.
-    v) Phase 3 (test-mode money, about 3-5 days once Stripe access is granted): Stripe Connect/Issuing setup, cardholder + card creation on invite accept, issuing_authorization.request webhook calling purchaseBlocker()/spendLimit() (keep it fast: one indexed query + the pure function), transaction/capture webhook to update the charge amount, Financial Connections bank linking in the app, ACH debits for deposits/refills/debt recovery with webhook-driven success/failure/return, nightly reconciliation comparing our ledger to Stripe.
+    v) Phase 3 (test-mode money, about 3-5 days once Stripe access is granted): Stripe Connect/Issuing setup, cardholder + card creation on invite accept, issuing_authorization.request webhook calling purchaseBlocker()/spendLimit() (keep it fast: one indexed query + the pure function), transaction/capture webhook to update the charge amount, Financial Connections bank linking in the app, saved personal card for debt recovery, ACH debits for deposits/refills with webhook-driven success/failure/return, nightly reconciliation comparing our ledger to Stripe.
     vi) Accounts to set up before starting: Supabase project, Stripe account (request Issuing access), Inngest, Expo (EAS) for push credentials, an LLM provider key for OCR, Resend + Twilio (optional for the demo), Sentry.
     vii) Definition of done for "backend v1" (end of Phase 1-2): two people on two devices can create a group, invite and accept, make a simulated purchase, claim items and lock in live, settle, see balances update everywhere, roll a period, and get push notifications, with all rules enforced on the server and tests passing.
     viii) Who could own what (suggestion): one person on database + server endpoints, one on app integration (auth, HTTP api.ts, realtime), one on jobs/notifications/OCR, then everyone on Stripe in Phase 3.

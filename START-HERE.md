@@ -5,6 +5,7 @@ Repository: https://github.com/henryehrnman/Split-Bill
 ## Contents
 - `schema.txt`: product schema (source of truth for product rules).
 - `README.md`: current state, architecture and next steps.
+- `backend.txt`: draft backend plan (stack, endpoints, data model, build order).
 - `mobile/`: React Native / Expo app, fake backend, tests, lockfile and build configuration.
 - `docs/`: project log, design research, feasibility and wallet plan.
 - `dist/`: saved web preview and downloadable native source.
@@ -23,6 +24,6 @@ For native preview use `npm start`; see `mobile/README.md` for device/build requ
 Checks: `npm run typecheck`, `npm run lint`, `npm test` from `mobile/`.
 
 ## Status
-As of October 17, 2026 the app implements the group-fund model in `schema.txt` entirely on the front end, backed by a fake in-app backend that saves to the device. No real accounts, cards, deposits or payments exist. This includes the October 17 schema update: budget periods, invites, refills, $0 restriction, debt recovery, and the itemized claim board. Backend/APIs, real card issuing and wallet provisioning are the next phases. See `README.md` for details, and `schema.txt` section 6 for the generative AI plan.
+As of October 17, 2026 the app implements the group-fund model in `schema.txt` entirely on the front end, backed by a fake in-app backend that saves to the device. No real accounts, cards, deposits or payments exist. This includes the October 17 schema update: budget periods, invites, refills, spending limited to your own balance until you add your share, debt recovery from your personal card, the cardholder sending the first split proposal (with notifications), and the itemized claim board. Backend/APIs, real card issuing and wallet provisioning are the next phases. See `README.md` for details, and `schema.txt` section 6 for the generative AI plan.
 
 The original hosting metadata in `.openai/` is retained for reference; do not publish against that project unintentionally.
