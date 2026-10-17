@@ -14,8 +14,8 @@ const LEDGER_LABEL: Record<LedgerEntry['kind'], string> = {
   'period-top-up': 'Period refill',
   'top-up-failed': 'Refill failed',
   charge: 'Share of charge',
-  'debt-recovery': 'Bank charge to cover negative balance',
-  'debt-recovery-failed': 'Bank charge failed',
+  'debt-recovery': 'Card charge to cover negative balance',
+  'debt-recovery-failed': 'Card charge failed',
 };
 const FAILED: LedgerEntry['kind'][] = ['top-up-failed', 'debt-recovery-failed'];
 
@@ -134,7 +134,7 @@ function GroupBalance({group}: {group: Group}) {
       <T style={[s.caption, {marginTop: 6}]}>
         {me.status === 'joined' ? `${money(used)} of your share used this period · ` : ''}{money(spend.month)} this month · {money(spend.total)} all time
       </T>
-      {me.suspended && <T style={{color: C.danger, fontSize: 13, marginTop: 8}}>Suspended: we couldn’t charge your bank for {money(-me.balance)}. The group is covering it until you add funds.</T>}
+      {me.suspended && <T style={{color: C.danger, fontSize: 13, marginTop: 8}}>Suspended: we couldn’t charge your personal card for {money(-me.balance)}. The group is covering it until you add funds.</T>}
       {me.status === 'invited' ? (
         <Button title="View invitation" onPress={() => router.replace('/')} />
       ) : (

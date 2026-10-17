@@ -13,6 +13,8 @@ export type Member = {
   autoDeposit: boolean;
   failTopUps: boolean;
   suspended: boolean;
+  // periodStart of the last period in which this member's balance reached their share.
+  fundedPeriod: number | null;
 };
 export type Group = {
   id: string;
@@ -38,6 +40,8 @@ export type Charge = {
   amount: number;
   createdAt: number;
   status: 'pending' | 'settled' | 'disputed';
+  // null while the cardholder is still choosing the first proposal; nobody else sees or acts on it yet.
+  sentAt: number | null;
   receipt: Receipt | null;
   proposals: Proposal[];
   settledAt?: number;
@@ -53,8 +57,9 @@ export type LedgerEntry = {
   at: number;
   chargeId?: string;
 };
+export type Notification = {id: string; userId: UserId; groupId: string; chargeId: string; text: string; at: number};
 export type Db = {
-  version: 3;
+  version: 5;
   seq: number;
   clockOffset: number;
   users: User[];
@@ -63,12 +68,15 @@ export type Db = {
   charges: Charge[];
   budgetProposals: BudgetProposal[];
   ledger: LedgerEntry[];
+  notifications: Notification[];
 };
 
 export class ApiError extends Error {}
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const SPLIT_DEADLINE = 7 * DAY;
+// If the cardholder never sends a first proposal, the default split goes out after this long.
+export const DRAFT_GRACE = 10 * 60 * 1000;
 
 const nextId = (db: Db, prefix: string) => `${prefix}_${(++db.seq).toString(36)}`;
 const fail = (message: string): never => {
@@ -91,6 +99,8 @@ export const currentProposal = (c: Charge) => c.proposals[c.proposals.length - 1
 export const cardFor = (db: Db, groupId: string, userId: UserId) => db.cards.find(c => c.groupId === groupId && c.userId === userId) ?? null;
 export const openBudgetProposal = (db: Db, groupId: string) => db.budgetProposals.find(p => p.groupId === groupId) ?? null;
 export const nextPeriodAt = (g: Group) => g.periodStart + g.periodDays * DAY;
+export const isDraft = (c: Charge) => c.sentAt === null;
+export const notificationsFor = (db: Db, userId: UserId, groupId: string) => db.notifications.filter(n => n.userId === userId && n.groupId === groupId);
 
 export function memberOf(g: Group, userId: UserId) {
   return g.members.find(m => m.userId === userId) ?? fail('You are not a member of this group.');
@@ -108,13 +118,13 @@ export function shares(g: Group, budget = g.budget): Record<UserId, number> {
   return Object.fromEntries(g.members.map((m, i) => [m.userId, parts[i]]));
 }
 
-export type Standing = 'on-track' | 'low' | 'restricted' | 'suspended' | 'invited';
+// Members who haven't brought their balance up to their share this period can only spend their own balance.
+export type Standing = 'on-track' | 'restricted' | 'suspended' | 'invited';
 export function standing(g: Group, userId: UserId): Standing {
   const m = memberOf(g, userId);
   if (m.status === 'invited') return 'invited';
   if (m.suspended) return 'suspended';
-  if (m.balance <= 0) return 'restricted';
-  return m.balance >= shares(g)[userId] ? 'on-track' : 'low';
+  return m.fundedPeriod === g.periodStart ? 'on-track' : 'restricted';
 }
 
 export function searchUsers(db: Db, query: string, exclude: UserId[]) {
@@ -136,8 +146,9 @@ export function spendLimit(db: Db, groupId: string, userId: UserId) {
   const g = groupById(db, groupId);
   if (!isActive(g) || g.frozen) return 0;
   const s = standing(g, userId);
-  if (s === 'restricted' || s === 'suspended' || s === 'invited') return 0;
-  return Math.max(0, fundBalance(g));
+  if (s === 'suspended' || s === 'invited') return 0;
+  const fund = Math.max(0, fundBalance(g));
+  return s === 'restricted' ? Math.min(fund, Math.max(0, memberOf(g, userId).balance)) : fund;
 }
 
 export function purchaseBlocker(db: Db, groupId: string, userId: UserId): string | null {
@@ -147,7 +158,8 @@ export function purchaseBlocker(db: Db, groupId: string, userId: UserId): string
   if (!isActive(g)) return 'Waiting for everyone to accept their invite and make their first deposit.';
   const s = standing(g, userId);
   if (s === 'suspended') return 'Your account is suspended until you repay what you owe the group.';
-  if (s === 'restricted') return 'Your balance is $0 or below. Add funds or wait for the next budget period.';
+  if (s === 'restricted' && memberOf(g, userId).balance <= 0) return `Add your ${money(shares(g)[userId])} share for this period to use the card.`;
+  if (fundBalance(g) <= 0) return 'The group fund is empty.';
   const pending = pendingCharge(db, groupId);
   if (pending) return `Agree on the split for ${pending.merchant} before the next purchase.`;
   if (!card) return 'You don’t have a card for this group yet.';
@@ -208,6 +220,7 @@ function issueCard(db: Db, groupId: string, userId: UserId) {
 function credit(db: Db, g: Group, m: Member, amount: number, kind: LedgerEntry['kind'], now: number) {
   m.balance += amount;
   if (m.suspended && m.balance >= 0) m.suspended = false;
+  if (m.balance >= shares(g)[m.userId]) m.fundedPeriod = g.periodStart;
   ledger(db, {groupId: g.id, userId: m.userId, kind, amount, at: now});
 }
 
@@ -228,7 +241,7 @@ export function createGroup(db: Db, actor: UserId, input: {name: string; inviteI
     budget: input.budget,
     periodDays: input.periodDays,
     periodStart: now,
-    members: ids.map(userId => ({userId, status: 'invited', balance: 0, autoDeposit: true, failTopUps: false, suspended: false})),
+    members: ids.map(userId => ({userId, status: 'invited', balance: 0, autoDeposit: true, failTopUps: false, suspended: false, fundedPeriod: null})),
     defaultSplit: {method: 'equal'},
     frozen: null,
   };
@@ -338,7 +351,11 @@ export function purchase(db: Db, actor: UserId, groupId: string, input: {merchan
   const blocker = purchaseBlocker(db, groupId, actor);
   if (blocker) fail(blocker);
   const limit = spendLimit(db, groupId, actor);
-  if (input.amount > limit) fail(`Declined: the group fund only has ${money(limit)} available.`);
+  if (input.amount > limit) {
+    fail(standing(g, actor) === 'restricted'
+      ? `Declined: until you add your share for this period, you can spend up to your own balance (${money(limit)}).`
+      : `Declined: the group fund only has ${money(limit)} available.`);
+  }
   const first = defaultInput(g);
   const charge: Charge = {
     id: nextId(db, 'chg'),
@@ -348,6 +365,7 @@ export function purchase(db: Db, actor: UserId, groupId: string, input: {merchan
     amount: input.amount,
     createdAt: now,
     status: 'pending',
+    sentAt: null,
     receipt: null,
     proposals: [{id: nextId(db, 'prop'), authorId: null, createdAt: now, input: first, shares: computeSplit(memberIds(g), input.amount, first).shares, acceptedBy: []}],
   };
@@ -360,7 +378,35 @@ function openCharge(db: Db, actor: UserId, chargeId: string) {
   const g = groupById(db, c.groupId);
   joinedMember(g, actor);
   if (c.status !== 'pending') fail('This charge is no longer open.');
+  if (isDraft(c) && actor !== c.cardholderId) fail(`Waiting for ${userById(db, c.cardholderId).name} to send the first proposal.`);
   return {c, g};
+}
+
+function notify(db: Db, c: Charge, userIds: UserId[], text: (userId: UserId) => string, now: number) {
+  for (const userId of userIds) db.notifications.unshift({id: nextId(db, 'ntf'), userId, groupId: c.groupId, chargeId: c.id, text: text(userId), at: now});
+}
+
+// Tells everyone with a share about the current proposal; the first one also ends the cardholder's draft.
+function announce(db: Db, c: Charge, now: number) {
+  const p = currentProposal(c);
+  const by = userById(db, p.authorId ?? c.cardholderId).name;
+  const text = (id: UserId) =>
+    isDraft(c)
+      ? `${by} paid ${money(c.amount)} at ${c.merchant}. Your share is ${money(p.shares[id])}. Accept it or propose changes.`
+      : `${by} proposed a new split for ${c.merchant}. Your share is ${money(p.shares[id])}.`;
+  notify(db, c, waitingOn(p), text, now);
+  c.sentAt ??= now;
+  if (!waitingOn(p).length) settle(db, c, now);
+}
+
+// Sends the group's default split as the cardholder's first proposal. No-op once anything has been sent.
+export function sendDefaultSplit(db: Db, actor: UserId, chargeId: string, now: number) {
+  const c = chargeById(db, chargeId);
+  if (c.status !== 'pending' || !isDraft(c)) return;
+  if (actor !== c.cardholderId) fail('Only the person who paid can send the first split.');
+  const p = currentProposal(c);
+  if ((p.shares[actor] ?? 0) > 0 && !p.acceptedBy.includes(actor)) p.acceptedBy.push(actor);
+  announce(db, c, now);
 }
 
 function board(c: Charge) {
@@ -371,6 +417,11 @@ export function scanReceipt(db: Db, actor: UserId, chargeId: string, now: number
   const {c} = openCharge(db, actor, chargeId);
   const scanned = ocr(c.merchant, c.amount, c.id);
   c.receipt = {items: scanned.items.map(i => ({...i, people: []})), tax: scanned.tax, tip: scanned.tip, itemized: scanned.itemized, scannedAt: now, locked: [], edits: []};
+  if (isDraft(c)) {
+    const by = userById(db, actor).name;
+    notify(db, c, memberIds(groupById(db, c.groupId)).filter(id => id !== actor), () => `${by} scanned the ${c.merchant} receipt (${money(c.amount)}). Claim the items you had.`, now);
+    c.sentAt = now;
+  }
   return c.receipt;
 }
 
@@ -444,18 +495,19 @@ export function proposeSplit(db: Db, actor: UserId, chargeId: string, input: Spl
   const result = computeSplit(memberIds(g), c.amount, input);
   if (result.error) fail(result.error);
   c.proposals.push({id: nextId(db, 'prop'), authorId: actor, createdAt: now, input, shares: result.shares, acceptedBy: [actor]});
-  if (!waitingOn(currentProposal(c)).length) settle(db, c, now);
+  announce(db, c, now);
 }
 
 export function acceptSplit(db: Db, actor: UserId, chargeId: string, now: number) {
   const {c} = openCharge(db, actor, chargeId);
+  if (isDraft(c)) return sendDefaultSplit(db, actor, chargeId, now);
   const p = currentProposal(c);
   if (!requiredApprovers(p).includes(actor)) fail('You have no share in this split, so your approval isn’t needed.');
   if (!p.acceptedBy.includes(actor)) p.acceptedBy.push(actor);
   if (!waitingOn(p).length) settle(db, c, now);
 }
 
-// Negative balances are recovered from the member's bank; if that fails the member is suspended
+// Negative balances are charged to the member's personal card; if that fails the member is suspended
 // and the shortfall is carried by the rest of the group until repaid.
 function settle(db: Db, c: Charge, now: number) {
   const p = currentProposal(c);
@@ -502,7 +554,7 @@ export function resolveDisputes(db: Db, groupId: string, now: number) {
   g.frozen = null;
 }
 
-// At each period start, auto-refill members are charged up to their share; others top up manually.
+// At each period start, auto-refill members are charged up to their share (leftover balance counts); others top up manually.
 export function rollPeriods(db: Db, now: number) {
   for (const g of db.groups) {
     while (now >= nextPeriodAt(g)) {
@@ -510,6 +562,7 @@ export function rollPeriods(db: Db, now: number) {
       const owed = shares(g);
       for (const m of g.members) {
         const need = owed[m.userId] - m.balance;
+        if (m.status === 'joined' && need <= 0) m.fundedPeriod = g.periodStart;
         if (m.status !== 'joined' || !m.autoDeposit || need <= 0) continue;
         if (m.failTopUps) ledger(db, {groupId: g.id, userId: m.userId, kind: 'top-up-failed', amount: need, at: g.periodStart});
         else credit(db, g, m, need, 'period-top-up', g.periodStart);
@@ -527,7 +580,14 @@ export function enforceDeadlines(db: Db, now: number) {
   }
 }
 
+export function sendStaleDrafts(db: Db, now: number) {
+  for (const c of db.charges) {
+    if (c.status === 'pending' && isDraft(c) && now - c.createdAt >= DRAFT_GRACE) sendDefaultSplit(db, c.cardholderId, c.id, c.createdAt + DRAFT_GRACE);
+  }
+}
+
 export function tick(db: Db, now: number) {
+  sendStaleDrafts(db, now);
   rollPeriods(db, now);
   enforceDeadlines(db, now);
 }

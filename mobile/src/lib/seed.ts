@@ -13,7 +13,7 @@ const [henry, maya, jordan, connor, saahil] = DEMO_USERS.map(u => u.id);
 
 // Built through the same rules the fake backend enforces so the history is internally consistent.
 export function seed(now: number): Db {
-  const db: Db = {version: 3, seq: 0, clockOffset: 0, users: DEMO_USERS.map(u => ({...u})), groups: [], cards: [], charges: [], budgetProposals: [], ledger: []};
+  const db: Db = {version: 5, seq: 0, clockOffset: 0, users: DEMO_USERS.map(u => ({...u})), groups: [], cards: [], charges: [], budgetProposals: [], ledger: [], notifications: []};
   const at = (t: number) => {
     tick(db, t);
     return t;
@@ -27,7 +27,7 @@ export function seed(now: number): Db {
   for (const id of [henry, maya, jordan]) addToWallet(db, id, cardFor(db, apt.id, id)!.id, id === jordan ? 'Google Wallet' : 'Apple Wallet');
 
   const costco = purchase(db, maya, apt.id, {merchant: 'Costco', amount: 9630}, at(now - 18 * DAY));
-  for (const id of [henry, maya, jordan]) acceptSplit(db, id, costco.id, at(now - 18 * DAY + 3600000));
+  for (const id of [maya, henry, jordan]) acceptSplit(db, id, costco.id, at(now - 18 * DAY + 3600000));
 
   const internet = purchase(db, henry, apt.id, {merchant: 'Comcast Internet', amount: 6000}, at(now - 4 * DAY));
   for (const id of [henry, maya, jordan]) acceptSplit(db, id, internet.id, at(now - 4 * DAY + 7200000));

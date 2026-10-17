@@ -14,8 +14,7 @@ export const periodLabel = (days: number) => (days === 7 ? 'every week' : days =
 export function StandingPill({standing}: {standing: Standing}) {
   const map: Record<Standing, [string, 'success' | 'blue' | 'warn' | 'danger' | 'muted']> = {
     'on-track': ['On track', 'success'],
-    low: ['Below share', 'blue'],
-    restricted: ['Restricted', 'warn'],
+    restricted: ['Share not added', 'warn'],
     suspended: ['Suspended', 'danger'],
     invited: ['Invited', 'muted'],
   };

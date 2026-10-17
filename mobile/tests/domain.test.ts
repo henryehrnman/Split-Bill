@@ -13,7 +13,9 @@ const bal = (g: d.Group) => g.members.map(m => m.balance);
   const [apt, ski] = db.groups;
   assert.equal(apt.name, 'Apartment 4B');
   assert.deepEqual(bal(apt), [8000, 8000, 4790]);
-  assert.equal(d.standing(apt, 'u_jordan'), 'low');
+  assert.equal(d.standing(apt, 'u_jordan'), 'restricted');
+  assert.equal(d.spendLimit(db, apt.id, 'u_jordan'), 4790);
+  assert.equal(d.standing(apt, 'u_henry'), 'on-track');
   assert.equal(d.pendingCharge(db, apt.id)?.merchant, 'Juniper');
   assert.equal(d.periodSpend(db, apt, 'u_henry'), 2000);
   assert.equal(d.isActive(ski), false);
@@ -21,7 +23,7 @@ const bal = (g: d.Group) => g.members.map(m => m.balance);
 }
 
 const db = seed(T0);
-Object.assign(db, {groups: [], cards: [], charges: [], budgetProposals: [], ledger: []});
+Object.assign(db, {groups: [], cards: [], charges: [], budgetProposals: [], ledger: [], notifications: []});
 
 // Invite search by handle, email or phone.
 assert.deepEqual(d.searchUsers(db, '@maya', ['u_henry']).map(u => u.id), ['u_maya']);
@@ -42,7 +44,7 @@ throws(() => d.respondInvite(db, 'u_jordan', g.id, true, T0), /declined/);
 d.setFailTopUps(db, 'u_jordan', g.id, false);
 d.respondInvite(db, 'u_jordan', g.id, true, T0);
 assert.deepEqual(bal(g), [7500, 10000, 10000]);
-assert.equal(d.standing(g, 'u_henry'), 'low');
+assert.equal(d.standing(g, 'u_henry'), 'on-track');
 assert.equal(db.cards.filter(c => c.groupId === g.id).length, 3);
 const card = (u: string) => d.cardFor(db, g.id, u)!;
 throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'X', amount: 100}, T0), /wallet/);
@@ -53,11 +55,21 @@ const dinner = d.purchase(db, 'u_maya', g.id, {merchant: 'Dinner', amount: 9001}
 assert.deepEqual(d.currentProposal(dinner).shares, {u_henry: 3001, u_maya: 3000, u_jordan: 3000});
 throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'Y', amount: 100}, T0), /before the next purchase/);
 throws(() => d.withdraw(db, 'u_henry', g.id, 100, T0), /once the Dinner split/);
-for (const u of ['u_henry', 'u_maya', 'u_jordan']) d.acceptSplit(db, u, dinner.id, T0);
+
+// The cardholder sends the first proposal; until then nobody else can act and nobody is notified.
+assert.equal(d.isDraft(dinner), true);
+throws(() => d.acceptSplit(db, 'u_henry', dinner.id, T0), /Waiting for Maya/);
+throws(() => d.sendDefaultSplit(db, 'u_henry', dinner.id, T0), /Only the person who paid/);
+assert.equal(db.notifications.length, 0);
+d.sendDefaultSplit(db, 'u_maya', dinner.id, T0);
+assert.equal(d.isDraft(dinner), false);
+assert.deepEqual(db.notifications.map(n => n.userId).sort(), ['u_henry', 'u_jordan']);
+assert.deepEqual(d.currentProposal(dinner).acceptedBy, ['u_maya']);
+for (const u of ['u_henry', 'u_jordan']) d.acceptSplit(db, u, dinner.id, T0);
 assert.equal(dinner.status, 'settled');
 assert.deepEqual(bal(g), [4499, 7000, 7000]);
 
-// Amount proposal; a negative balance is charged back to $0 and the member is restricted at $0.
+// Amount proposal; a negative balance is charged back to $0, and members who added their share can still spend the whole fund.
 const rent = d.purchase(db, 'u_jordan', g.id, {merchant: 'Rent', amount: 15000}, T0);
 d.proposeSplit(db, 'u_jordan', rent.id, {method: 'amount', amounts: {u_henry: 6000, u_maya: 1000, u_jordan: 8000}}, T0);
 throws(() => d.proposeSplit(db, 'u_maya', rent.id, {method: 'amount', amounts: {u_henry: 1, u_maya: 1, u_jordan: 1}}, T0), /must total/);
@@ -65,15 +77,14 @@ d.acceptSplit(db, 'u_henry', rent.id, T0);
 d.acceptSplit(db, 'u_maya', rent.id, T0);
 assert.deepEqual(bal(g), [0, 6000, 0]);
 assert.equal(db.ledger.filter(e => e.kind === 'debt-recovery').length, 2);
-assert.equal(d.standing(g, 'u_henry'), 'restricted');
-assert.equal(d.spendLimit(db, g.id, 'u_henry'), 0);
-throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'Z', amount: 100}, T0), /\$0 or below/);
+assert.equal(d.standing(g, 'u_henry'), 'on-track');
+assert.equal(d.spendLimit(db, g.id, 'u_henry'), 6000);
 
 // If the bank charge fails, the member is suspended and the group carries the debt.
 d.deposit(db, 'u_jordan', g.id, 2000, T0);
 d.setFailTopUps(db, 'u_jordan', g.id, true);
 const groceries = d.purchase(db, 'u_maya', g.id, {merchant: 'Groceries', amount: 7500}, T0);
-for (const u of ['u_henry', 'u_maya', 'u_jordan']) d.acceptSplit(db, u, groceries.id, T0);
+for (const u of ['u_maya', 'u_henry', 'u_jordan']) d.acceptSplit(db, u, groceries.id, T0);
 assert.deepEqual(bal(g), [0, 3500, -500]);
 assert.equal(d.standing(g, 'u_jordan'), 'suspended');
 throws(() => d.purchase(db, 'u_jordan', g.id, {merchant: 'Z', amount: 100}, T0), /suspended/);
@@ -86,6 +97,13 @@ assert.equal(db.ledger.some(e => e.kind === 'top-up-failed' && e.userId === 'u_j
 d.setFailTopUps(db, 'u_jordan', g.id, false);
 d.deposit(db, 'u_jordan', g.id, 500, T0 + 14 * d.DAY);
 assert.equal(d.standing(g, 'u_jordan'), 'restricted');
+throws(() => d.purchase(db, 'u_jordan', g.id, {merchant: 'Z', amount: 100}, T0 + 14 * d.DAY), /Add your \$100\.00 share/);
+
+// Without their share added, a member can only spend up to their own balance.
+d.deposit(db, 'u_jordan', g.id, 3000, T0 + 14 * d.DAY);
+assert.equal(d.spendLimit(db, g.id, 'u_jordan'), 3000);
+throws(() => d.purchase(db, 'u_jordan', g.id, {merchant: 'Z', amount: 4000}, T0 + 14 * d.DAY), /own balance/);
+d.withdraw(db, 'u_jordan', g.id, 3000, T0 + 14 * d.DAY);
 d.setAutoDeposit(db, 'u_jordan', g.id, false);
 d.tick(db, T0 + 28 * d.DAY);
 assert.deepEqual(bal(g), [10000, 10000, 0]);
@@ -98,7 +116,7 @@ assert.equal(g.budget, 30000);
 d.respondBudget(db, 'u_jordan', raise.id, true);
 assert.equal(g.budget, 45000);
 assert.deepEqual(bal(g), [10000, 10000, 0]);
-assert.equal(d.standing(g, 'u_henry'), 'low');
+assert.equal(d.standing(g, 'u_henry'), 'on-track');
 d.tick(db, T0 + 42 * d.DAY);
 assert.deepEqual(bal(g), [15000, 15000, 0]);
 d.proposeBudget(db, 'u_maya', g.id, 30000, T0 + 42 * d.DAY);
@@ -138,9 +156,38 @@ d.resolveDisputes(db, g.id, t + d.SPLIT_DEADLINE + 2);
 assert.equal(late.status, 'settled');
 assert.equal(g.frozen, null);
 
+// A first proposal that leaves someone out only notifies the people with a share.
+const t2 = t + d.SPLIT_DEADLINE + 3;
+db.notifications = [];
+const coffee = d.purchase(db, 'u_henry', g.id, {merchant: 'Coffee', amount: 1200}, t2);
+d.proposeSplit(db, 'u_henry', coffee.id, {method: 'equal', participants: ['u_henry', 'u_maya']}, t2);
+assert.deepEqual(db.notifications.map(n => n.userId), ['u_maya']);
+d.acceptSplit(db, 'u_maya', coffee.id, t2);
+assert.equal(coffee.status, 'settled');
+
+// If the cardholder never sends anything, the default split goes to everyone after the grace period.
+db.notifications = [];
+const snacks = d.purchase(db, 'u_maya', g.id, {merchant: 'Snacks', amount: 900}, t2);
+d.tick(db, t2 + d.DRAFT_GRACE - 1);
+assert.equal(d.isDraft(snacks), true);
+d.tick(db, t2 + d.DRAFT_GRACE);
+assert.equal(d.isDraft(snacks), false);
+assert.deepEqual(db.notifications.map(n => n.userId).sort(), ['u_henry', 'u_jordan']);
+for (const u of ['u_henry', 'u_jordan']) d.acceptSplit(db, u, snacks.id, t2 + d.DRAFT_GRACE);
+assert.equal(snacks.status, 'settled');
+
+// Scanning the receipt while drafting sends it to everyone to claim their items.
+db.notifications = [];
+const lunch = d.purchase(db, 'u_henry', g.id, {merchant: 'Lunch', amount: 3000}, t2 + d.DAY);
+d.scanReceipt(db, 'u_henry', lunch.id, t2 + d.DAY);
+assert.equal(d.isDraft(lunch), false);
+assert.deepEqual(db.notifications.map(n => n.userId).sort(), ['u_jordan', 'u_maya']);
+d.sendDefaultSplit(db, 'u_henry', lunch.id, t2 + d.DAY);
+assert.equal(db.notifications.length, 2);
+
 // Chargeback on a settled charge freezes the group.
 d.fileChargeback(db, 'u_henry', dinner.id, t);
 assert.equal(dinner.status, 'disputed');
 throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'Z', amount: 100}, t), /frozen/);
 
-console.log('PASS domain: invite search, invites accept/decline, withdraw lock, $0 restriction, debt recovery + suspension, period refills, budget changes, item claim board with locks and edits, 7-day freeze, chargeback.');
+console.log('PASS domain: invite search, invites accept/decline, withdraw lock, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, period refills, budget changes, item claim board with locks and edits, 7-day freeze, chargeback.');

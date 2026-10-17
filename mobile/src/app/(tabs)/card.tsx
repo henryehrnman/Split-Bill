@@ -33,7 +33,7 @@ export default function Card() {
   const blocker = purchaseBlocker(db, group.id, viewer.id);
   const st = standing(group, viewer.id);
   const buy = (m: string, a: number) =>
-    run(x => api.purchase(x, group.id, {merchant: m, amount: a}), `${money(a)} at ${m} approved. Agree on the split before the next purchase.`).then(ok => {
+    run(x => api.purchase(x, group.id, {merchant: m, amount: a}), `${money(a)} at ${m} approved. Choose who was part of it, or leave and the default split is sent to everyone.`).then(ok => {
       if (ok) router.push('/split');
     });
 
@@ -49,9 +49,14 @@ export default function Card() {
         <T style={s.caption}>Demo virtual card</T>
       </Row>
       {blocker && <T style={{color: C.warn, fontSize: 13, lineHeight: 19, marginBottom: 6}}>{blocker}</T>}
-      {isActive(group) && !group.frozen && (st === 'on-track' || st === 'low') && (
+      {isActive(group) && !group.frozen && st === 'on-track' && (
         <T style={s.small}>
-          You can spend up to everything in the group fund. Your share is settled after each purchase; if it takes you below $0, the difference is charged to your bank.
+          You can spend up to everything in the group fund. Your share is settled after each purchase; if it takes you below $0, the difference is charged to your personal card.
+        </T>
+      )}
+      {isActive(group) && !group.frozen && st === 'restricted' && (
+        <T style={s.small}>
+          You haven’t added your share for this period yet, so you can only spend up to your own balance until you do.
         </T>
       )}
 

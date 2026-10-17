@@ -5,7 +5,7 @@ import {Page, T, Button, Avatar, Icon, Pill, Segmented, Field, GroupPicker, Empt
 import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents, toInput} from '../../lib/money';
-import {DAY, availableFunds, currentProposal, isActive, itemBoardStatus, memberOf, nextPeriodAt, openBudgetProposal, pendingCharge, shares, standing, userById, waitingOn} from '../../lib/domain';
+import {DAY, availableFunds, currentProposal, isActive, isDraft, itemBoardStatus, memberOf, nextPeriodAt, notificationsFor, openBudgetProposal, pendingCharge, shares, standing, userById, waitingOn} from '../../lib/domain';
 import type {Charge, Db, Group} from '../../lib/domain';
 
 export default function Home() {
@@ -102,6 +102,7 @@ function FormingGroup({group}: {group: Group}) {
 }
 
 function pendingLine(db: Db, c: Charge, viewerId: string) {
+  if (isDraft(c)) return c.cardholderId === viewerId ? 'send the first proposal' : `waiting on ${userById(db, c.cardholderId).name} to send a split`;
   const r = c.receipt;
   if (r) {
     const st = itemBoardStatus(c);
@@ -169,11 +170,38 @@ function ActiveGroup({group}: {group: Group}) {
         </View>
       )}
 
+      <Notifications group={group} />
+
       <T style={s.section}>Members</T>
       <MemberRows group={group} />
-      <T style={[s.caption, {marginTop: 10}]}>Anyone at $0 or below can’t use the card until they add funds or the next period starts.</T>
+      <T style={[s.caption, {marginTop: 10}]}>Anyone who hasn’t added their share this period can only spend up to their own balance until they do.</T>
 
       <GroupSettings key={group.id} group={group} />
+    </>
+  );
+}
+
+// Demo stand-in for push notifications.
+function Notifications({group}: {group: Group}) {
+  const {db, viewer, now} = useStore();
+  const items = notificationsFor(db, viewer.id, group.id).slice(0, 4);
+  if (!items.length) return null;
+  return (
+    <>
+      <T style={s.section}>Notifications</T>
+      {items.map(n => {
+        const open = pendingCharge(db, group.id)?.id === n.chargeId;
+        return (
+          <Pressable key={n.id} accessibilityRole="button" disabled={!open} onPress={() => router.push('/split')} style={s.listRow}>
+            <Icon name="bell" size={16} color={open ? C.blue : C.muted} />
+            <View style={{flex: 1}}>
+              <T style={{fontSize: 14, color: open ? C.ink : C.muted}}>{n.text}</T>
+              <T style={s.caption}>{ago(now, n.at)}</T>
+            </View>
+            {open && <Icon name="chevron-right" color={C.muted} size={18} />}
+          </Pressable>
+        );
+      })}
     </>
   );
 }

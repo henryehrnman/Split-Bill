@@ -6,7 +6,7 @@ import {seed} from './seed';
 
 // Fake backend: same call shape a real HTTP client will have later, with every rule
 // enforced in domain.ts and data persisted on this device.
-const STORAGE_KEY = 'splitbill.fake-backend.v3';
+const STORAGE_KEY = 'splitbill.fake-backend.v5';
 const LATENCY_MS = 120;
 
 let db: Db | null = null;
@@ -19,8 +19,8 @@ function decode(raw: string | null): Db | null {
   if (!raw) return null;
   try {
     const x = JSON.parse(raw);
-    const lists = ['users', 'groups', 'cards', 'charges', 'budgetProposals', 'ledger'];
-    return x && x.version === 3 && lists.every(k => Array.isArray(x[k])) ? (x as Db) : null;
+    const lists = ['users', 'groups', 'cards', 'charges', 'budgetProposals', 'ledger', 'notifications'];
+    return x && x.version === 5 && lists.every(k => Array.isArray(x[k])) ? (x as Db) : null;
   } catch {
     return null;
   }
@@ -81,6 +81,7 @@ export const api = {
   suggestItemEdit: (actor: UserId, chargeId: string, itemId: string, targetId: UserId) => mutate((x, t) => d.suggestItemEdit(x, actor, chargeId, itemId, targetId, t)),
   respondItemEdit: (actor: UserId, chargeId: string, editId: string, accept: boolean) => mutate((x, t) => d.respondItemEdit(x, actor, chargeId, editId, accept, t)),
   proposeSplit: (actor: UserId, chargeId: string, input: SplitInput) => mutate((x, t) => d.proposeSplit(x, actor, chargeId, input, t)),
+  sendDefaultSplit: (actor: UserId, chargeId: string) => mutate((x, t) => d.sendDefaultSplit(x, actor, chargeId, t)),
   acceptSplit: (actor: UserId, chargeId: string) => mutate((x, t) => d.acceptSplit(x, actor, chargeId, t)),
   fileChargeback: (actor: UserId, chargeId: string) => mutate((x, t) => d.fileChargeback(x, actor, chargeId, t)),
   // Demo controls with no production equivalent.
