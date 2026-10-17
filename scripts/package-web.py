@@ -4,7 +4,7 @@ root=Path(__file__).resolve().parents[1]
 source=root/'dist-next'; target=root/'dist'
 if not (source/'index.html').exists(): raise RuntimeError('Run Expo web export to dist-next first')
 shutil.rmtree(target); shutil.copytree(source,target)
-for route in ['split','card','activity','profile']:
+for route in ['split','card','activity','profile','new-group']:
     (target/route).mkdir(exist_ok=True)
     shutil.copy(target/'index.html',target/route/'index.html')
 for name in ['PROJECT.md','ASYNC_PLAN.md','FEASIBILITY.md','WALLET_PLAN.md','DESIGN.md']: shutil.copy(root/'docs'/name,target/name)

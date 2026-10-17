@@ -31,7 +31,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types tests/engine.test.ts && node --experimental-strip-types tests/recovery.test.ts"
+    "test": "node --experimental-strip-types tests/split.test.ts && node --experimental-strip-types tests/domain.test.ts"
   },
   "private": true
 }

@@ -1,34 +1,232 @@
-import React,{createContext,useContext,useEffect,useReducer,useRef,useState} from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {decode,remember,restore,STORAGE_KEY} from './recovery';
-import type {SavedReceipt} from './recovery';
-import {View,Text,Pressable,ScrollView,StyleSheet,TextInput,StyleProp,TextStyle,TextProps} from 'react-native';
+import React from 'react';
+import {View, Text, Pressable, ScrollView, StyleSheet, TextInput, StyleProp, TextStyle, TextProps, ViewStyle} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {router} from 'expo-router';
 import Feather from '@expo/vector-icons/Feather';
-import {reducer,fresh,State,Action,money} from './engine';
-export const C={ink:'#171a20',green:'#2459e8',dark:'#171e2d',muted:'#626a78',line:'#e8ebf0',bg:'#f5f6f8',blue:'#2459e8',softBlue:'#edf2ff',success:'#17794c'};
-const Context=createContext<{state:State;dispatch:React.Dispatch<Action>;receipts:SavedReceipt[];storageNotice:string;clearHistory:()=>void}|null>(null);
-export function Provider({children}:{children:React.ReactNode}){
- const [state,dispatch]=useReducer((s:State,a:Action|{type:'hydrate';state:State})=>a.type==='hydrate'?a.state:reducer(s,a),undefined,fresh);
- const [receipts,setReceipts]=useState<SavedReceipt[]>([]),[ready,setReady]=useState(false),[storageNotice,setStorageNotice]=useState('');
- const writes=useRef(Promise.resolve());
- useEffect(()=>{let active=true;AsyncStorage.getItem(STORAGE_KEY).then(raw=>{if(!active)return;const saved=decode(raw);if(saved){dispatch({type:'hydrate',state:restore(saved)});setReceipts(saved.receipts);}else if(raw)setStorageNotice('Saved demo data could not be restored. A fresh demo is ready.');}).catch(()=>{if(active)setStorageNotice('Local storage unavailable. This demo will not survive closing the app.');}).finally(()=>{if(active)setReady(true);});return()=>{active=false;};},[]);
- const next=remember(receipts,state);
- if(next!==receipts)setReceipts(next);
- useEffect(()=>{if(!ready)return;const raw=JSON.stringify({version:1,draft:state.draft,receipts});writes.current=writes.current.then(()=>AsyncStorage.setItem(STORAGE_KEY,raw)).catch(()=>setStorageNotice('Could not save this demo. Keep the app open to retain progress.'));},[ready,state,receipts]);
- if(!ready)return <View style={{flex:1,justifyContent:'center',alignItems:'center'}}><Text>Restoring demo…</Text></View>;
- return <Context.Provider value={{state,dispatch,receipts,storageNotice,clearHistory:()=>{dispatch({type:'reset'});setReceipts([]);}}}>{children}</Context.Provider>
+import {useStore} from './store';
+import type {User} from './domain';
+
+export const C = {ink: '#171a20', dark: '#171e2d', muted: '#626a78', line: '#e8ebf0', bg: '#f5f6f8', blue: '#2459e8', softBlue: '#edf2ff', success: '#17794c', softSuccess: '#eef7f1', warn: '#9a6420', softWarn: '#fbf5e9', danger: '#b52d37', softDanger: '#fdf0f1'};
+const TONES = [['#e2eaff', '#2c4b98'], ['#f4dfd7', '#8b5142'], ['#e8e2f2', '#67518a'], ['#dcefe6', '#2f6b4f']];
+
+export function T({children, style, ...props}: TextProps & {children: React.ReactNode; style?: StyleProp<TextStyle>}) {
+  const f = StyleSheet.flatten(style) || {};
+  const weight = String(f.fontWeight || '400');
+  const family = ['700', '800', '900', 'bold'].includes(weight) ? 'DM-Bold' : ['500', '600'].includes(weight) ? 'DM-Medium' : 'DM-Regular';
+  return <Text {...props} style={[s.text, style, {fontFamily: family, fontWeight: 'normal', lineHeight: f.lineHeight ?? Math.round((f.fontSize ?? 15) * 1.4)}]}>{children}</Text>;
 }
-export function useApp(){const x=useContext(Context);if(!x)throw Error('Missing app provider');return x}
-export const names=['Henry','Maya','Jordan'];
-export function T({children,style,...props}:TextProps & {children:React.ReactNode;style?:StyleProp<TextStyle>}){const f=StyleSheet.flatten(style)||{};const weight=String(f.fontWeight||'400');const family=['700','800','900','bold'].includes(weight)?'DM-Bold':['500','600'].includes(weight)?'DM-Medium':'DM-Regular';return <Text {...props} style={[s.text,style,{fontFamily:family,fontWeight:'normal',lineHeight:f.lineHeight??Math.round((f.fontSize??15)*1.4)}]}>{children}</Text>}
-export function Icon({name,size=20,color=C.ink}:{name:React.ComponentProps<typeof Feather>['name'];size?:number;color?:string}){return <Feather name={name} size={size} color={color}/>}
-export function Avatar({index=0,size=40}:{index?:number;size?:number}){return <View style={{width:size,height:size,borderRadius:size/2,backgroundColor:['#e2eaff','#f4dfd7','#e8e2f2'][index],alignItems:'center',justifyContent:'center'}}><T style={{fontSize:size*.34,fontWeight:'700',color:['#2c4b98','#8b5142','#67518a'][index]}}>{['HE','ML','JR'][index]}</T></View>}
-export function Button({title,onPress,disabled=false,secondary=false}:{title:string;onPress:()=>void;disabled?:boolean;secondary?:boolean}){return <Pressable accessibilityRole="button" accessibilityState={{disabled}} disabled={disabled} onPress={onPress} style={({pressed})=>[s.button,secondary&&s.secondary,disabled&&{backgroundColor:'#e9ecf2'},pressed&&{opacity:.8}]}><T style={{fontWeight:'700',textAlign:'center',fontSize:16,color:disabled?'#717b8b':secondary?C.ink:'white'}}>{title}</T></Pressable>}
-export function Page({title,subtitle,children,footer}:{title:string;subtitle?:string;children:React.ReactNode;footer?:React.ReactNode}){return <SafeAreaView edges={['top']} style={{flex:1,backgroundColor:'white'}}><View style={s.top}><View style={{flexDirection:'row',alignItems:'center',gap:8}}><View style={s.mark}><View style={s.markLine}/><View style={[s.markLine,{transform:[{rotate:'-24deg'}]}]}/></View><T style={s.logo}>splitbill</T></View><View style={[s.row,{gap:12}]}><View style={s.demo}><View style={{width:5,height:5,borderRadius:3,backgroundColor:'#a77a32'}}/><T style={{fontSize:11,color:'#805e28',fontWeight:'500'}}>Demo</T></View><Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={()=>router.push('/profile')} style={{padding:4}}><Avatar size={34}/></Pressable></View></View><ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled"><T style={s.title}>{title}</T>{subtitle&&<T style={s.sub}>{subtitle}</T>}{children}</ScrollView>{footer&&<View style={s.footer}>{footer}</View>}</SafeAreaView>}
-export function Box({children,style}:{children:React.ReactNode;style?:any}){return <View style={[s.box,style]}>{children}</View>}
-export function Label({children}:{children:React.ReactNode}){return <T style={s.label}>{children}</T>}
-export function Field({label,value,onChange,text=false}:{label:string;value:string;onChange:(v:string)=>void;text?:boolean}){return <View style={{flex:1}}><Label>{label}</Label><TextInput accessibilityLabel={label} keyboardType={text?'default':'decimal-pad'} value={value} onChangeText={onChange} style={s.input}/></View>}
-export function CardVisual(){const {state}=useApp();const card=state.card;return <View style={s.card}><View accessible={false} style={s.cardArc}/><View accessible={false} style={[s.cardArc,{right:-65,top:35,borderColor:'#334870'}]}/><View style={s.row}><T style={{color:'white',fontWeight:'700',fontSize:21,letterSpacing:-.8}}>splitbill</T><Icon name="wifi" size={23} color="#ccd5e5"/></View><T style={{color:'#aebbd1',fontSize:11,marginTop:32,marginBottom:5}}>GROUP SPENDING LIMIT</T><T style={{color:'white',fontSize:34,fontWeight:'500',fontVariant:['tabular-nums'],letterSpacing:-1}}>{card?money(card.limit):'$0.00'}</T><View style={[s.row,{marginTop:30}]}><View><T style={{color:'#d4dbea',fontSize:12}}>Friday dinner</T><T style={{color:'#8899b6',fontSize:10,marginTop:4}}>VIRTUAL · DEMO ONLY</T></View><T style={{color:'#d4dbea',fontSize:12,letterSpacing:2}}>•••• DEMO</T></View></View>}
-export const s=StyleSheet.create({text:{fontFamily:'DM-Regular',color:C.ink,fontSize:15,lineHeight:22},page:{paddingHorizontal:24,paddingTop:12,paddingBottom:30,width:'100%',maxWidth:480,alignSelf:'center'},top:{paddingHorizontal:24,paddingVertical:16,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},logo:{fontSize:23,lineHeight:28,fontWeight:'700',letterSpacing:-1},mark:{width:24,height:25,flexDirection:'row',gap:3,alignItems:'center'},markLine:{width:7,height:21,borderRadius:2,backgroundColor:C.blue,transform:[{rotate:'24deg'}]},avatar:{width:40,height:40,borderRadius:20,backgroundColor:C.softBlue,justifyContent:'center',alignItems:'center'},demo:{flexDirection:'row',alignItems:'center',gap:5,backgroundColor:'#fbf5e9',paddingHorizontal:8,paddingVertical:3,borderRadius:6},title:{fontSize:28,lineHeight:35,fontWeight:'700',letterSpacing:-.9,marginBottom:6},sub:{color:C.muted,fontSize:14,lineHeight:21,marginBottom:24},box:{backgroundColor:C.bg,padding:18,borderRadius:14,marginBottom:16},button:{backgroundColor:C.blue,borderRadius:12,minHeight:52,justifyContent:'center',paddingVertical:14,paddingHorizontal:18,marginVertical:5},secondary:{backgroundColor:C.bg},label:{fontSize:12,lineHeight:18,color:C.muted,fontWeight:'500',marginBottom:8,marginTop:8},row:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:10},input:{borderWidth:1,borderColor:'#d8dde6',padding:12,borderRadius:10,fontSize:17,fontFamily:'DM-Medium',color:C.ink,backgroundColor:'white',minWidth:0,minHeight:48},divider:{height:1,backgroundColor:C.line,marginVertical:20},small:{fontSize:12,color:C.muted,lineHeight:18},section:{fontSize:17,lineHeight:24,fontWeight:'700',marginTop:24,marginBottom:16,letterSpacing:-.3},card:{backgroundColor:C.dark,borderRadius:20,padding:24,marginBottom:22,overflow:'hidden'},cardArc:{position:'absolute',width:240,height:240,borderRadius:120,borderWidth:32,borderColor:'#263750',right:-70,top:-110},pill:{paddingHorizontal:12,paddingVertical:8,borderRadius:8,backgroundColor:C.bg},notice:{fontSize:13,lineHeight:20,color:'#39634e',paddingVertical:12},footer:{borderTopWidth:1,borderColor:C.line,paddingHorizontal:24,paddingTop:12,paddingBottom:14,backgroundColor:'white'},money:{fontSize:58,lineHeight:68,fontWeight:'500',letterSpacing:-2.5,fontVariant:['tabular-nums']},listRow:{flexDirection:'row',alignItems:'center',paddingVertical:18,gap:12,borderBottomWidth:1,borderColor:C.line},caption:{fontSize:11,color:C.muted,lineHeight:17},status:{fontSize:11,color:C.success,fontWeight:'500'}});
+
+export function Icon({name, size = 20, color = C.ink}: {name: React.ComponentProps<typeof Feather>['name']; size?: number; color?: string}) {
+  return <Feather name={name} size={size} color={color} />;
+}
+
+export function Avatar({user, size = 40}: {user: User; size?: number}) {
+  const [bg, fg] = TONES[user.tone % TONES.length];
+  return (
+    <View style={{width: size, height: size, borderRadius: size / 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center'}}>
+      <T style={{fontSize: size * 0.34, fontWeight: '700', color: fg}}>{user.initials}</T>
+    </View>
+  );
+}
+
+export function Button({title, onPress, disabled = false, secondary = false, danger = false}: {title: string; onPress: () => void; disabled?: boolean; secondary?: boolean; danger?: boolean}) {
+  const {busy} = useStore();
+  const off = disabled || busy;
+  return (
+    <Pressable accessibilityRole="button" accessibilityState={{disabled: off}} disabled={off} onPress={onPress} style={({pressed}) => [s.button, secondary && s.secondary, danger && {backgroundColor: C.danger}, off && {backgroundColor: '#e9ecf2'}, pressed && {opacity: 0.8}]}>
+      <T style={{fontWeight: '700', textAlign: 'center', fontSize: 16, color: off ? '#717b8b' : secondary ? C.ink : 'white'}}>{title}</T>
+    </Pressable>
+  );
+}
+
+export function Pill({label, tone = 'blue'}: {label: string; tone?: 'blue' | 'success' | 'warn' | 'danger' | 'muted'}) {
+  const colors = {blue: [C.softBlue, C.blue], success: [C.softSuccess, C.success], warn: [C.softWarn, C.warn], danger: [C.softDanger, C.danger], muted: [C.bg, C.muted]}[tone];
+  return (
+    <View style={{backgroundColor: colors[0], borderRadius: 6, paddingHorizontal: 9, paddingVertical: 4, alignSelf: 'flex-start'}}>
+      <T style={{fontSize: 11, color: colors[1], fontWeight: '500'}}>{label}</T>
+    </View>
+  );
+}
+
+export function Segmented<K extends string>({options, value, onChange}: {options: [K, string][]; value: K; onChange: (k: K) => void}) {
+  return (
+    <View style={{flexDirection: 'row', backgroundColor: C.bg, padding: 4, borderRadius: 11, marginBottom: 20}}>
+      {options.map(([k, label]) => (
+        <Pressable key={k} accessibilityRole="button" accessibilityState={{selected: value === k}} onPress={() => onChange(k)} style={{flex: 1, minHeight: 40, justifyContent: 'center', borderRadius: 8, backgroundColor: value === k ? 'white' : 'transparent', borderWidth: 1, borderColor: value === k ? '#e1e5ed' : 'transparent'}}>
+          <T style={{textAlign: 'center', fontSize: 13, fontWeight: value === k ? '700' : '400', color: value === k ? C.ink : C.muted}}>{label}</T>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+export function Chip({label, selected, onPress}: {label: string; selected: boolean; onPress: () => void}) {
+  return (
+    <Pressable accessibilityRole="checkbox" accessibilityState={{checked: selected}} onPress={onPress} style={{minHeight: 40, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 10, backgroundColor: selected ? '#eaf0ff' : C.bg}}>
+      <T style={{fontSize: 12, color: selected ? C.blue : C.muted, fontWeight: selected ? '500' : '400'}}>{label}</T>
+    </Pressable>
+  );
+}
+
+function NoticeBanner() {
+  const {notice, clearNotice} = useStore();
+  if (!notice) return null;
+  const error = notice.kind === 'error';
+  return (
+    <Pressable accessibilityRole="alert" onPress={clearNotice} style={{flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: error ? C.softDanger : C.softSuccess, borderRadius: 12, padding: 14, marginBottom: 18}}>
+      <Icon name={error ? 'alert-circle' : 'check-circle'} size={18} color={error ? C.danger : C.success} />
+      <T style={{flex: 1, fontSize: 13, lineHeight: 19, color: error ? C.danger : C.success}}>{notice.text}</T>
+      <Icon name="x" size={16} color={C.muted} />
+    </Pressable>
+  );
+}
+
+function ViewerSwitch() {
+  const {db, viewer, setViewerId} = useStore();
+  const next = db.users[(db.users.findIndex(u => u.id === viewer.id) + 1) % db.users.length];
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`Viewing as ${viewer.name}. Switch to ${next.name}`} onPress={() => setViewerId(next.id)} style={s.demo}>
+      <Icon name="repeat" size={11} color={C.warn} />
+      <T style={{fontSize: 11, color: C.warn, fontWeight: '500'}}>Demo · {viewer.name}</T>
+    </Pressable>
+  );
+}
+
+export function Page({title, subtitle, children, footer, back = false}: {title: string; subtitle?: string; children: React.ReactNode; footer?: React.ReactNode; back?: boolean}) {
+  const {viewer} = useStore();
+  return (
+    <SafeAreaView edges={['top']} style={{flex: 1, backgroundColor: 'white'}}>
+      <View style={s.top}>
+        {back ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={{flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4}}>
+            <Icon name="chevron-left" size={22} />
+            <T style={{fontSize: 16, fontWeight: '500'}}>Back</T>
+          </Pressable>
+        ) : (
+          <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+            <View style={s.mark}>
+              <View style={s.markLine} />
+              <View style={[s.markLine, {transform: [{rotate: '-24deg'}]}]} />
+            </View>
+            <T style={s.logo}>splitbill</T>
+          </View>
+        )}
+        <View style={[s.row, {gap: 10}]}>
+          <ViewerSwitch />
+          <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => router.push('/profile')} style={{padding: 4}}>
+            <Avatar user={viewer} size={34} />
+          </Pressable>
+        </View>
+      </View>
+      <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
+        <T style={s.title}>{title}</T>
+        {subtitle && <T style={s.sub}>{subtitle}</T>}
+        <NoticeBanner />
+        {children}
+      </ScrollView>
+      {footer && <View style={s.footer}>{footer}</View>}
+    </SafeAreaView>
+  );
+}
+
+export function Label({children}: {children: React.ReactNode}) {
+  return <T style={s.label}>{children}</T>;
+}
+
+export function Field({label, value, onChange, text = false, placeholder}: {label: string; value: string; onChange: (v: string) => void; text?: boolean; placeholder?: string}) {
+  return (
+    <View style={{flex: 1}}>
+      <Label>{label}</Label>
+      <TextInput accessibilityLabel={label} placeholder={placeholder} placeholderTextColor="#9aa1ad" keyboardType={text ? 'default' : 'decimal-pad'} value={value} onChangeText={onChange} style={s.input} />
+    </View>
+  );
+}
+
+export function Row({children, style}: {children: React.ReactNode; style?: StyleProp<ViewStyle>}) {
+  return <View style={[s.row, style]}>{children}</View>;
+}
+
+export function CardVisual({holder, groupName, last4, limit, frozen}: {holder: string; groupName: string; last4: string; limit: string; frozen: boolean}) {
+  return (
+    <View style={[s.card, frozen && {opacity: 0.6}]}>
+      <View accessible={false} style={s.cardArc} />
+      <View accessible={false} style={[s.cardArc, {right: -65, top: 35, borderColor: '#334870'}]} />
+      <View style={s.row}>
+        <T style={{color: 'white', fontWeight: '700', fontSize: 21, letterSpacing: -0.8}}>splitbill</T>
+        <Icon name={frozen ? 'lock' : 'wifi'} size={23} color="#ccd5e5" />
+      </View>
+      <T style={{color: '#aebbd1', fontSize: 11, marginTop: 32, marginBottom: 5}}>YOU CAN SPEND</T>
+      <T style={{color: 'white', fontSize: 34, fontWeight: '500', fontVariant: ['tabular-nums'], letterSpacing: -1}}>{limit}</T>
+      <View style={[s.row, {marginTop: 30}]}>
+        <View>
+          <T style={{color: '#d4dbea', fontSize: 12}}>{holder} · {groupName}</T>
+          <T style={{color: '#8899b6', fontSize: 10, marginTop: 4}}>VISA · VIRTUAL · DEMO ONLY</T>
+        </View>
+        <T style={{color: '#d4dbea', fontSize: 12, letterSpacing: 2}}>•••• {last4}</T>
+      </View>
+    </View>
+  );
+}
+
+export function GroupPicker({allowNew = false}: {allowNew?: boolean}) {
+  const {db, viewer, group, setGroupId} = useStore();
+  const groups = db.groups.filter(g => g.members.some(m => m.userId === viewer.id));
+  if (!groups.length && !allowNew) return null;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8, paddingBottom: 18}}>
+      {groups.map(g => (
+        <Chip key={g.id} label={g.name} selected={g.id === group?.id} onPress={() => setGroupId(g.id)} />
+      ))}
+      {allowNew && <Chip label="+ New group" selected={false} onPress={() => router.push('/new-group')} />}
+    </ScrollView>
+  );
+}
+
+export function EmptyState({icon, title, body, action}: {icon: React.ComponentProps<typeof Feather>['name']; title: string; body: string; action?: React.ReactNode}) {
+  return (
+    <View style={{alignItems: 'center', paddingTop: 50, paddingBottom: 30}}>
+      <Icon name={icon} size={32} color={C.muted} />
+      <T style={{fontSize: 21, fontWeight: '700', marginTop: 20, textAlign: 'center'}}>{title}</T>
+      <T style={[s.small, {textAlign: 'center', marginTop: 10, marginBottom: 20}]}>{body}</T>
+      {action}
+    </View>
+  );
+}
+
+export const ago = (now: number, at: number) => {
+  const m = Math.max(0, Math.round((now - at) / 60000));
+  if (m < 60) return m <= 1 ? 'just now' : `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+};
+export const shortDate = (at: number) => new Date(at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+
+export const s = StyleSheet.create({
+  text: {fontFamily: 'DM-Regular', color: C.ink, fontSize: 15, lineHeight: 22},
+  page: {paddingHorizontal: 24, paddingTop: 12, paddingBottom: 30, width: '100%', maxWidth: 480, alignSelf: 'center'},
+  top: {paddingHorizontal: 24, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
+  logo: {fontSize: 23, lineHeight: 28, fontWeight: '700', letterSpacing: -1},
+  mark: {width: 24, height: 25, flexDirection: 'row', gap: 3, alignItems: 'center'},
+  markLine: {width: 7, height: 21, borderRadius: 2, backgroundColor: C.blue, transform: [{rotate: '24deg'}]},
+  demo: {flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.softWarn, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6},
+  title: {fontSize: 28, lineHeight: 35, fontWeight: '700', letterSpacing: -0.9, marginBottom: 6},
+  sub: {color: C.muted, fontSize: 14, lineHeight: 21, marginBottom: 20},
+  box: {borderWidth: 1, borderColor: C.line, borderRadius: 18, padding: 20, marginBottom: 16},
+  button: {backgroundColor: C.blue, borderRadius: 12, minHeight: 52, justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 18, marginVertical: 5},
+  secondary: {backgroundColor: C.bg},
+  label: {fontSize: 12, lineHeight: 18, color: C.muted, fontWeight: '500', marginBottom: 8, marginTop: 8},
+  row: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10},
+  input: {borderWidth: 1, borderColor: '#d8dde6', padding: 12, borderRadius: 10, fontSize: 17, fontFamily: 'DM-Medium', color: C.ink, backgroundColor: 'white', minWidth: 0, minHeight: 48},
+  smallInput: {borderWidth: 1, borderColor: '#d8dde6', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 10, fontSize: 14, fontFamily: 'DM-Medium', color: C.ink, backgroundColor: 'white', width: 76, textAlign: 'right'},
+  divider: {height: 1, backgroundColor: C.line, marginVertical: 20},
+  small: {fontSize: 12, color: C.muted, lineHeight: 18},
+  section: {fontSize: 17, lineHeight: 24, fontWeight: '700', marginTop: 28, marginBottom: 10, letterSpacing: -0.3},
+  card: {backgroundColor: C.dark, borderRadius: 20, padding: 24, marginBottom: 18, overflow: 'hidden'},
+  cardArc: {position: 'absolute', width: 240, height: 240, borderRadius: 120, borderWidth: 32, borderColor: '#263750', right: -70, top: -110},
+  footer: {borderTopWidth: 1, borderColor: C.line, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 14, backgroundColor: 'white'},
+  money: {fontSize: 52, lineHeight: 62, fontWeight: '500', letterSpacing: -2.2, fontVariant: ['tabular-nums']},
+  listRow: {flexDirection: 'row', alignItems: 'center', paddingVertical: 16, gap: 12, borderBottomWidth: 1, borderColor: C.line},
+  caption: {fontSize: 11, color: C.muted, lineHeight: 17},
+  strong: {fontWeight: '700', fontVariant: ['tabular-nums']},
+});

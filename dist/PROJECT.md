@@ -1,5 +1,10 @@
 # Split Bill — project plan and progress
-Updated: October 15, 2026, Pacific. Owner: Henry Ehrnman. Stage: hackathon prototype.
+Updated: October 17, 2026, Pacific. Owners: Henry Ehrnman, Connor Zacharias. Stage: hackathon MVP.
+
+## Product model change — October 17, 2026 (supersedes the flow below)
+Connor's `schema.txt` replaces the original "approve first, then a one-time card" flow. The product is now a standing group fund: members make equal initial deposits that set the group's buying power; each member has their own virtual card on the fund; purchases are charged first and split afterwards through iterative proposals that every member with a share must accept; only one charge may be open at a time; balances are decreased on settlement and refilled by manual or automatic top-ups; members below their share are restricted to their own balance; buying power changes need unanimous acceptance; unagreed splits after 7 days and chargebacks freeze the group and escalate to a (hypothetical) dispute center; receipts can be scanned and items claimed, with tax/tip proportional to items; Activity and Profile track group and personal spend.
+
+Implementation (October 17): the whole model is built in the Expo app against a fake backend (`mobile/src/lib/api.ts`) that enforces the rules in `mobile/src/lib/domain.ts` and persists to device storage. Split math (`mobile/src/lib/split.ts`) now supports any group size. A demo user switcher stands in for authentication. The previous single-bill engine, local recovery module and their tests were removed and replaced with split and domain tests. TypeScript, lint and tests pass; main flows were clicked through in the web preview. Next phase: real backend and APIs, then issuing/wallet partners. Earlier sections below are historical context; where they describe pre-approval before payment or a per-bill card, they no longer apply.
 
 ## Product
 A social group-checkout app: friends link funding accounts, agree to flexible shares and pay a merchant with one app-issued virtual card. The merchant receives one payment; each participant sees their own obligation. Initial audience hypothesis: US college students dining in groups. Geography and hackathon deadline are unconfirmed.
