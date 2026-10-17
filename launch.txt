@@ -9,6 +9,7 @@ Launch plan: getting Split Bill onto a real group's iPhones (research, October 1
       a) Apple Pay won't work with test cards. Stripe: digital wallet tokens "are only available in live mode", so nobody can add a test card to Apple Wallet.
       b) Stripe's live Issuing is for commercial (business) card programs. Consumer cards are a private preview, and live access means applying to Stripe sales as a company.
       c) Pooled group money held for consumers likely counts as money transmission / stored value, so a live launch needs a partner bank and legal review (backend.txt 7.iii).
+    For the hackathon deadline (10:00am October 18), see section 8: a cut-down version of milestone A that fits in 17 hours.
     iii) How purchases work in A: a "Simulate tap" button in the app calls Stripe's test endpoint (POST /v1/test_helpers/issuing/authorizations). Stripe then sends our server the same real-time issuing_authorization.request a real card swipe would, so our rules (purchaseBlocker / spendLimit) run exactly as they will in production. Only the store is fake.
 
   1) APIs we can use right away (no approval needed)
@@ -98,3 +99,75 @@ Launch plan: getting Split Bill onto a real group's iPhones (research, October 1
     https://docs.lithic.com/docs/auth-stream-access-asa
     https://increase.com/documentation/real-time-decisions
     https://increase.com/documentation/push-provisioning
+
+  8) hackathon plan: 5:00pm October 17 to 10:00am October 18 (17 hours)
+    Goal for 10am: a group opens Split Bill on their own iPhones, signs in as themselves, and uses one shared group live: invite and accept, simulate a card tap, the payer sends the first proposal, everyone claims receipt items from a real photo and locks in, the split settles and balances update on every phone. All rules run on a real server, money stays simulated. Everything in sections 3-4 that isn't on this list waits until after the hackathon.
+
+    i) research findings that shape the plan
+      a) Expo Go is out for the group. Our app is on Expo SDK 58 (stable October 15). Expo's SDK 58 post says the App Store Expo Go for SDK 58 ships "within a few weeks"; today's store version runs SDK 57. Since SDK 57, iOS Expo Go also requires the phone and the computer running the dev server to be signed in to the same Expo account, so teammates can't just scan a QR code.
+      b) TestFlight only works if someone already has a paid Apple Developer membership. Apple says enrollment takes about 2 business days; 2026 forum reports describe 1-7+ weeks. If nobody has one, don't plan on TestFlight.
+      c) The hosted web app works on any iPhone today. The app already exports for web (dist/). Served from a URL, it opens in Safari and can be added to the home screen, which needs no Apple account, no review and no installs. This is the main path.
+      d) Supabase's built-in email sender allows about 2 auth emails per hour for the whole project, and only to team addresses. So no email codes or magic links: use email + password with "Confirm email" turned off (no emails sent), or anonymous sign-in.
+      e) Native push needs a development build (and an Apple account on iOS). Skip it: the app's in-app notifications (domain.ts notificationsFor) plus Realtime give live updates while the app is open.
+      f) domain.ts, split.ts, money.ts, fakeOcr.ts and seed.ts already use explicit .ts imports and plain TypeScript, so they run unchanged in Deno (Supabase Edge Functions) and in Node 24.
+      g) Stripe Issuing test mode is instant from the dashboard, and simulated taps fire the real issuing_authorization.request webhook (section 0.iii). It's a stretch goal: worth it only once the core works.
+
+    ii) architecture for tonight (fastest path that keeps domain.ts as the single source of rules)
+      a) Database: one Supabase Postgres table, app_state(id int primary key, db jsonb, version int), holding the same Db object the fake backend keeps in AsyncStorage today. The normalized tables in backend.txt section 4 come after the hackathon.
+      b) Server: one Supabase Edge Function, rpc. Request: {method, args} plus the user's Supabase JWT. It looks up the caller's domain user id from the JWT (never trusts an actor in the body), loads app_state, runs tick() and the same domain function api.ts calls today, and saves with an optimistic version check (retry on conflict). Then it returns the Db filtered to the caller's groups and users.
+      c) Shared code: a small script copies mobile/src/lib/{domain,split,money,fakeOcr,seed}.ts into supabase/functions/_shared/ before each deploy (Supabase's recommended layout), so there's still one copy we edit.
+      d) Sign-in: Supabase email + password, confirmations off. Sign-up creates the domain User (name, handle, email, phone) through a createUser rpc method. Keep the demo user switcher behind a "demo mode" toggle for judges.
+      e) Live updates: each app subscribes to Supabase Realtime postgres_changes on app_state and calls rpc fetch when it changes.
+      f) App: api.ts gets an HTTP implementation with the same method names, chosen by EXPO_PUBLIC_API_URL; the fake backend stays for offline demos.
+      g) Receipt scanning: a second Edge Function, scan-receipt. The app picks or takes a photo with expo-image-picker (works on web and iOS) and uploads it. The function asks a vision model (Claude Sonnet 5.5, or Haiku 5.5 for speed) for JSON items/tax/tip, checks the sum against the charge, and falls back to the editable single line when it doesn't add up. The model key lives only in the function's secrets.
+      h) Web hosting: npx expo export -p web, deployed to Vercel (static, free Hobby plan) or EAS Hosting (eas deploy). Redeploy after every merge so the URL on everyone's phone stays current.
+
+    iii) accounts and keys (first 45 minutes, in parallel)
+      a) Supabase project (free tier is fine for one night): turn off email confirmations, enable Realtime on app_state, note the URL, publishable key and secret key.
+      b) Vercel (or Expo) account for the web URL.
+      c) Anthropic API key for receipt scanning.
+      d) Check whether anyone already has an active Apple Developer membership. Yes: run the native track in v.d. No: web only, and don't enroll tonight expecting it to arrive.
+      e) Optional: Stripe account with Issuing test mode, only if the stretch goal happens.
+      f) .env files stay out of git (.gitignore already covers .env*).
+
+    iv) who does what (3 people)
+      a) Server (Henry): app_state table, rpc Edge Function, the copy script, auth -> user mapping, filtered responses, deploy.
+      b) App (Connor): sign-in/sign-up screen, HTTP api.ts, Realtime subscription, demo-mode toggle, loading/error states for slower network calls.
+      c) Receipts, hosting, demo (Saahil): scan-receipt function + photo picker on the Split screen, Vercel/EAS web deploy, seed a demo group with real accounts, demo script and backup video.
+
+    v) timeline (Pacific)
+      a) 5:00-5:45pm: pull, read this section, create accounts and keys, agree on the rpc request/response shape (it's just api.ts's method names and arguments).
+      b) 5:45-9:30pm: build. Server: table, rpc function, deploy. App: sign-in, HTTP api.ts, Realtime. Saahil: web deploy pipeline first (deploy the current fake-backend build so the URL exists), then scan-receipt.
+      c) 9:30-10:30pm, milestone 1: two phones on the hosted URL, two real accounts, one group. Create, invite, accept, simulated tap, first proposal, accept, settle. Fix whatever breaks before starting anything new.
+      d) 10:30pm-1:30am:
+        1) Real receipt scanning end to end (photo -> items on the claim board -> claim, lock, settle).
+        2) Bug bash on real iPhones in Safari: small screens, keyboard covering inputs, slow network.
+        3) Native track only if an Apple membership exists: in app.json confirm bundle ID com.henryehrnman.splitbill, then eas build -p ios --profile production and eas submit to TestFlight. Add teammates as internal testers (no review needed). Budget about 1-2 hours, mostly waiting on build and processing. Otherwise skip.
+        4) Stretch, only if 1-2 are solid: Stripe Issuing test mode. Create a test card per member on accept, have the "Simulate tap" button call the test authorization endpoint, and answer issuing_authorization.request with purchaseBlocker()/spendLimit().
+      e) 1:30am: feature freeze. Merge, deploy, confirm the URL works on every phone.
+      f) 1:30-6:00am: sleep in shifts; at least one person stays on to fix anything urgent.
+      g) 6:00-8:00am: fresh-eyes bug bash; write the demo script (90-second pitch + 3-minute demo); record a backup video of the full flow on two phones; update README "Current state".
+      h) 8:00-9:30am: rehearse the demo twice on the real URL, reset demo data, preload phones.
+      i) 9:30am: code freeze, final deploy, submit before 10:00am.
+
+    vi) cut list (don't start these before 10am)
+      Real money and live cards; Apple Pay / Add to Wallet; native push; Stripe Financial Connections / ACH; saved personal card for debt recovery (keep simulated); Inngest jobs (tick() already runs period rollover, the 7-day deadline and stale drafts on every request); normalized tables, ledger reconciliation, row-level security per group; natural-language claiming and other AI ideas beyond receipt scanning.
+
+    vii) risks and fallbacks
+      a) Two writes at once on the single app_state row: the version check plus a retry handles it at hackathon scale.
+      b) Edge Function cold start or outage during the demo: keep the fake backend build ready (EXPO_PUBLIC_API_URL unset) and the backup video.
+      c) Receipt scan returns something wrong: totals are checked against the charge, and items can be fixed by hand before claiming (already built).
+      d) Privacy: the rpc function must filter responses to the caller's groups; it's the one security step we can't skip, since real people will sign in.
+      e) Judges without accounts: demo mode with the seeded users stays available on the same URL.
+
+    viii) what to say in the demo about the gap to launch: money is simulated and cards are test-mode by design. Real cards need live Stripe Issuing approval (business programs only), Apple's wallet approval, and a partner bank for pooled funds (sections 0.ii and 4). The rules engine that would approve real taps is the same code running tonight.
+
+    ix) extra sources for this section
+      https://expo.dev/changelog/sdk-58
+      https://expo.dev/changelog/expo-go-57-login
+      https://docs.expo.dev/versions/v58.0.0/sdk/notifications.md
+      https://developer.apple.com/forums/thread/822540
+      https://dreamlit.ai/blog/supabase-email-templates
+      https://supabase.com/docs/guides/getting-started/tutorials/with-expo-react-native.md
+      https://supabase.com/docs/guides/ai-tools/ai-prompts/edge-functions
+      https://docs.expo.dev/more/qr-codes
