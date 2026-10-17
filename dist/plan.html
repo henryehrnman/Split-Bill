@@ -1,0 +1,219 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Split Bill — Project progress</title><style>body{background:#f5f7f2;color:#173226;font:16px system-ui;margin:0;padding:28px}main{max-width:900px;margin:auto}a{color:#245d35}pre{white-space:pre-wrap;font:inherit;line-height:1.65}section{background:white;border-radius:20px;padding:25px;margin:25px 0}</style><main><a href="/">← Open Split Bill</a><h1>Project & progress</h1><p><a href="/native-source.zip">Download native app source</a> · <a href="/PROJECT.md">Project plan</a> · <a href="/WALLET_PLAN.md">Wallet plan</a></p><section><pre># Split Bill — project plan and progress
+Updated: October 15, 2026, Pacific. Owner: Henry Ehrnman. Stage: hackathon prototype.
+
+## Product
+A social group-checkout app: friends link funding accounts, agree to flexible shares and pay a merchant with one app-issued virtual card. The merchant receives one payment; each participant sees their own obligation. Initial audience hypothesis: US college students dining in groups. Geography and hackathon deadline are unconfirmed.
+
+## Current deliverable
+Current native recovery behavior (October 16): drafts and up to 100 simulated receipts persist locally. Reopening revokes all approvals and discards card/wallet state; history is not synchronized or authenticated. The earlier in-memory description below is historical.
+A private responsive browser demo with three sample participants, editable subtotal/tax/tip, equal/percentage/custom-amount splits, exact-cent allocation, per-person simulated approval, approval reset when the bill changes, simulated card readiness, decline/retry, and shared receipt. No real accounts, card issuance, money movement, authentication or cross-device synchronization. Demo state resets on refresh. Approvals are controls on one screen, not proof of participant consent. Source and this plan are stored in the Site repository; project folder contains the Site.
+
+## Product decisions
+Use an explicit simulation for judging the experience before obtaining issuer access. Treat the card as an app-issued payment credential; do not claim it is credit until the funding product is chosen. Prefer secured contributions before merchant authorization as the starting architecture hypothesis. This does not mean linked account balances or authorizations guarantee settled funds. Resolve liquidity, returns and risk with a qualified issuing partner before live payments.
+
+The app must show total and shares before approval. Any material change invalidates approvals. Fees must be disclosed before consent. Handle tax, shared items and tip explicitly. A decline must not silently switch liability to the organizer. No fake Apple Pay button or claim that a browser demo can tap to pay.
+
+## Initial market research — checked October 15, 2026
+| Product | Verified overlap | Implication |
+|---|---|---|
+| Cino | Group cards, connected funding cards and adjustable split ratios; bills split at payment | Direct competitor. Do not claim this payment model is unique. |
+| Venmo Groups | Shared-expense records, customized splits and payments due between members | Familiar social pattern; distinguish checkout experience from reimbursement. |
+| Splitwise | Group expense tracking and flexible splitting | Flexible arithmetic alone is insufficient differentiation. |
+| tricount | Shared-expense tracking, custom splits and bunq card expense tracking | Card-adjacent competitors matter as well as ledger apps. |
+
+Sources: https://www.getcino.com/ ; https://www.balderton.com/news/cino-raises-e3-5m-to-revolutionise-shared-payments-with-the-first-virtual-card-that-splits-and-pays-group-bills-instantly/ ; https://help.venmo.com/cs/articles/managing-expenses-for-venmo-groups-vhel173 ; https://help.venmo.com/cs/articles/splitting-sharing-purchases-vhel189 ; https://www.splitwise.com/ ; https://www.tricount.com/features . Vendor descriptions establish advertised capabilities, not independent performance. Geographic availability, pricing and user adoption need additional verification.
+
+Working differentiation hypothesis: clear item-level allocation plus explicit approval of tax/tip and predictable failure handling for ad-hoc restaurant groups. Validate this against Cino QuickSplit and split-by-amount before making competitive claims. No market-size or demand estimates have been invented.
+
+## Payments feasibility
+Stripe documents virtual cards and Issuing authorizations, test purchases and a separate approval path for live access. Consumer issuing documentation exists, but suitability and eligibility for this exact program are not established. Issuing does not by itself implement atomic multi-person funding. A viable system needs the issuer/processor, funding rails, a ledger and reconciler, identity/consent, fraud controls and operational support.
+Sources: https://docs.stripe.com/api/issuing/cards/create ; https://docs.stripe.com/issuing/testing ; https://docs.stripe.com/issuing/onboarding-overview ; https://docs.stripe.com/issuing/consumer-compliance .
+
+## Target architecture
+Client -&gt; authenticated API -&gt; group/session service -&gt; versioned split proposal -&gt; participant approvals -&gt; funding orchestration -&gt; issuer authorization policy -&gt; capture/reconciliation -&gt; receipts/refunds.
+Entities: User, FundingInstrumentToken, Group, Membership, Bill, LineItem, SplitVersion, Share, Approval, FundingAttempt, CardSession, Authorization, Capture, LedgerEntry, Refund, AuditEvent.
+Money: integer minor units and explicit currency; largest-remainder allocation with stable participant ordering. Each write uses idempotency keys. Approvals reference immutable split version and amount. Webhooks authenticate signatures, deduplicate events and support out-of-order delivery. Ledger balances cannot be inferred solely from browser state.
+States: draft -&gt; awaiting approvals -&gt; securing funding -&gt; ready -&gt; authorized -&gt; captured; separate failed/cancelled/expired paths. Merchant authorization and final capture can differ, especially restaurant tips. Additional amounts require prior disclosed limits or renewed consent. Refunds follow original allocation and cannot exceed captured amounts. Production needs compensating actions for partial funding failures and reconciliation, not assumed distributed atomicity.
+
+## Prioritized backlog
+1. Add item-level assignment with shared items, tax/tip allocation and cent conservation.
+2. Add meaningful persistent demo sessions, history, receipt export and partial refund simulation.
+3. Add multi-device demo using authenticated server state and immutable approval versions; make single-screen simulation boundary explicit until complete.
+4. Exercise payment states: changed tips, one participant unavailable, funding failure, duplicate webhook, expired approval and retry without duplicate charge.
+5. Compare Cino feature-by-feature using first-party sources, verify region/pricing, then revise positioning.
+6. Create issuer decision matrix including access requirements, funding latency, sandbox availability, digital-wallet provisioning, dispute ownership and fees. Do not promise live capability without evidence.
+7. Prepare a 90-second pitch and 3-minute demo, test mobile usability and keyboard accessibility.
+8. Define interview guide; seek evidence from 5–10 target users when Henry can recruit them. Do not contact anyone without authorization.
+9. Add sandbox issuing only if suitable access is available. Do not enable live payments as part of routine automated work.
+
+## Acceptance gates
+Shares sum exactly to total. Invalid input blocks payment. Changes revoke approvals. Only all valid approvals unlock payment. Failed attempt yields no successful receipt. Duplicate pay cannot create duplicate receipt. Equal, percent and custom splits have tests. Before live integration: authenticated participant authorization, server validation, idempotency, reconciliation and partner approval.
+
+## Research and validation plan
+Measure time from bill entry to ready state, allocation errors, completion rate and participant comprehension. Test equal dinner, unequal food/shared appetizer, tax/tip change, absent friend and declined funding. Success targets are hypotheses: group can explain every charge; no unapproved amount; complete sample checkout within 60 seconds. No user tests conducted yet.
+
+## Demo script
+Open prototype. Explain one merchant payment and individual shares. Set a total and switch to percentage or custom shares. Approve three contributions. Change tip to show approvals resetting. Reapprove, simulate a decline, then retry successfully. Show receipt. State that real issuing is a separate partner-backed integration milestone.
+
+## Progress and operating instructions
+2026-10-15: Verified no prior Split Bill schedule or Site; existing daily and weekly reports paused. Created project folder and private Site. Enabled Build Split Bill hourly (highest supported scheduling frequency). First unattended run not yet verified. Created first prototype and this research/architecture/backlog. JS syntax and targeted arithmetic/state checks executed during initial build; browser visual QA unavailable in this environment.
+Future runs: read this file and canonical Site source, choose the highest-value unfinished task, implement and verify it, update this log and privately deploy. Preserve user edits; avoid concurrent writers. Record completed evidence and blockers. No endless redundant tasks just to exhaust credits. Review schedule status on a later run. Scheduling is not a guarantee of uninterrupted compute or unlimited credits.
+
+## Inputs that would sharpen the next iteration
+Hackathon deadline and judging rubric; teammates and existing code; intended country; preferred stack; whether a sandbox demo is sufficient. Work can continue under current assumptions without these answers.
+
+## Native app update — October 15, 2026
+User clarified iOS/Android app-store direction and dedicated group card with Apple/Google Pay. Native React Native/Expo source lives in mobile/; browser review is exported from it. Read WALLET_PLAN.md before further payment work. The five-screen design supersedes the original web demo. Added generated demo-card session, wallet setup simulation, freeze/unfreeze and consent-gated checkout. Store signing, real issuing and real wallet provisioning remain unimplemented.
+Validation: native TypeScript and lint checks passed; reducer tests passed for cent conservation, invalid shares, unanimous consent, wallet gate, frozen card, decline/retry, duplicate payment and invalidation after edit. Expo web bundle exported successfully. Physical device and browser visual QA remain outstanding. Run mobile web export into dist-next, then scripts/package-web.py before Sites packaging.
+Expo iOS and Android JavaScript/Hermes bundles also exported successfully. This is bundle validation, not signed IPA/APK generation or physical-device verification.
+
+## UI/UX redesign — October 15, 2026
+Researched AI-design homogenization and NN/g hierarchy/consistency principles. Added docs/DESIGN.md with audit, source links and concrete design rules. Reworked all five native screens: bundled DM Sans, Feather icons, cobalt action palette, restrained panels, task-specific headings, four-tab navigation, persistent primary actions, compact approval rows, bill-edit disclosure, wallet selection rows and separate demo scenarios. Preserve these rules in scheduled iterations. Visual browser/device QA remains outstanding.
+Redesign verification: TypeScript, lint and payment-state tests passed. Updated web, iOS and Android bundles exported successfully. No browser screenshots, physical-device QA or user testing were performed in this run.
+
+## Background milestone — October 15, 2026, 9:50 p.m. Pacific
+First recorded background entry: saved ASYNC_PLAN.md and FEASIBILITY.md. Cino already supports guest checkout; item-level consent remains a differentiation hypothesis. Wallet tokens require partner-backed live access. Native lint, typecheck and reducer tests passed. UI unchanged; visual/device QA outstanding. Next: implement shared-item splits and exact tax/tip allocation.
+
+## Completed milestone — October 16, 2026, 3:05 a.m. Pacific
+Fetched canonical source at 87e7c337; no active-writer record found. Implemented Items split mode: editable named amounts, multiple assignees per item, add/remove, proportional tax and tip with deterministic participant-order cent allocation. Item costs must match subtotal; empty/unassigned/invalid costs block approvals and card creation. Every edit revokes approvals/card. Equal, percentage and custom modes remain available. Money inputs now reject fractional cents. Activity subtitle updated to Henry’s requested “Your splits, in one place.”
+Evidence: native TypeScript, Expo lint and engine tests passed. Tests cover shared-item rounding, reversed assignee order, zero assignees, invalid/duplicate assignees, subtotal mismatch, fractional cents, cent conservation across 104 bill sizes, and item-edit approval/card reset; previous wallet/freeze/decline/duplicate-payment tests still pass. Web export verified for this revision. No browser or physical-device visual QA performed; supported browser-control skill is unavailable. No signed binaries or live payment actions.
+Source access initially failed through the default proxy; network-enabled retry succeeded. No project data was changed until canonical source was fetched. Reused existing matching dependencies without installing new packages.
+Next: validated versioned local demo recovery and persistent receipt history. State is still in memory and approvals still simulate three people on one device. Authenticated shared sessions, live issuing, wallet provisioning and signing remain outstanding.
+
+## Recovery milestone — October 16, 2026, 3:52 a.m. Pacific
+Fetched canonical d510bc1c before editing; no active-writer record found. Added versioned, bounded local draft/receipt storage using Expo-compatible AsyncStorage. Recovery validates JSON shape, schema version, receipt cent conservation, unique receipt IDs and item bounds. Invalid saved data starts fresh; invalid but structurally valid unfinished drafts remain editable and cannot bypass the engine gate. Recovered approvals, demo cards and wallet selection are always cleared. No real financial credentials are stored.
+Activity now lists persistent demo receipts with immutable wallet/share snapshots and offers another split. Restart preserves history; confirmed clear removes saved draft/history by replacing the snapshot with a fresh empty demo. Failed storage displays an honest warning. Writes are serialized after hydration so startup cannot overwrite recovered data. This is local demo recovery, not multi-user synchronization, durable server accounting or independent consent.
+Verification evidence and next actions are recorded in ASYNC_PLAN.md. No browser or physical-device QA; no signed binaries or live payments. Dependency restoration repaired a self-referencing node_modules symlink; source was unchanged until canonical fetch succeeded.
+</pre></section><section><pre># Overnight and Friday execution plan
+Saved October 15, 2026, Pacific. Priorities, not completion-time promises.
+
+Native Expo app remains canonical. Preserve DESIGN.md and private audience. Read canonical source and current docs before every run; if another writer is active, do independent read-only research. Roughly 70% building/verification, 30% decision-focused research. No real money, paid purchases, external messages or store submission. Other reports remain paused.
+
+## Tonight: October 15–16
+1. DONE: bounded competitor/issuer memo, FEASIBILITY.md.
+2. DONE: item editing and shared assignment; proportional tax/tip with integer cents and stable largest-remainder ties. Preserve equal/percentage/custom modes. Reject unassigned items/subtotal mismatches; edits revoke approvals/card. Test shared items, rounding and conservation.
+3. IMPLEMENTED: Validated, versioned local demo recovery and receipt history; reset invalid data safely. Persist simulated nonsensitive data only. Local recovery is not multi-user synchronization. Device restart QA remains outstanding.
+4. Fix observed invalid-total, changed-tip, pending-person, frozen-card, decline/retry and duplicate-payment issues. Review accessibility/small screens with supported tools; record unavailable QA.
+
+## Friday: October 16
+5. Finish overnight gates before expansion.
+6. Save 90-second pitch, 3-minute demo and concise architecture/competitor explanation with clear simulation boundary.
+7. If stable, implement authenticated server membership and versioned approvals; otherwise document exact handoff. Single-screen controls are not independent consent.
+8. Prepare native internal-build instructions and remaining signing/account/device requirements. Do not claim signed binaries or store submission.
+
+## Completed run: October 15, 2026, 9:50 p.m. Pacific
+Retrieved canonical source at 3cf7f02. Confirmed redesign present; no prior ASYNC_PLAN.md or completed unattended log entry. Three existing source revisions alone do not establish unattended execution. Saved plan and primary-source feasibility memo; exposed both through progress packaging.
+Checks: native lint, TypeScript and existing reducer tests passed. No native API or UI changes; existing bundles reused.
+Next: item-level shared splits with exact tax/tip and approval invalidation, then persistence.
+Blocked: live issuer/program access, developer/signing accounts and physical-device QA. Browser visual QA remains unverified. These do not block simulated implementation.
+
+## Completed milestone — October 16, 2026, 3:05 a.m. Pacific
+Fetched canonical source at 87e7c337; no active-writer record found. Implemented Items split mode: editable named amounts, multiple assignees per item, add/remove, proportional tax and tip with deterministic participant-order cent allocation. Item costs must match subtotal; empty/unassigned/invalid costs block approvals and card creation. Every edit revokes approvals/card. Equal, percentage and custom modes remain available. Money inputs now reject fractional cents. Activity subtitle updated to Henry’s requested “Your splits, in one place.”
+Evidence: native TypeScript, Expo lint and engine tests passed. Tests cover shared-item rounding, reversed assignee order, zero assignees, invalid/duplicate assignees, subtotal mismatch, fractional cents, cent conservation across 104 bill sizes, and item-edit approval/card reset; previous wallet/freeze/decline/duplicate-payment tests still pass. Web export verified for this revision. No browser or physical-device visual QA performed; supported browser-control skill is unavailable. No signed binaries or live payment actions.
+Source access initially failed through the default proxy; network-enabled retry succeeded. No project data was changed until canonical source was fetched. Reused existing matching dependencies without installing new packages.
+Next: validated versioned local demo recovery and persistent receipt history. State is still in memory and approvals still simulate three people on one device. Authenticated shared sessions, live issuing, wallet provisioning and signing remain outstanding.
+
+## Recovery milestone — October 16, 2026, 3:52 a.m. Pacific
+Implemented draft recovery, bounded receipt history, fresh consent after reopening, restart-with-history and confirmed deletion. Recovery unit tests cover malformed/unknown versions, invalid receipt sums, duplicate IDs, invalid item shape, invalid unfinished drafts, receipt deduplication and approval/card reset. Storage is nonsensitive simulation only. Dependency: AsyncStorage installed via Expo SDK 58 compatible installer; SDK source consulted: https://docs.expo.dev/versions/v58.0.0/sdk/async-storage/ (October 16).
+Evidence: TypeScript, Expo lint, existing arithmetic/payment tests and new recovery tests passed; Expo web export passed. Tests validate pure serialization/state behavior, not real browser/device restart behavior. Removed a tracked self-referencing dependency symlink and restored dependencies from lockfile; dependencies themselves remain ignored.
+Expo iOS and Android Hermes bundle exports passed with AsyncStorage included. These are JavaScript bundle checks, not installable signed binaries or native storage/device tests.
+Next: check persistence on physical iOS/Android and browser reload; add partial-refund simulation with cumulative caps and idempotency tests. Then demo/pitch and authenticated-session architecture. Supported browser-control skill remains unavailable, so no visual/reload/device success is claimed. Live issuer access, signing accounts and authenticated server membership remain blockers to those production features, not this demo.
+</pre></section><section><pre># Group checkout decision memo
+Checked October 15, 2026, Pacific. First-party claims, not independent product testing. No Split Bill provider approval or partnership exists.
+
+## Verified facts
+Cino QuickSplit advertises guest link/QR contributions with Apple/Google Pay and a virtual checkout card. Its current page lists €0.20 per transaction capped at €5 monthly, QuickSplit included. Older indexed copy showed sterling pricing: verify local terms before quoting UK fees. Its footer identifies Checkout SAS as debit-card issuer. No-app invitations and group-card checkout are competitive overlap.
+https://www.getcino.com/quicksplit
+
+Cino&#x27;s support article (updated May 27, 2025) lists UK plus 29 European countries, not US. Homepage broadly agrees; QuickSplit&#x27;s marketing counter says 33 countries. Exact count is inconsistent. US eligibility is not established. This suggests a positioning question, not verified demand or launch permission.
+https://support.getcino.com/hc/en-us/articles/8255257055389-Which-countries-is-Cino-available-in
+https://www.getcino.com/
+
+Stripe checks Issuing balance/card controls before real-time authorization, whose decision window is two seconds. Approval reserves funds; capture creates a transaction; reversals/expiry release holds. Thus prepare contributions before merchant checkout, rather than collecting from participants during the authorization callback. Authorization is not final settlement, and this does not establish how consumer contributions fund a program.
+https://docs.stripe.com/issuing/purchases/authorizations
+
+Stripe wallet tokens require approved live cards, not sandbox cards. iOS push provisioning needs Apple&#x27;s payment-pass entitlement. Android needs issuer onboarding, private SDK/API access and app allowlisting. Manual access precedes push access; backend short-lived keys and card/device eligibility checks are required. Issuer provisioning differs from merchant Apple Pay acceptance.
+https://docs.stripe.com/issuing/cards/digital-wallets?platform=react-native
+
+## Recommended architecture: hypothesis
+Keep native simulation. Next: item assignments, exact tax/tip and versioned proposal; each person sees their total before approval. Material edits revoke approvals/card. Add validated local recovery/receipts, then authenticated membership and server-owned versions. Model funding readiness, authorization and capture separately in the future adapter. Live adapter stays disabled.
+
+## Unresolved questions
+- Eligible country/program, accountable cardholder and authorized spender? Separate from personal cards does not mean ownerless credit.
+- Who carries failed/returned funding, liquidity, disputes, fees and refunds? Do not assume atomic multi-person collection.
+- How are restaurant-tip changes and forced/late captures reconciled against consent caps?
+- Does Cino offer item/shared-item allocation and immutable approval? Reviewed pages do not establish absence; no exclusivity claim.
+- Does item-level consent motivate switching? Needs recruited user tests.
+
+Research stop: enough evidence for next build. Repeat research only when a concrete decision needs it.
+</pre></section><section><pre># Native app and group-card specification
+Updated October 15, 2026. User direction: iOS/Android product with Venmo/Cash App familiarity, a dedicated group card and Apple/Google Pay.
+
+## Intended experience
+Create group checkout -&gt; agree to shares -&gt; secure contributions -&gt; create/activate group card -&gt; provision an authorized spender&#x27;s wallet -&gt; merchant payment -&gt; reconciliation and individual receipts.
+The card is separate from participants&#x27; existing personal cards. It cannot be literally ownerless: it must be associated with the issuer&#x27;s approved cardholder/program. The issuer must agree to liability, funding and authorized spenders. A named authorized payer is the starting hypothesis. Do not assume all members can share a card or token. A credit card requires a real credit arrangement; prepaid/debit/credit structure remains unresolved. Demo language is “group card.”
+
+## Delivered foundation
+October 16 recovery update: local draft and simulated receipt snapshots now survive reopening. Approvals, card and wallet state deliberately do not; all participants must be simulated approving again. Local storage is not synchronized consent or a real wallet connection. Current design tokens are in DESIGN.md and supersede the early green palette described below.
+Expo SDK 58 / React Native under mobile/, with Expo Router and shared native/web components. Home, Split, Card, Activity, Profile. Original Split Bill branding: green-led palette, bottom tabs, friend rows, large totals and card visual. The state reducer requires approvals, generates a demo session, gates checkout on simulated wallet setup, supports freezing/declines, blocks duplicate payments and revokes card/approvals when a split changes. No auth, real accounts, wallet tokens or native binary. State is in memory.
+
+## Wallet research
+Stripe supports eligible issued cards in digital wallets. Its documentation says wallet tokens require live mode and cannot be tested in a sandbox. iOS push provisioning requires Apple&#x27;s payment-pass-provisioning entitlement. Android requires issuer/API access and native integration. Confirm program and region eligibility. Only show real wallet provisioning buttons when card/device eligibility is verified. This is issuer-side provisioning, not accepting Apple Pay as a merchant or generating a generic Wallet pass.
+Sources checked October 15, 2026:
+- https://docs.stripe.com/issuing/cards/digital-wallets?platform=react-native
+- https://developer.apple.com/library/archive/documentation/Miscellaneous/Reference/EntitlementKeyReference/ApplePayandPassKitEntitlements/ApplePayandPassKitEntitlements.html
+- https://docs.stripe.com/issuing/consumer-compliance
+- https://docs.expo.dev/versions/v58.0.0/
+- https://docs.expo.dev/router/installation/
+
+## Next work
+1. Preserve native UI as canonical and export it for browser review.
+2. Add item splits, shared items and cent-conserving tax/tip allocation.
+3. Add durable sessions, authenticated users and multi-device approvals.
+4. Define authenticated server APIs for bill versions, approvals, card sessions, eligible wallet provisioning and issuer webhooks. Validate membership, authorized spender, approval version, funding, expiry and idempotency. Never put issuer secrets/PAN/CVC in client storage or logs.
+5. Implement simulated/live issuer adapters; keep live disabled until partner approval/access and scoped authorization.
+6. Connect Expo/EAS and Apple/Google developer accounts for signed internal builds. These accounts and signing are unresolved. Physical device QA, store assets, privacy disclosures and store review remain outstanding.
+7. Continue hourly work on this direction. Private web publication does not mean App Store submission or successful native build.
+</pre></section><section><pre># Split Bill design system and UX audit
+Updated October 15, 2026. This specification is binding guidance for ongoing design work; preserve the native app as canonical.
+
+## Research findings
+“Vibecoded” is an informal judgment, not a measurable interface category. Microsoft Research&#x27;s March 2026 paper examines homogenization risks and proposes deliberate challenges to default outputs; it does not establish that one color/font proves AI authorship. NN/g&#x27;s visual-design guidance emphasizes typographic consistency, grid alignment, hierarchy and restrained palettes. Its consistency heuristic favors predictable conventions. Apply those principles to the task, rather than copying another app&#x27;s screen.
+Sources:
+- https://www.microsoft.com/en-us/research/publication/interrogating-design-homogenization-in-web-vibe-coding/
+- https://www.nngroup.com/articles/why-does-design-look-good/
+- https://www.nngroup.com/articles/visual-hierarchy-ux-definition/
+- https://www.nngroup.com/articles/consistency-and-standards/
+
+## Audit of previous implementation (source-based, not user testing)
+1. Large slogan titles displaced useful information on every screen.
+2. Nearly all content used similarly rounded colored boxes, flattening hierarchy.
+3. Unicode glyphs used as navigation icons differed in weight, alignment and rendering.
+4. Every action looked primary; three large approval buttons dominated the split screen.
+5. Repeated implementation explanations and simulation warnings competed with task content.
+6. Excessive bold weights, weak secondary-text contrast, arbitrary radii and spacing made screens feel assembled rather than designed.
+7. Long screens buried the main action. Profile was unnecessarily a fifth navigation tab while already available through the avatar.
+
+## Direction: a focused social payments utility
+Quiet white canvas, charcoal ink, cobalt action color. Warm participant colors add human distinction without fake photos. Group-card art uses dark navy with simple concentric arcs as an intentional physical-card detail. Real tasks lead: active bill, your share, approvals, wallet choice, receipt. No invented transaction history, testimonials or balances.
+
+## Tokens
+Typography: DM Sans Regular / Medium / Bold, bundled locally for native and web. Money uses tabular numerals and a 58/68 display scale; screens use 28/35; section titles 17/24; body 15/22; supporting text 12/18. Do not add additional typefaces or font weights without a purpose.
+Color: ink #171a20; action #2459e8; muted #626a78; divider #e8ebf0; surface #f5f6f8; positive #17794c. Accent color is reserved for actions/selection, not large decorative blocks on every screen.
+Spacing: 4/8/12/16/24/32 scale, 24-point screen inset. Inputs and buttons at least 48/52 points; interactive approval targets 44 points high. Radius: 10 inputs, 12 buttons, 14 secondary panels, 18 active bill, 20 payment card. Standard Feather icons at 18–24 points.
+
+## Interaction rules
+- Four bottom destinations: Home, Split, Card, Activity. Profile via avatar.
+- One main action in a persistent footer on checkout screens.
+- Bill edit fields live behind an explicit Edit bill disclosure, not in the first-view foreground.
+- Equal / percentage / amount selector exposes selected state.
+- People use aligned rows; inline approval actions retain disabled/approved states.
+- Wallet choices are selection rows; choose first, then simulate payment. Do not use official provisioning branding or imply real wallet connection.
+- Decline scenario lives behind Demo scenarios; freeze is a standard card control.
+- Persistent Demo badge plus contextual no-money text; technical implementation detail lives in profile and project docs.
+- Empty activity has an honest empty state and a clear next action. Receipt only appears after simulated success.
+- Keep all engine invariants: approval reset, invalid-input blocks, freeze and wallet gates, decline/retry, duplicate guard.
+
+## Verification and next review
+Run TypeScript/lint, existing payment reducer tests and web export. Browser-control skill is unavailable in this environment, so visual browser/device QA remains outstanding; do not claim screenshots or usability testing happened. Next review: 320/390/430 widths, OS large text, keyboard visibility, VoiceOver/TalkBack, font loading, touch target spacing, route refresh and sticky footer on small screens. Ask Henry for feedback after the published revision; aesthetic success is not established by compiling.
+</pre></section></main></html>

@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {fresh,reducer} from '../src/lib/engine.ts';
+import {decode,restore,remember} from '../src/lib/recovery.ts';
+let s=fresh();for(let index=0;index<3;index++)s=reducer(s,{type:'approve',index});
+s=reducer(s,{type:'generate',id:'saved-one'});s=reducer(s,{type:'wallet',wallet:'Apple Wallet'});s=reducer(s,{type:'pay'});
+const receipts=remember([],s);assert.equal(receipts.length,1);assert.equal(remember(receipts,s),receipts);
+const raw=JSON.stringify({version:1,draft:s.draft,receipts});const saved=decode(raw)!;assert(saved);
+const recovered=restore(saved);assert.equal(recovered.card,null);assert.equal(recovered.receipt,null);assert.deepEqual(recovered.approvals,[false,false,false]);assert.equal(saved.receipts[0].wallet,'Apple Wallet');
+assert.equal(remember(receipts,reducer(s,{type:'reset'})),receipts);
+for(const bad of ['bad','{}',JSON.stringify({...saved,version:2}),JSON.stringify({...saved,draft:{...s.draft,values:null}}),JSON.stringify({...saved,receipts:[{...receipts[0],shares:[1,2,3]}]}),JSON.stringify({...saved,receipts:[receipts[0],receipts[0]]}),JSON.stringify({...saved,draft:{...s.draft,items:[{people:null}]}})])assert.equal(decode(bad),null);
+const invalidDraft={...s.draft,subtotal:''};assert.match(restore(decode(JSON.stringify({...saved,draft:invalidDraft}))!).notice,/needs attention/);
+assert.equal(remember([],fresh()).length,0);
+console.log('PASS: versioned recovery, malformed-data rejection, consent/card reset, receipt retention and deduplication.');
