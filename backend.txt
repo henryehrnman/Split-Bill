@@ -2,6 +2,20 @@ Backend plan (draft for discussion; nothing here is built yet)
   Goal: replace the fake backend in mobile/src/lib/api.ts with a real server, without changing the product rules in schema.txt. The app already calls a small async API, so each method below becomes an HTTP endpoint. Business rules stay in mobile/src/lib/domain.ts and split.ts and move to the server as-is (TypeScript), so the server and the app's previews never disagree.
   Stage: hackathon MVP. Everything involving money runs in sandbox / test mode only. No live cards or real bank debits until we have a partner and the compliance questions in section 7 are answered.
 
+  0) at a glance
+    i) Server: TypeScript API (Hono) that imports domain.ts and split.ts unchanged, hosted on Vercel / Railway / Fly.io.
+    ii) Database, sign-in, live updates, receipt storage: Supabase (Postgres + Auth + Realtime + Storage). Live updates matter for the claim board so locks and suggested edits show up on everyone's phone right away. [Alternative: Neon + Clerk + Ably.]
+    iii) Cards: Stripe Issuing in test mode. Each card tap is sent to us in real time and we approve or decline within about 2 seconds; that is where the $0 restriction, suspension, one-pending-split and frozen-group rules are enforced. [Alternative: Lithic, quicker sandbox access.]
+    iv) Pulling money from members' banks (deposits, period refills, the bank charge when someone goes negative): Stripe Financial Connections + ACH. [Alternative: Plaid.]
+    v) Ledger: our own append-only table of balance changes in Postgres; balances are calculated from it, never edited directly.
+    vi) Scheduled jobs (period rollover, 7-day deadline, retrying failed charges): Inngest or Trigger.dev. [Simpler: Vercel Cron.]
+    vii) Receipt scanning: a vision model (OpenAI, Claude or Gemini) returning structured JSON, checked against the charge total. [Alternative: AWS Textract.]
+    viii) Notifications and invites: Expo Push, Resend (email), Twilio (SMS).
+    ix) Two real-world problems the design must handle:
+      a) Final amounts differ from the tap. Restaurants and gas stations often capture a different amount than they authorized (tips, holds), so the pending split updates when the final amount arrives, and acceptances/locks reset if it changed (3.ii).
+      b) Bank debits are slow and can bounce. ACH takes 1-4 business days and can be returned after looking successful; a return feeds into the bank-charge-or-suspend rule (3.iii).
+    x) Biggest open decisions: Supabase vs separate services; Stripe vs Lithic; and pooled group money likely counts as money transmission, which is fine to ignore for the demo but needs a partner bank and legal review before a real launch (section 7).
+
   1) recommended stack (hackathon-friendly; alternatives in brackets)
     i) API server: TypeScript with Hono or Fastify, so domain.ts and split.ts are imported directly. Host on Vercel Functions, Railway or Fly.io. [Alternative: Supabase Edge Functions.]
     ii) Database: Postgres, hosted on Supabase or Neon. Money is stored as integer cents (as today). [Alternative: none recommended; we need transactions and row locks for balances.]
@@ -103,3 +117,30 @@ Backend plan (draft for discussion; nothing here is built yet)
     iii) Pooled group funds held for consumers likely count as money transmission / stored value. A live launch needs a sponsor bank or a BaaS partner (e.g. through the issuer) and legal review. Fine to ignore for the hackathon demo, not for launch.
     iv) Who pays when a suspended member never repays (schema 3.iii says the group carries it)? Do we ever write it off?
     v) Do we credit balances when an ACH debit starts (better UX, risk of returns) or when it settles (safer, 1-4 day delay)?
+
+  8) suggestions and plan to move forward (when we're ready to implement)
+    i) My recommendations on the open questions:
+      a) Use Supabase for database, auth, realtime and storage. One dashboard, one SDK, free tier, Expo support. We can split services out later if needed.
+      b) Keep business logic in our own Hono API, not in Supabase database functions, so domain.ts stays the single source of rules and stays unit-testable. Supabase is used as Postgres + auth + realtime, not as the rules engine.
+      c) Start with Stripe for both cards and bank debits (test mode). Apply for Stripe Issuing access on day one because approval can take time; if it stalls, switch the card piece to Lithic's sandbox. The card provider sits behind one small module so swapping is cheap.
+      d) For the demo, credit balances when an ACH debit starts and handle returns as failed charges. Revisit before any live money.
+      e) Don't block Phase 1 on payments. Real accounts + multi-phone sync with simulated money is already a big demo upgrade.
+    ii) Repo layout:
+      a) server/            new Hono API (routes, db queries, webhooks, jobs)
+      b) shared/            domain.ts, split.ts, money.ts moved here and imported by both mobile/ and server/ (or keep them in mobile/src/lib and import by path at first)
+      c) server/migrations/ SQL migrations for the tables in section 4 (Supabase CLI or drizzle-kit)
+      d) mobile/src/lib/api.ts keeps the same method names; add an HTTP implementation and choose fake vs real with an env var (EXPO_PUBLIC_API_URL set = real backend). The fake backend stays for offline demos and UI work.
+    iii) Step-by-step, Phase 1 (no money, about 2-4 days of focused work):
+      1. Create the Supabase project; turn on email + phone OTP auth. Add SUPABASE_URL / keys to .env files (never committed).
+      2. Write migrations for section 4 tables; seed the demo users and groups for testing.
+      3. Scaffold server/ with Hono: auth middleware (verify Supabase JWT -> actor id), Idempotency-Key handling, error format matching ApiError messages the app already shows.
+      4. Persistence layer: load a group's state from Postgres into the Db shape domain.ts expects, run the domain function inside a transaction with the group row locked (SELECT ... FOR UPDATE), write the changes back, append ledger + audit rows. This lets us reuse domain.ts almost unchanged at first.
+      5. Implement endpoints in section 2 in this order: /me and search, groups + invites, deposits/withdrawals, purchase (simulated card tap endpoint for now), claim board, proposals/accept, budget proposals, chargeback.
+      6. Port tests: run tests/domain.test.ts against domain.ts as today, plus API tests that hit the endpoints against a local Supabase (supabase start).
+      7. App: sign-in screen, HTTP api.ts, subscribe to Realtime for the selected group and refetch on changes; remove the demo switcher when the real backend is on.
+      8. Demo check: two phones (or a phone + web) in the same group, claiming items and locking in live.
+    iv) Phase 2 (about 2-3 days): Inngest jobs for period rollover and the 7-day deadline (idempotent per group + period); Expo push tokens table + notifications for invites, new charges, item edits, proposals; invite email/SMS; receipt upload to Storage + vision OCR endpoint with a JSON schema, total check, and a fallback to a single editable line.
+    v) Phase 3 (test-mode money, about 3-5 days once Stripe access is granted): Stripe Connect/Issuing setup, cardholder + card creation on invite accept, issuing_authorization.request webhook calling purchaseBlocker()/spendLimit() (keep it fast: one indexed query + the pure function), transaction/capture webhook to update the charge amount, Financial Connections bank linking in the app, ACH debits for deposits/refills/debt recovery with webhook-driven success/failure/return, nightly reconciliation comparing our ledger to Stripe.
+    vi) Accounts to set up before starting: Supabase project, Stripe account (request Issuing access), Inngest, Expo (EAS) for push credentials, an LLM provider key for OCR, Resend + Twilio (optional for the demo), Sentry.
+    vii) Definition of done for "backend v1" (end of Phase 1-2): two people on two devices can create a group, invite and accept, make a simulated purchase, claim items and lock in live, settle, see balances update everywhere, roll a period, and get push notifications, with all rules enforced on the server and tests passing.
+    viii) Who could own what (suggestion): one person on database + server endpoints, one on app integration (auth, HTTP api.ts, realtime), one on jobs/notifications/OCR, then everyone on Stripe in Phase 3.
