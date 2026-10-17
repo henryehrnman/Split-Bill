@@ -1,0 +1,100 @@
+Launch plan: getting Split Bill onto a real group's iPhones (research, October 17, 2026; nothing here is built yet)
+  Goal: decide which APIs and hosting we can use right away, and list every step between today's fake-backend app and a real group using it on their own phones. Builds on backend.txt (server design) and follows schema.txt as updated by Saahil on October 17 (spend rule by share, cardholder sends the first proposal, personal card charged when a split takes someone below $0).
+
+  0) at a glance
+    i) There are two milestones, and only the first can start today.
+      a) Milestone A: real app, real accounts, a real group on their own iPhones, test-mode money. No approvals needed. About 1-2 weeks of work.
+      b) Milestone B: real cards paying at real stores. Gated on outside approvals and legal work. Weeks to months.
+    ii) Why B is blocked:
+      a) Apple Pay won't work with test cards. Stripe: digital wallet tokens "are only available in live mode", so nobody can add a test card to Apple Wallet.
+      b) Stripe's live Issuing is for commercial (business) card programs. Consumer cards are a private preview, and live access means applying to Stripe sales as a company.
+      c) Pooled group money held for consumers likely counts as money transmission / stored value, so a live launch needs a partner bank and legal review (backend.txt 7.iii).
+    iii) How purchases work in A: a "Simulate tap" button in the app calls Stripe's test endpoint (POST /v1/test_helpers/issuing/authorizations). Stripe then sends our server the same real-time issuing_authorization.request a real card swipe would, so our rules (purchaseBlocker / spendLimit) run exactly as they will in production. Only the store is fake.
+
+  1) APIs we can use right away (no approval needed)
+    i) Database, sign-in, live updates, receipt photos: Supabase. Free tier pauses a project after about a week with no activity, so move to Pro ($25/mo) once the group is using it.
+    ii) Sign-in method: Supabase email one-time code, or Sign in with Apple. Phone codes need an SMS provider (Twilio) that charges per text, so skip them at first.
+    iii) API server: Hono (TypeScript) importing domain.ts and split.ts unchanged, as planned in backend.txt.
+    iv) Test cards and approving each tap: Stripe Issuing in test mode. Instant access from the Stripe dashboard (US). Create cardholders and virtual cards, simulate taps and captures, answer the real-time authorization webhook. Test cards can't be used at real merchants.
+    v) Saved personal card for debt recovery (schema 3.iii): Stripe SetupIntent at sign-up, PaymentIntent when a split takes someone below $0. Works in test mode now and in live mode with a normal Stripe account.
+    vi) Bank linking and ACH deposits/refills: Stripe Financial Connections + ACH Direct Debit. Works in test mode. Deposits can also stay simulated in Phase 1.
+    vii) Push notifications: Expo Push (expo-notifications). Needs a development build on the phone, not Expo Go.
+    viii) Scheduled jobs (period rollover, 7-day deadline, sending stale draft splits): Inngest. [Simpler: Vercel Cron.] Free tier is enough.
+    ix) Receipt scanning (schema 6.i.a): a vision model on the server, e.g. Claude Sonnet 5.5, returning structured JSON, checked against the charge total.
+    x) Errors: Sentry, free tier.
+    xi) Backup card issuers if Stripe stalls: Lithic (self-serve sandbox, Auth Stream Access for real-time approval) and Increase (self-serve sandbox, real-time decisions). Both gate production access too.
+
+  2) hosting
+    i) API: Railway or Vercel. Stripe needs an answer to each tap within about 2 seconds, so an always-running server (Railway) or Vercel's reused instances (Fluid Compute) avoids slow cold starts on that endpoint.
+    ii) Database, sign-in, storage, live updates: Supabase.
+    iii) iOS builds: EAS Build, then EAS Submit to TestFlight.
+
+  3) steps to milestone A (a real group on real iPhones, test-mode money)
+    i) Accounts (day 1):
+      a) Apple Developer Program, $99/yr, ideally enrolled as a company. Apple's rules expect financial apps on the App Store to come from a legal entity.
+      b) Expo / EAS account.
+      c) Supabase project.
+      d) Stripe account with Issuing test mode turned on. Also contact Stripe sales about live Issuing now, because approval takes time and test access doesn't register interest in live mode.
+      e) Inngest, Sentry, and an LLM API key.
+    ii) Backend, Phase 1 (about 2-4 days, backend.txt 8.iii):
+      a) Postgres tables from backend.txt section 4, including funded_period, sent_at, notifications and payment_methods.
+      b) Sign-in check on every request (verify Supabase JWT -> actor id), Idempotency-Key handling.
+      c) Endpoints from backend.txt section 2 running domain.ts.
+      d) Realtime updates for the claim board, locks, edits and proposals.
+    iii) App (in parallel):
+      a) Sign-in screen.
+      b) HTTP version of api.ts, switched on by EXPO_PUBLIC_API_URL so the fake backend stays for offline demos.
+      c) Subscribe to Realtime for the selected group and refetch on changes.
+      d) Hide the demo user switcher when the real backend is on.
+    iv) Stripe test mode:
+      a) Create a cardholder and virtual card when someone accepts an invite.
+      b) issuing_authorization.request endpoint calling purchaseBlocker() / spendLimit(); creates the cardholder's draft charge.
+      c) "Simulate tap" button that calls the test authorization endpoint.
+      d) Save each member's personal card (SetupIntent) for debt recovery.
+    v) Phase 2 work:
+      a) Expo push for invites, sent proposals, receipt scans, item edits and budget changes.
+      b) Inngest jobs: period rollover, 7-day deadline, send-stale-drafts (10 minutes).
+      c) Receipt upload to Supabase Storage + vision OCR.
+    vi) Build and ship:
+      a) app.json: add the expo-notifications plugin; confirm the bundle ID com.henryehrnman.splitbill is ours.
+      b) eas build --platform ios, then eas submit to TestFlight.
+      c) Add the group as internal testers: up to 100 people, no Apple review, but each must be added to our App Store Connect team. External testers (up to 10,000) need a one-time beta review. Builds expire after 90 days.
+    vii) Test with the group: create a group, invite and accept, simulate a tap, send the first proposal, claim and lock items live on two phones, settle, roll a period, get push notifications.
+
+  4) steps to milestone B (real money)
+    i) Form a company (needed for Stripe live Issuing and for App Store review of a financial app).
+    ii) Apply to Stripe sales for live Issuing (or to Lithic / Increase).
+    iii) Legal review of pooled funds. Likely answer: a partner bank or banking-as-a-service provider holds the money.
+    iv) Basic Apple Pay: users type the card into Apple Wallet themselves (manual provisioning). Needs Apple approval through Stripe, about 1-2 weeks.
+    v) "Add to Apple Wallet" button (push provisioning): needs the Apple entitlement com.apple.developer.payment-pass-provisioning, requested by emailing support-issuing@stripe.com with card network, card name, app name, Apple team ID, App Store app ID (ADAM ID) and bundle ID. Then use AddToWalletButton from @stripe/stripe-react-native. On iOS the button flow can be built early with testEnv={true}, but no card is actually added.
+    vi) Identity checks for cardholders (Stripe Identity), live keys, ledger reconciliation against Stripe.
+    vii) Possible early real-money pilot: our own team using company cards for team expenses is a genuine business use. Ask Stripe sales whether that qualifies.
+
+  5) costs to expect for milestone A
+    i) Apple Developer Program: $99/yr.
+    ii) Supabase: free to start, $25/mo Pro once in use (avoids the inactivity pause).
+    iii) Railway or Vercel: free to a few dollars a month at this size.
+    iv) Stripe test mode, Expo Push, Inngest and Sentry free tiers: $0.
+    v) LLM receipt scanning: pay per use, small at this size.
+    vi) EAS Build: free tier covers a handful of builds a month.
+
+  6) decisions for the team
+    i) Accept that the first TestFlight round uses simulated taps (recommended), or wait for live approval.
+    ii) Railway or Vercel for the API.
+    iii) Keep deposits simulated in Phase 1, or build Financial Connections right away.
+    iv) Who forms the company and contacts Stripe sales this week, since that's the slowest step.
+
+  7) sources
+    https://docs.stripe.com/issuing/cards/digital-wallets.md?platform=react-native
+    https://docs.stripe.com/issuing/how-issuing-works
+    https://docs.stripe.com/issuing/testing.md?testing-method=with-code
+    https://support.stripe.com/questions/how-to-apply-for-issuing
+    https://support.stripe.com/questions/stripe-issuing-test-mode-configurations-and-differences-vs-live-mode
+    https://docs.stripe.com/issuing/consumer-issuing
+    https://docs.expo.dev/versions/v58.0.0/sdk/stripe.md
+    https://supabase.com/docs/guides/functions/examples/push-notifications
+    https://automationatlas.io/answers/supabase-free-tier-limits-2026/
+    https://ptkd.com/journal/testflight-external-tester-limit-2026
+    https://docs.lithic.com/docs/auth-stream-access-asa
+    https://increase.com/documentation/real-time-decisions
+    https://increase.com/documentation/push-provisioning
