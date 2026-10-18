@@ -66,7 +66,7 @@ Built in the local demo and shared server-backed app (all money simulated):
 - Percent / amount / equal proposals with acceptances, exact-cent allocation for any group size; default split per group.
 - Spending limited to your own balance until you add your share for the period, automatic personal-card charge for negative balances, suspension when that fails, withdrawals locked while a split is pending.
 - Budget change proposals with unanimous acceptance.
-- Receipt photos (shared accounts): take or choose a photo and a Claude vision model on the server drafts the items, tax and tip. A read that doesn't add up to the charge becomes one line to fix by hand. The local demo and "Use sample receipt" keep the simulated scanner for the demo merchants (Juniper, Trader Joe's, Shell).
+- Receipt photos (shared accounts): take or choose a photo and the server drafts the items, tax and tip. Gemini is used when `GEMINI_API_KEY` is set (`gemini-3.5-flash-lite` by default); Claude is the fallback when only `ANTHROPIC_API_KEY` is set. A read that doesn't add up to the charge becomes one line to fix by hand. The local demo and "Use sample receipt" keep the simulated scanner for the demo merchants (Juniper, Trader Joe's, Shell).
 - 7-day split deadline freeze, chargeback freeze, and a demo "support resolves dispute" action.
 - Activity (group month/all-time spend, charge details) and Profile (balance, period spend, charges, funding history).
 - **Demo user switcher**: tap the "Demo · Name" badge or use Profile to act as Henry, Maya, Jordan, Connor, or Saahil. This stands in for each person using their own phone. In the seeded data, Maya's Juniper charge is pending with her default split already sent, and Henry has a pending invite to Connor's "Tahoe ski trip".
@@ -75,7 +75,7 @@ Built in the local demo and shared server-backed app (all money simulated):
 
 Verified: TypeScript, lint, and unit tests for split math and all backend rules (invites, periods, share-added spending rule, debt recovery, suspension, first proposal and notifications, claim board) pass, and the web bundle exports. Clicked through in headless Chrome: purchase, the payer's first proposal (sent by hand, sent automatically on leaving, and leaving someone out), notifications, accepting and settling, and the layout at iPhone size. `npm ci` in `mobile/` matches `package.json` as of main `7126984`.
 
-The shared server is deployed. Supabase project `uiwbsedibgvwaklmwjna` is running the code on main: migration `0001` is applied and the `rpc` Edge Function is active. Email confirmation is off. An unauthenticated call returns 401, a CORS preflight returns 204, and a signed-in call with no profile returns 403 `no_profile`, so sign-in, the function, and `app_state` work together. `DEMO_MODE` is off, so a signed-in user cannot wipe every account. Receipt photo scans return 503 `scan_off` until `ANTHROPIC_API_KEY` is set on the function.
+The shared server is deployed. Supabase project `uiwbsedibgvwaklmwjna` is running the code on main: migration `0001` is applied and the `rpc` Edge Function is active. Email confirmation is off. An unauthenticated call returns 401, a CORS preflight returns 204, and a signed-in call with no profile returns 403 `no_profile`, so sign-in, the function, and `app_state` work together. `DEMO_MODE` is off, so a signed-in user cannot wipe every account. A synthetic receipt photo was read live on October 18, 2026 with Gemini (`gemini-3.5-flash-lite`): the items, tax, and tip matched the charge and landed on the claim board. Demo photos should be synthetic or redacted. Scans return 503 `scan_off` only when neither `GEMINI_API_KEY` nor `ANTHROPIC_API_KEY` is set.
 
 Point a shared-server build at it with `mobile/.env.local` or the hosted build environment: `EXPO_PUBLIC_API_URL=https://uiwbsedibgvwaklmwjna.supabase.co/functions/v1/rpc`, `EXPO_PUBLIC_SUPABASE_URL=https://uiwbsedibgvwaklmwjna.supabase.co`, and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the Supabase dashboard (Settings → API Keys).
 
@@ -95,7 +95,7 @@ All business rules live in plain TypeScript so they can move to a real server un
 | `mobile/src/lib/api.ts` | Async API facade: local persisted demo or authenticated HTTP RPC, selected by session mode |
 | `mobile/src/lib/fakeOcr.ts` | Sample receipts, and the check that real photo reads add up to the charge |
 | `mobile/src/lib/photo.ts` | Takes or picks a receipt photo and shrinks it for upload |
-| `supabase/functions/rpc/receipt.ts` | Reads a receipt photo with a Claude vision model |
+| `supabase/functions/rpc/receipt.ts` | Reads a receipt photo with Gemini, or with Claude when only that key is set |
 | `mobile/src/lib/seed.ts` | Demo users and history, built through the same rules |
 | `mobile/src/lib/store.tsx` | Scoped account/demo state, selected group, API calls, Realtime refresh, notices |
 | `mobile/src/lib/ui.tsx` | Shared UI components and styles |
@@ -108,7 +108,7 @@ For the hackathon (by 10:00am October 18; details in [`launch.txt`](launch.txt) 
 
 1. **Server (Henry):** implemented Supabase table and RPC Edge Function running `domain.ts`, sign-in to user mapping and filtered responses. Deploy using [`supabase/README.md`](supabase/README.md).
 2. **App (Connor):** implemented sign-in/sign-up and profile completion, authenticated HTTP `api.ts`, version-ping Realtime updates, remote invite search, demo-mode toggle and account isolation, loading/error/retry states. Configure the public client settings and verify against the deployed server on two phones.
-3. **Receipts, hosting, demo (Saahil):** receipt photos are implemented (Claude vision model on the server); they need `ANTHROPIC_API_KEY` set on the deployed function and a test on real receipts. The hosted web app is live at [https://splitbill-hackathon.vercel.app](https://splitbill-hackathon.vercel.app). The demo script is [`docs/DEMO.md`](docs/DEMO.md). Still to do: a demo group with real accounts, and a backup video.
+3. **Receipts, hosting, demo (Saahil):** receipt photos are live on the deployed function with Gemini (`GEMINI_API_KEY` set; `GEMINI_MODEL` defaults to `gemini-3.5-flash-lite`). A synthetic receipt was read onto the claim board on October 18, 2026. Claude remains the fallback. Use a synthetic or redacted receipt. The hosted web app is live at [https://splitbill-hackathon.vercel.app](https://splitbill-hackathon.vercel.app). The demo script is [`docs/DEMO.md`](docs/DEMO.md). Still to do: a demo group with real accounts, and a backup video. The final Devpost submission needs a video under 3 minutes. Tonight's draft does not.
 4. Stretch goal: Stripe Issuing test mode, with the "Simulate tap" button firing Stripe's real card-approval webhook.
 
 Left out until after the hackathon: real money and cards, Apple Pay, native push notifications, bank linking, saved-card debt recovery (stays simulated), scheduled jobs (`tick()` runs them on every request), normalized tables.
