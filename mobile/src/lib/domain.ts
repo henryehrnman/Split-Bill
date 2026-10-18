@@ -232,7 +232,7 @@ export function itemBoardStatus(c: Charge) {
   const unclaimed = r.items.filter(i => !i.people.length);
   const claimants = [...new Set(r.items.flatMap(i => i.people))];
   const unlocked = claimants.filter(id => !r.locked.includes(id));
-  const ready = r.items.length > 0 && !unclaimed.length && !unlocked.length && !r.edits.length;
+  const ready = !r.draft && r.items.length > 0 && !unclaimed.length && !unlocked.length && !r.edits.length;
   return {unclaimed, claimants, unlocked, ready};
 }
 
@@ -479,6 +479,13 @@ function board(c: Charge) {
   return c.receipt ?? fail('Scan the receipt first.');
 }
 
+// A photo read that didn't add up is only a draft: nobody claims, locks or suggests on it until someone saves a version that equals the charge.
+function claimable(c: Charge) {
+  const r = board(c);
+  if (r.draft) fail('Fix the receipt first: the scanned items don’t add up to the charge yet.');
+  return r;
+}
+
 // Consent covers receipt contents and claims; other members locking or suggesting edits does not change them.
 export function receiptApprovalKey(receipt: Receipt): string {
   return JSON.stringify({
@@ -495,7 +502,7 @@ export function scanReceipt(db: Db, actor: UserId, chargeId: string, now: number
   const scanned = read === undefined ? ocr(c.merchant, c.amount, c.id) : fromScan(read, c.merchant, c.amount, c.id);
   c.receipt = {items: scanned.items.map(i => ({...i, people: []})), tax: scanned.tax, tip: scanned.tip, itemized: scanned.itemized, scannedAt: now, locked: [], edits: [], ...(scanned.draft && {draft: scanned.draft})};
   const by = userById(db, actor).name;
-  notify(db, c, memberIds(groupById(db, c.groupId)).filter(id => id !== actor), () => `${by} scanned the ${c.merchant} receipt (${money(c.amount)}). Claim the items you had.`, now);
+  notify(db, c, memberIds(groupById(db, c.groupId)).filter(id => id !== actor), () => c.receipt?.draft ? `${by} scanned the ${c.merchant} receipt (${money(c.amount)}), but the items don’t match the charge yet. Review them before claiming.` : `${by} scanned the ${c.merchant} receipt (${money(c.amount)}). Claim the items you had.`, now);
   c.sentAt ??= now;
   return c.receipt;
 }
@@ -520,7 +527,7 @@ export function updateReceipt(db: Db, actor: UserId, chargeId: string, input: {i
 
 export function toggleClaim(db: Db, actor: UserId, chargeId: string, itemId: string) {
   const {c} = openCharge(db, actor, chargeId);
-  const r = board(c);
+  const r = claimable(c);
   if (r.locked.includes(actor)) fail('Unlock your selection to change it.');
   const item = r.items.find(i => i.id === itemId) ?? fail('Item not found.');
   item.people = item.people.includes(actor) ? item.people.filter(p => p !== actor) : [...item.people, actor];
@@ -530,7 +537,7 @@ export function toggleClaim(db: Db, actor: UserId, chargeId: string, itemId: str
 export function setLocked(db: Db, actor: UserId, chargeId: string, locked: boolean, now: number, expectedReceiptKey?: string) {
   const {c} = openCharge(db, actor, chargeId);
   if (locked && !c.receipt) throw new StaleStateError('The receipt was replaced by a proposal. Review the latest split.');
-  const r = board(c);
+  const r = locked ? claimable(c) : board(c);
   if (locked && expectedReceiptKey !== receiptApprovalKey(r)) throw new StaleStateError('The receipt changed. Review your items before locking them.');
   r.locked = locked ? [...new Set([...r.locked, actor])] : r.locked.filter(id => id !== actor);
   confirmItemsIfReady(db, c, now);
@@ -538,7 +545,7 @@ export function setLocked(db: Db, actor: UserId, chargeId: string, locked: boole
 
 export function suggestItemEdit(db: Db, actor: UserId, chargeId: string, itemId: string, targetId: UserId, now: number) {
   const {c, g} = openCharge(db, actor, chargeId);
-  const r = board(c);
+  const r = claimable(c);
   if (targetId === actor) fail('Change your own items directly.');
   joinedMember(g, targetId);
   const item = r.items.find(i => i.id === itemId) ?? fail('Item not found.');
@@ -548,7 +555,7 @@ export function suggestItemEdit(db: Db, actor: UserId, chargeId: string, itemId:
 
 export function respondItemEdit(db: Db, actor: UserId, chargeId: string, editId: string, accept: boolean, now: number) {
   const {c} = openCharge(db, actor, chargeId);
-  const r = board(c);
+  const r = claimable(c);
   const edit = r.edits.find(e => e.id === editId) ?? fail('That edit is no longer pending.');
   if (edit.targetId !== actor) fail('Only the person this edit affects can respond to it.');
   r.edits = r.edits.filter(e => e.id !== editId);

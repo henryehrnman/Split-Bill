@@ -641,10 +641,20 @@ for (const legacy of [false, true]) {
   assert.equal(off.itemized, false);
   assert.deepEqual(off.items.map(i => i.amount), [15420], 'the board stays one line while the read is a draft');
   assert.deepEqual(off.draft, {items: [{name: 'Pasta', amount: 9000}, {name: 'Wine', amount: 5000}], tax: 1020, tip: 1300});
+  // The server enforces it, not just the Split screen: nobody can claim, lock or suggest on the one-line board while it's a draft.
+  const beforeGuards = JSON.stringify(db);
+  throws(() => d.toggleClaim(db, 'u_henry', c.id, off.items[0].id), /Fix the receipt first/);
+  throws(() => d.setLocked(db, 'u_henry', c.id, true, T0, d.receiptApprovalKey(off)), /Fix the receipt first/);
+  throws(() => d.suggestItemEdit(db, 'u_henry', c.id, off.items[0].id, 'u_maya', T0), /Fix the receipt first/);
+  assert.equal(JSON.stringify(db), beforeGuards, 'refused draft writes change nothing');
+  assert.equal(d.itemBoardStatus(c).ready, false);
+  assert.match(db.notifications[0].text, /don’t match the charge yet/);
   throws(() => d.updateReceipt(db, 'u_maya', c.id, {items: [{id: 'a', name: 'Pasta', amount: 9000}, {id: 'b', name: 'Wine', amount: 5000}], tax: 1020, tip: 1300}), /add up to/);
   d.updateReceipt(db, 'u_maya', c.id, {items: [{id: 'a', name: 'Pasta', amount: 9000}, {id: 'b', name: 'Wine', amount: 5000}], tax: 1020, tip: 400});
   assert.equal(c.receipt!.itemized, true);
   assert.equal(c.receipt!.draft, undefined);
+  d.toggleClaim(db, 'u_henry', c.id, 'a');
+  assert.deepEqual(c.receipt!.items[0].people, ['u_henry'], 'claims open once the saved receipt matches');
 
   assert.equal(d.scanReceipt(db, 'u_maya', c.id, T0, {items: [{name: 'Refund', amount: -500}], tax: 0, tip: 0}).draft, undefined, 'an unusable read keeps no draft');
   assert.equal(d.scanReceipt(db, 'u_maya', c.id, T0, {items: [], tax: 0, tip: 0}).draft, undefined);
