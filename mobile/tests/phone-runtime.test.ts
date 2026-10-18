@@ -38,13 +38,23 @@ function declaration(name: string) {
 const names = ['button', 'moneyCents', 'distributeWeighted', 'validateItemList', 'itemBreakdown',
   'itemListSignature', 'prepareSelection', 'beginSelection', 'advanceItemSelection', 'toggleSelection',
   'back', 'confirmSelection', 'confirmItemList', 'submitSplitProposal', 'splitFooter', 'selectItems',
-  'itemEditor', 'call', 'act'];
+  'itemEditor', 'call', 'act', 'currentAllocation', 'canonicalAllocation', 'equalChargeAllocation',
+  'splitUnit', 'percentageParts', 'percentText', 'percentageBasis', 'makePercentageDraft',
+  'percentageAllocation', 'allocationText', 'calculateProposal', 'customAllocationValue',
+  'customInputWidth', 'methodName', 'draftPersonalAllocation', 'draftValidationText',
+  'refreshDraftSummary', 'memberAllocations', 'splitEdit'];
 const clickHandlers = body.filter(node => node.type === 'ExpressionStatement'
   && node.expression.type === 'CallExpression' && node.expression.callee.type === 'Identifier'
   && node.expression.callee.name === 'on' && node.expression.arguments[0]?.type === 'Literal'
   && node.expression.arguments[0].value === 'click'
   && source.slice(node.start, node.end).includes('case "confirm-selection":'));
 assert.equal(clickHandlers.length, 1, 'Expected one delegated selection action handler');
+const inputHandlers = body.filter(node => node.type === 'ExpressionStatement'
+  && node.expression.type === 'CallExpression' && node.expression.callee.type === 'Identifier'
+  && node.expression.callee.name === 'on' && node.expression.arguments[0]?.type === 'Literal'
+  && node.expression.arguments[0].value === 'input'
+  && source.slice(node.start, node.end).includes('e.target.dataset.draftField'));
+assert.equal(inputHandlers.length, 1, 'Expected one draft input handler');
 const render = body.find(node => node.type === 'FunctionDeclaration' && node.id?.name === 'render');
 assert.ok(render?.type === 'FunctionDeclaration');
 const routes = render.body.body.find(node => node.type === 'SwitchStatement');
@@ -55,42 +65,50 @@ const selectionRender = selectionRoute.consequent.filter(node => node.type !== '
   .map(node => source.slice(node.start, node.end)).join('\n');
 const runtimeSource = names.map(declaration).join('\n')
   + '\n' + source.slice(clickHandlers[0].start, clickHandlers[0].end)
+  + '\n' + source.slice(inputHandlers[0].start, inputHandlers[0].end)
   + `\nthis.runtime={${names.join(',')}};`
   + `\nthis.renderSelection=function(id){const r={id};let html='',footer='';${selectionRender};return {html,footer};};`;
 
-function fixture() {
+function fixture(amount = 103, itemized = true) {
   let db: Db = {version: 6, seq: 0, clockOffset: 0,
     users: [PAYER, SELF, PEER].map((id, tone) => ({id, name: id, initials: id[0], tone,
       handle: id, email: `${id}@example.test`, phone: ''})),
     groups: [], cards: [], charges: [], budgetProposals: [], ledger: [], notifications: []};
-  const group = d.createGroup(db, PAYER, {name: 'Runtime group', budget: 6000, periodDays: 30, inviteIds: [SELF, PEER]}, NOW);
-  for (const id of [SELF, PEER]) d.respondInvite(db, id, group.id, true, NOW, 2000);
+  const budget = Math.max(6000, amount * 3);
+  const group = d.createGroup(db, PAYER, {name: 'Runtime group', budget, periodDays: 30, inviteIds: [SELF, PEER]}, NOW);
+  for (const id of [SELF, PEER]) d.respondInvite(db, id, group.id, true, NOW, budget / 3);
   d.addToWallet(db, PAYER, d.cardFor(db, group.id, PAYER)!.id, 'Apple Wallet');
-  const chargeId = d.purchase(db, PAYER, group.id, {merchant: 'Runtime receipt', amount: 103}, NOW).id;
-  d.confirmReceiptList(db, PAYER, chargeId, list, NOW, d.chargeEditKey(db.charges[0]));
+  const chargeId = d.purchase(db, PAYER, group.id, {merchant: 'Runtime receipt', amount}, NOW).id;
+  if (itemized) d.confirmReceiptList(db, PAYER, chargeId, list, NOW, d.chargeEditKey(db.charges[0]));
+  else d.proposeSplit(db, PAYER, chargeId, {method: 'equal', participants: [PAYER, SELF, PEER]}, NOW,
+    {acceptOwnShare: false, expectedEditKey: d.chargeEditKey(db.charges[0])});
   const snapshot = projectPhoneSnapshot(db, SELF, NOW);
   const state = {...snapshot.state, tab: 'home', stack: [{type: 'split', id: chargeId}],
-    splitDrafts: {} as Record<string, any>, selectionDrafts: {} as Record<string, any>};
+    splitDrafts: {} as Record<string, any>, selectionDrafts: {} as Record<string, any>, splitUnits: {} as Record<string, string>};
   const calls: {method: string; args: any[]}[] = [];
   const messages: string[] = [];
-  let handler: (event: any) => void;
+  const handlers: Record<string, (event: any) => void> = {};
+  const dom = {share: {textContent: ''}, error: {textContent: '', hidden: true}, submit: {disabled: false}};
+  let renders = 0;
   let work: Promise<void> | undefined;
   let failTransport = false;
   let lastError: unknown;
   const context: any = {
     state, pending: snapshot.pending, busy: false, disposed: false, suppressCardClickUntil: 0,
-    root: {setAttribute() {}, removeAttribute() {}}, $: () => null,
-    on: (_type: string, callback: (event: any) => void) => { handler = callback; },
+    root: {setAttribute() {}, removeAttribute() {},
+      querySelectorAll: (selector: string) => selector === '[data-draft-submit]' ? [dom.submit] : []},
+    $: (selector: string) => ({'#split-share': dom.share, '#draft-total': dom.error, '[data-draft-submit]': dom.submit})[selector] ?? null,
+    on: (type: string, callback: (event: any) => void) => { handlers[type] = callback; },
     chargePeople: (charge: PhoneCharge) => charge.people,
     currentProposal: (charge: PhoneCharge) => state.proposalDetails[charge.id],
     current: () => state.stack.at(-1) ?? {type: state.tab},
     push: (type: string, id: string) => state.stack.push({type, id}),
-    saveScroll() {}, render() {}, safeRender() {}, syncRoute() {},
+    saveScroll() {}, render() { renders++; }, safeRender() {}, syncRoute() {},
     toast: (message: string) => messages.push(message),
     money: (value: number) => `$${value.toFixed(2)}`, esc: String, icon: () => '',
     backbar: (title: string) => `<header>${title}</header>`,
-    itemFlowShell: (_charge: unknown, _proposal: unknown, card: string) => card,
-    receiptEntryActions: () => '', customInputWidth: () => 4, draftValidationText: () => '',
+    itemFlowShell: (_charge: unknown, _proposal: unknown, card: string, _selecting: boolean, share: number | null) => { context.flowShare = share; return card; },
+    receiptEntryActions: () => '', proposalHeading: () => '<h2>Proposed split</h2>', avatar: () => '',
     cents: (value: number) => Math.round(value * 100),
     adopt(next: PhoneSnapshot) { Object.assign(state, next.state); context.pending = next.pending; },
     bridge: {
@@ -115,7 +133,7 @@ function fixture() {
   async function click(action: string, extra: Record<string, string> = {}) {
     work = undefined;
     const target = {dataset: {action, id: chargeId, ...extra}, closest: () => null};
-    handler!({target: {closest: () => target}, preventDefault() {}});
+    handlers.click({target: {closest: () => target}, preventDefault() {}});
     await work;
   }
   async function clickFooter(label: string) {
@@ -128,7 +146,8 @@ function fixture() {
     await click(action);
   }
   const currentCharge = () => db.charges.find(charge => charge.id === chargeId)!;
-  return {context, state, calls, messages, chargeId, click, clickFooter, currentCharge,
+  return {context, state, calls, messages, chargeId, click, clickFooter, currentCharge, dom,
+    input(target: any) { handlers.input({target}); }, get renders() { return renders; },
     get db() { return db; }, get lastError() { return lastError; },
     fail() { failTransport = true; },
     refresh() { context.adopt(projectPhoneSnapshot(db, SELF, NOW)); },
@@ -154,16 +173,18 @@ function fixture() {
   assert.equal(JSON.stringify(f.db), before);
 }
 
-// Receipt-list editing uses the same footer but cannot accidentally approve items.
-{
+// Both list-editor actions publish only the list; selection still has no inline actions.
+for (const action of ['confirm-item-list', 'submit-proposal']) {
   const f = fixture();
   f.state.splitDrafts[f.chargeId] = clone(f.state.proposalDetails[f.chargeId]);
   f.state.stack.push({type: 'split-edit', id: f.chargeId});
   const card = f.context.runtime.itemEditor(f.context.pending[0], f.state.splitDrafts[f.chargeId]);
-  assert.doesNotMatch(card, /data-action="(?:submit-proposal|cancel-edit|confirm-selection)"/);
+  assert.match(card, /data-action="cancel-edit"[^>]*>Cancel/);
+  assert.match(card, /data-action="confirm-item-list"[^>]*>Confirm items/);
+  assert.doesNotMatch(card, /data-action="confirm-selection"/);
   const footer = f.context.runtime.splitFooter(f.chargeId, true);
   assert.match(footer, /data-action="submit-proposal"[^>]*>Propose changes/);
-  await f.click('submit-proposal');
+  await f.click(action);
   assert.deepEqual(f.calls.map(call => call.method), ['confirmReceiptList']);
   assert.equal(f.state.stack.at(-1)?.type, 'select-items');
   assert.deepEqual(f.currentCharge().receipt!.locked, []);
@@ -247,4 +268,132 @@ for (const revision of ['unchanged', 'image', 'restored-image'] as const) {
   assert.equal(f.calls.length, 0);
 }
 
-console.log('PASS phone runtime: shared footer wiring, draft-only selection/cancel, failed and stale submissions, zero items, settlement, and receipt revision reset.');
+
+function customFixture(amount = 10000) {
+  const f = fixture(amount, false), charge = f.context.pending[0];
+  const draft = {...clone(f.state.proposalDetails[f.chargeId]), method: 'custom', allocation: [...charge.allocation]} as any;
+  f.state.splitDrafts[f.chargeId] = draft;
+  f.state.stack.push({type: 'split-edit', id: f.chargeId});
+  return Object.assign(f, {charge, draft});
+}
+function submitTag(markup: string) {
+  const tag = markup.match(/<button\b[^>]*data-draft-submit\b[^>]*>/)?.[0];
+  assert.ok(tag, 'The custom footer must expose its draft submit button');
+  return tag;
+}
+
+// Initial custom rendering and live refresh agree; invalid totals never normalize
+// the viewer's percentage or fall back to their published allocation.
+for (const test of [
+  {unit: 'dollars', values: ['20', '30', '40'], own: 20, valid: false},
+  {unit: 'dollars', values: ['20', '30', '60'], own: 20, valid: false},
+  {unit: 'dollars', values: ['20', '30', '50'], own: 20, valid: true},
+  {unit: 'dollars', values: ['20', '', '80'], own: 20, valid: false},
+  {unit: 'dollars', values: ['', '50', '50'], own: null, valid: false},
+  {unit: 'dollars', values: ['0', '50', '50'], own: 0, valid: true},
+  {unit: 'percent', values: ['30', '30', '30'], own: 30, valid: false},
+  {unit: 'percent', values: ['30', '50', '30'], own: 30, valid: false},
+  {unit: 'percent', values: ['30', '30', '40'], own: 30, valid: true},
+  {unit: 'percent', values: ['30', '', '70'], own: 30, valid: false},
+  {unit: 'percent', values: ['', '50', '50'], own: null, valid: false},
+  {unit: 'percent', values: ['0', '50', '50'], own: 0, valid: true},
+]) {
+  const f = customFixture(), api = f.context.runtime;
+  f.state.splitUnits[f.chargeId] = test.unit;
+  if (test.unit === 'percent') f.draft.percentageDraft = {...api.makePercentageDraft(f.draft.allocation), values: test.values};
+  else f.draft.allocation = test.values;
+  const before = JSON.stringify(f.db), raw = JSON.stringify(f.draft);
+  assert.equal(api.draftPersonalAllocation(f.charge, f.draft), test.own);
+  api.splitEdit(f.chargeId);
+  assert.equal(f.context.flowShare, test.own, 'Initial top share must use the draft preview');
+  const footer = api.splitFooter(f.chargeId, true);
+  assert.equal(/\bdisabled\b/.test(submitTag(footer)), !test.valid);
+  const rows = api.memberAllocations(f.charge, f.draft, true);
+  assert.match(rows, /id="draft-total"/);
+  if (!test.valid) {
+    assert.match(rows, /Split must total to \$100\.00/);
+    assert.ok(rows.indexOf('id="draft-total"') > rows.lastIndexOf('class="person-row"'));
+    assert.match(rows, /class="[^"]*form-error[^"]*"[^>]*id="draft-total"|id="draft-total"[^>]*class="[^"]*form-error/);
+  } else assert.doesNotMatch(rows, /Split must total to/);
+  api.refreshDraftSummary(f.charge, f.draft);
+  assert.equal(f.dom.share.textContent, test.own === null ? '—' : `$${test.own.toFixed(2)}`);
+  assert.equal(f.dom.submit.disabled, !test.valid);
+  assert.equal(f.dom.error.textContent, test.valid ? '' : 'Split must total to $100.00');
+  assert.equal(f.dom.error.hidden, test.valid);
+  assert.equal(JSON.stringify(f.draft), raw, 'Preview must not rewrite raw draft data');
+  if (!test.valid) {
+    await f.click('submit-proposal'); // Validation remains effective even if a stale event bypasses disabled UI.
+    assert.equal(f.calls.length, 0);
+    assert.equal(f.state.stack.at(-1)?.type, 'split-edit');
+  }
+  assert.equal(JSON.stringify(f.db), before);
+}
+
+// Valid amounts use canonical remainder cents, and unchanged percent baselines
+// retain their exact original cents rather than reverse-calculating rounded text.
+{
+  const f = customFixture(1), api = f.context.runtime;
+  f.draft.percentageDraft = {...api.makePercentageDraft(f.draft.allocation), values: ['50', '40', '0']};
+  assert.equal(api.draftPersonalAllocation(f.charge, f.draft), 0.01);
+  f.draft.percentageDraft.values[1] = '50';
+  assert.deepEqual(clone(api.calculateProposal(f.charge, f.draft).allocation), [0, 0.01, 0]);
+  assert.equal(api.draftPersonalAllocation(f.charge, f.draft), 0);
+}
+{
+  const f = customFixture(1000003), api = f.context.runtime;
+  f.draft.allocation = [5000.01, 5000.02, 0];
+  f.draft.percentageDraft = api.makePercentageDraft(f.draft.allocation);
+  assert.deepEqual(clone(f.draft.percentageDraft.values), ['50', '50', '0']);
+  assert.equal(api.draftPersonalAllocation(f.charge, f.draft), 5000.01);
+  assert.deepEqual(clone(api.calculateProposal(f.charge, f.draft).allocation), f.draft.allocation);
+}
+
+// The real input handler updates existing nodes, preserving typing/caret and
+// draft strings while switching button/error state in both units.
+for (const unit of ['dollars', 'percent']) {
+  const f = customFixture(), api = f.context.runtime;
+  f.state.splitUnits[f.chargeId] = unit;
+  f.draft.allocation = [20, 30, 50];
+  if (unit === 'percent') f.draft.percentageDraft = api.makePercentageDraft(f.draft.allocation);
+  const before = JSON.stringify(f.db);
+  const input = {dataset: {draftField: unit === 'percent' ? 'percentage' : 'allocation', person: '0'},
+    value: '21.', style: {}, selectionStart: 3, selectionEnd: 3};
+  const renderCount = f.renders;
+  f.input(input);
+  assert.equal(input.value, '21.');
+  assert.equal(input.selectionStart, 3); assert.equal(input.selectionEnd, 3);
+  assert.equal((unit === 'percent' ? f.draft.percentageDraft.values : f.draft.allocation)[0], '21.');
+  assert.equal(f.dom.share.textContent, '$21.00');
+  assert.equal(f.dom.submit.disabled, true);
+  assert.equal(f.dom.error.textContent, 'Split must total to $100.00');
+  assert.equal(f.dom.error.hidden, false);
+  f.input({dataset: {...input.dataset, person: '2'}, value: '49', style: {}});
+  assert.equal(f.dom.submit.disabled, false);
+  assert.equal(f.dom.error.textContent, '');
+  assert.equal(f.dom.error.hidden, true);
+  assert.equal(f.dom.share.textContent, '$21.00');
+  assert.equal(f.renders, renderCount);
+  assert.equal(f.calls.length, 0);
+  assert.equal(JSON.stringify(f.db), before);
+}
+
+// Equal proposals and item selection retain active footers; inline list Cancel
+// only discards its unsent editor and does not publish or approve anything.
+{
+  const f = customFixture(), api = f.context.runtime;
+  f.draft.method = 'equal';
+  f.draft.allocation = ['', '', ''];
+  assert.doesNotMatch(api.splitFooter(f.chargeId, true), /\bdisabled\b/);
+  assert.equal(api.draftPersonalAllocation(f.charge, f.draft), api.calculateProposal(f.charge, f.draft).allocation[0]);
+}
+{
+  const f = fixture(), before = JSON.stringify(f.db);
+  f.state.splitDrafts[f.chargeId] = clone(f.state.proposalDetails[f.chargeId]);
+  f.state.stack.push({type: 'split-edit', id: f.chargeId});
+  await f.click('cancel-edit');
+  assert.equal(f.state.splitDrafts[f.chargeId], undefined);
+  assert.equal(f.calls.length, 0);
+  assert.equal(JSON.stringify(f.db), before);
+}
+
+console.log('PASS phone runtime: inline list/shared selection actions, draft isolation and stale guards, settlement, receipt revisions, live custom preview/validation, canonical cents, and input preservation.');
