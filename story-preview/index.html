@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#171e2d">
+  <meta name="description" content="One group. A card for every member. Everyone's share. A guided look at chipin.">
+  <title>chipin — a little less settling up</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="story.css">
+  <script defer src="story.js"></script>
+</head>
+<body data-scene="intro" data-tone="navy" data-mode="scripted" data-copy-side="left">
+  <a class="skip-link" href="#story-track">Skip to story chapters</a>
+  <div id="story-progress" aria-hidden="true"></div>
+
+  <header class="story-header">
+    <a class="story-brand" href="#top" aria-label="chipin, back to the beginning">
+      <img src="phone/assets/chipin-mark.png" alt="" width="34" height="34">
+      <span>chipin<span class="brand-period">.</span></span>
+    </a>
+    <div class="header-actions">
+      <span class="story-status"><span aria-hidden="true"></span>Scripted demo</span>
+      <button id="explore-toggle" class="explore-button" type="button">Explore demo <span aria-hidden="true">↗</span></button>
+    </div>
+  </header>
+
+  <main id="top">
+    <div id="story-stage" aria-label="chipin guided product story">
+      <div class="stage-grid" aria-hidden="true"></div>
+      <div id="ambient-glow" aria-hidden="true"></div>
+      <div class="orbital-lines" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div id="stage-word" aria-hidden="true">together</div>
+      <div class="stage-grain" aria-hidden="true"></div>
+
+      <section id="scene-copy" aria-live="polite" aria-atomic="true">
+        <p id="scene-kicker" class="scene-kicker">A little less settling up</p>
+        <h1 id="scene-title" class="scene-title">Good company.<br><span class="accent">Shared moments.</span></h1>
+        <p id="scene-body">A group, a shared card, and a simpler way to spend together. Meet chipin.</p>
+      </section>
+
+      <div id="card-fan" aria-hidden="true">
+        <div class="visual-card fan-card-one"><div class="prop-card-top"><span>chipin.</span><span class="prop-contactless">)))</span></div><span class="prop-chip"></span><div class="prop-card-bottom"><span>APARTMENT · CONNOR<br><b>•••• 4826</b></span><strong>VISA</strong></div></div>
+        <div class="visual-card fan-card-two"><div class="prop-card-top"><span>chipin.</span><span class="prop-contactless">)))</span></div><span class="prop-chip"></span><div class="prop-card-bottom"><span>APARTMENT · HENRY<br><b>•••• 6419</b></span><strong>VISA</strong></div></div>
+        <div class="visual-card fan-card-three"><div class="prop-card-top"><span>chipin.</span><span class="prop-contactless">)))</span></div><span class="prop-chip"></span><div class="prop-card-bottom"><span>APARTMENT · MAYA<br><b>•••• 9032</b></span><strong>VISA</strong></div></div>
+      </div>
+
+      <div id="phone-rig">
+        <div class="phone-shadow" aria-hidden="true"></div>
+        <div class="phone-edge" aria-hidden="true"></div>
+        <span class="phone-side-button side-button-one" aria-hidden="true"></span>
+        <span class="phone-side-button side-button-two" aria-hidden="true"></span>
+        <span class="phone-side-button side-button-three" aria-hidden="true"></span>
+        <iframe id="story-phone" src="phone/index.html" title="chipin interactive product preview" width="390" height="780" tabindex="-1" loading="eager"></iframe>
+        <div class="phone-glass" aria-hidden="true"></div>
+      </div>
+
+      <aside id="receipt-prop" aria-hidden="true">
+        <div class="receipt-paper">
+          <div class="receipt-emblem">鼎</div>
+          <h2>DIN TAI FUNG</h2>
+          <p class="receipt-subtitle">A table worth sharing.</p>
+          <div class="receipt-rule"></div>
+          <div class="prop-receipt-row"><span>Pork xiaolongbao</span><strong>$24.00</strong></div>
+          <div class="prop-receipt-row"><span>Spicy wontons</span><strong>$26.00</strong></div>
+          <div class="prop-receipt-row"><span>Noodles</span><strong>$22.00</strong></div>
+          <div class="prop-receipt-row"><span>Fried rice</span><strong>$28.00</strong></div>
+          <div class="prop-receipt-row"><span>Cucumber salad</span><strong>$12.00</strong></div>
+          <div class="prop-receipt-row"><span>Tea</span><strong>$8.00</strong></div>
+          <div class="receipt-rule"></div>
+          <div class="prop-receipt-row receipt-adjustment"><span>Subtotal</span><strong>$120.00</strong></div>
+          <div class="prop-receipt-row receipt-adjustment"><span>Tax</span><strong>$10.20</strong></div>
+          <div class="prop-receipt-row receipt-adjustment"><span>Tip</span><strong>$24.00</strong></div>
+          <div class="receipt-total"><span>TOTAL</span><strong>$154.20</strong></div>
+          <div class="receipt-barcode"></div>
+          <p class="receipt-thanks">THANK YOU FOR COMING TOGETHER</p>
+        </div>
+      </aside>
+
+      <footer class="story-footer">
+        <div class="scroll-instruction"><span class="scroll-line" aria-hidden="true"></span><span>Scroll to explore</span><span class="keyboard-hint">or ← →</span></div>
+        <nav id="chapter-nav" aria-label="Story chapters"></nav>
+        <div class="story-position"><span id="scene-count" aria-label="Current chapter">01 / 12</span><button id="replay" type="button" aria-label="Replay the story">Replay <span aria-hidden="true">↺</span></button></div>
+      </footer>
+    </div>
+    <div id="story-track" aria-label="Story chapters" tabindex="-1"></div>
+  </main>
+  <noscript><p class="no-script">This guided story needs JavaScript. <a href="phone/index.html">Open the standalone chipin preview.</a></p></noscript>
+</body>
+</html>
