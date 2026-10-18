@@ -487,4 +487,64 @@ for (const bankDeclines of [false, true]) {
   assert.deepEqual(db.ledger.filter(e => e.groupId === g.id && e.kind === 'period-top-up').map(e => [e.userId, e.amount]), [['u_henry', 2000]]);
 }
 
-console.log('PASS domain: invite search, reviewed invitation deposits, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock and pooled-fund cap, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with held funds, active-only period refills, budget changes, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');
+// Approved budgets change the next period's target, including for groups saved before periodBudget existed.
+for (const legacy of [false, true]) {
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Budget timing', inviteIds: ['u_maya'], budget: 20000, periodDays: 1}, T0);
+  assert.equal(g.periodBudget, 20000);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, 10000);
+  d.setAutoDeposit(db, 'u_maya', g.id, false);
+  d.withdraw(db, 'u_maya', g.id, 10000, T0);
+  d.rollPeriods(db, T0 + d.DAY);
+  if (legacy) delete g.periodBudget; // Simulate a previously persisted group without the optional field.
+  assert.deepEqual(d.periodShares(g), {u_henry: 10000, u_maya: 10000});
+  assert.equal(d.standing(g, 'u_maya'), 'restricted');
+
+  const ledgerBeforeRaise = db.ledger.filter(e => e.groupId === g.id);
+  d.proposeBudget(db, 'u_henry', g.id, 40000, T0 + d.DAY);
+  assert.equal(g.budget, 20000, 'a proposal alone does not change the budget');
+  d.respondBudget(db, 'u_maya', d.openBudgetProposal(db, g.id)!.id, true);
+  assert.equal(g.periodBudget, 20000, 'capture the old budget before changing a legacy group');
+  assert.equal(g.budget, 40000);
+  assert.deepEqual(d.periodShares(g), {u_henry: 10000, u_maya: 10000});
+  assert.deepEqual(d.shares(g), {u_henry: 20000, u_maya: 20000}, 'next-period refill uses the approved budget');
+  assert.deepEqual(bal(g), [10000, 0]);
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledgerBeforeRaise);
+  assert.match(d.purchaseBlocker(db, g.id, 'u_maya')!, /Add your \$100\.00 share/);
+  d.deposit(db, 'u_maya', g.id, 6000, T0 + d.DAY);
+  assert.equal(d.standing(g, 'u_maya'), 'restricted');
+  d.deposit(db, 'u_maya', g.id, 4000, T0 + d.DAY);
+  assert.equal(d.standing(g, 'u_maya'), 'on-track', 'adding this period’s $100 share restores pooled spending');
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 20000);
+
+  d.proposeBudget(db, 'u_henry', g.id, 60000, T0 + d.DAY);
+  d.respondBudget(db, 'u_maya', d.openBudgetProposal(db, g.id)!.id, true);
+  assert.equal(g.periodBudget, 20000, 'another approval cannot overwrite the current-period snapshot');
+  assert.equal(g.budget, 60000);
+  d.rollPeriods(db, T0 + 2 * d.DAY);
+  assert.equal(g.periodBudget, 60000);
+  assert.deepEqual(d.periodShares(g), {u_henry: 30000, u_maya: 30000});
+  assert.deepEqual(bal(g), [30000, 10000]);
+  assert.equal(d.standing(g, 'u_henry'), 'on-track');
+  assert.equal(d.standing(g, 'u_maya'), 'restricted', 'manual refill now requires the new target');
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id && e.kind === 'period-top-up').map(e => [e.userId, e.amount]), [['u_henry', 20000]]);
+
+  const ledgerBeforeCut = db.ledger.filter(e => e.groupId === g.id);
+  d.proposeBudget(db, 'u_henry', g.id, 20000, T0 + 2 * d.DAY);
+  d.respondBudget(db, 'u_maya', d.openBudgetProposal(db, g.id)!.id, true);
+  assert.equal(g.periodBudget, 60000);
+  assert.deepEqual(d.shares(g), {u_henry: 10000, u_maya: 10000});
+  assert.deepEqual(bal(g), [30000, 10000]);
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledgerBeforeCut, 'approving a cut does not refund or collect money');
+  d.deposit(db, 'u_maya', g.id, 5000, T0 + 2 * d.DAY);
+  assert.equal(d.standing(g, 'u_maya'), 'restricted', 'a future cut cannot reduce this period’s funding requirement');
+  const ledgerBeforeRollover = db.ledger.filter(e => e.groupId === g.id);
+  d.rollPeriods(db, T0 + 3 * d.DAY);
+  assert.equal(g.periodBudget, 20000);
+  assert.deepEqual(d.periodShares(g), {u_henry: 10000, u_maya: 10000});
+  assert.deepEqual(bal(g), [30000, 15000], 'the lower target preserves surplus balances');
+  assert(g.members.every(m => m.fundedPeriod === g.periodStart));
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledgerBeforeRollover, 'balances already above the lower target need no refill');
+}
+
+console.log('PASS domain: invite search, reviewed invitation deposits, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock and pooled-fund cap, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with held funds, active-only period refills, current and next-period budget targets, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');
