@@ -293,6 +293,67 @@ test('unchanged fetches and searches do not write state or trigger a version pin
   assert.equal(h.state!.version, version);
 });
 
+test('a new manual proposal replaces receipt consent and rejects old receipt locks', async () => {
+  const h = harness();
+  const {alice, bob, aliceId, bobId, chargeId, reviewedReceiptKey} = await claimedReceipt(h);
+  await alice.state('setLocked', [chargeId, true, reviewedReceiptKey]);
+  const receiptState = clone(h.state!);
+  await assert.rejects(alice.state('proposeSplit', [chargeId, {method: 'amount', amounts: {[aliceId]: 1, [bobId]: 2}}]), error => error instanceof RpcError && error.code === 'rule');
+  assert.deepEqual(h.state, receiptState, 'an invalid proposal must retain the receipt and its consent');
+
+  const proposed = await alice.state('proposeSplit', [chargeId, {method: 'amount', amounts: {[aliceId]: 6001, [bobId]: 3000}}]);
+  const charge = proposed.db.charges.find(c => c.id === chargeId)!;
+  assert.equal(charge.receipt, null);
+  const beforeLock = clone(h.state!);
+  await assert.rejects(bob.state('setLocked', [chargeId, true, reviewedReceiptKey]), error => error instanceof RpcError && error.status === 409 && error.code === 'stale');
+  assert.deepEqual(h.state, beforeLock, 'superseded receipt approval cannot settle or modify the new proposal');
+  const settled = await bob.state('acceptSplit', [chargeId, charge.proposals.at(-1)!.id]);
+  assert.equal(settled.db.charges.find(c => c.id === chargeId)!.status, 'settled');
+  assert.deepEqual(settled.db.groups[0].members.map(m => m.balance), [3999, 7000]);
+});
+
+test('scanning a receipt supersedes proposal acceptance and notifies other members', async () => {
+  const h = harness();
+  const {alice, bob, bobId, chargeId, proposal} = await pendingCharge(h);
+  const notifications = h.state!.db.notifications.length;
+  await alice.state('scanReceipt', [chargeId]);
+  assert.equal(h.state!.db.notifications.length, notifications + 1);
+  assert.equal(h.state!.db.notifications[0].userId, bobId);
+  assert.match(h.state!.db.notifications[0].text, /Claim the items/);
+  const before = clone(h.state!);
+  await assert.rejects(bob.state('acceptSplit', [chargeId, proposal.id]), error => error instanceof RpcError && error.status === 409 && error.code === 'stale');
+  assert.deepEqual(h.state, before, 'old proposal approval cannot settle an active receipt');
+});
+
+test('CAS replay rejects a receipt lock when a manual proposal replaced the board before save', async () => {
+  const h = harness();
+  const {alice, bob, aliceId, bobId, chargeId, reviewedReceiptKey} = await claimedReceipt(h);
+  await alice.state('setLocked', [chargeId, true, reviewedReceiptKey]);
+  let replacement: State | null = null;
+  h.beforeSave(async () => {
+    await alice.state('proposeSplit', [chargeId, {method: 'amount', amounts: {[aliceId]: 6001, [bobId]: 3000}}]);
+    replacement = clone(h.state!);
+  });
+  await assert.rejects(bob.state('setLocked', [chargeId, true, reviewedReceiptKey]), error => error instanceof RpcError && error.status === 409 && error.code === 'stale');
+  assert(replacement);
+  assert.deepEqual(h.state, replacement, 'discard the attempted receipt settlement after the proposal wins');
+  assert.equal(h.conflicts, 1);
+});
+
+test('CAS replay rejects proposal acceptance when a receipt was scanned before save', async () => {
+  const h = harness();
+  const {alice, bob, chargeId, proposal} = await pendingCharge(h);
+  let replacement: State | null = null;
+  h.beforeSave(async () => {
+    await alice.state('scanReceipt', [chargeId]);
+    replacement = clone(h.state!);
+  });
+  await assert.rejects(bob.state('acceptSplit', [chargeId, proposal.id]), error => error instanceof RpcError && error.status === 409 && error.code === 'stale');
+  assert(replacement);
+  assert.deepEqual(h.state, replacement, 'discard the attempted proposal settlement after the receipt wins');
+  assert.equal(h.conflicts, 1);
+});
+
 test('a forged actor cannot change the authenticated viewer or the member receiving a deposit', async () => {
   const h = harness();
   const {alice, bob, aliceId, bobId} = await accounts(h);

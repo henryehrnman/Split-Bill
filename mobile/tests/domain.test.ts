@@ -390,4 +390,33 @@ throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
   assert.deepEqual(bal(g), [9220, 9480]);
 }
 
-console.log('PASS domain: invite search, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with held funds, period refills, budget changes, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');
+// A failed debt recovery reduces the cash available for every member's withdrawals.
+{
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Debt-backed balance', inviteIds: ['u_maya'], budget: 20000, periodDays: 30}, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0);
+  d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
+  d.setFailTopUps(db, 'u_maya', g.id, true);
+  const c = d.purchase(db, 'u_henry', g.id, {merchant: 'Shared debt', amount: 15000}, T0);
+  d.proposeSplit(db, 'u_henry', c.id, {method: 'amount', amounts: {u_henry: 0, u_maya: 15000}}, T0);
+  d.acceptSplit(db, 'u_maya', c.id, T0, d.currentProposal(c).id);
+  assert.deepEqual(bal(g), [10000, -5000]);
+  assert.equal(d.availableFunds(db, g), 5000);
+
+  const before = JSON.parse(JSON.stringify(db));
+  throws(() => d.withdraw(db, 'u_henry', g.id, 5001, T0), /withdraw up to \$50\.00/);
+  assert.deepEqual(db, before);
+  d.withdraw(db, 'u_henry', g.id, 5000, T0);
+  assert.deepEqual(bal(g), [5000, -5000]);
+  assert.equal(d.availableFunds(db, g), 0);
+  throws(() => d.withdraw(db, 'u_henry', g.id, 1, T0), /withdraw up to \$0\.00/);
+
+  d.setFailTopUps(db, 'u_maya', g.id, false);
+  d.deposit(db, 'u_maya', g.id, 5000, T0);
+  assert.equal(d.availableFunds(db, g), 5000);
+  d.withdraw(db, 'u_henry', g.id, 5000, T0);
+  assert.deepEqual(bal(g), [0, 0]);
+  assert.equal(d.availableFunds(db, g), 0);
+}
+
+console.log('PASS domain: invite search, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock and pooled-fund cap, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with held funds, period refills, budget changes, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');

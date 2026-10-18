@@ -84,17 +84,24 @@ function useSendDefaultOnLeave(group: Group, charge: Charge) {
 }
 
 function ChargeSplit({group, charge, picker}: {group: Group; charge: Charge; picker: React.ReactNode}) {
-  const {db, now, viewer} = useStore();
-  const [mode, setMode] = useState<Mode>(charge.receipt?.itemized === true ? 'items' : 'proposal');
-  const [editing, setEditing] = useState(false);
   const sendFirst = useSendDefaultOnLeave(group, charge);
+  const revision = charge.receipt ? `receipt:${charge.receipt.scannedAt}` : `proposal:${currentProposal(charge).id}`;
+  // Follow remote workflow changes without resetting the first-send controller.
+  return <ChargeSplitPane key={revision} group={group} charge={charge} picker={picker} sendFirst={sendFirst} />;
+}
+
+function ChargeSplitPane({group, charge, picker, sendFirst}: {group: Group; charge: Charge; picker: React.ReactNode; sendFirst: FirstSend<Db>}) {
+  const {db, now, viewer} = useStore();
+  const [mode, setMode] = useState<Mode>(charge.receipt ? 'items' : 'proposal');
+  const [editing, setEditing] = useState(false);
+  const [fixing, setFixing] = useState(false);
   const daysLeft = Math.max(0, Math.ceil((charge.createdAt + SPLIT_DEADLINE - now) / DAY));
   const p = currentProposal(charge);
   const payer = userById(db, charge.cardholderId).name;
   const draft = isDraft(charge);
   const mine = viewer.id === charge.cardholderId;
 
-  const footer = draft ? null : mode === 'items' ? <ItemsFooter charge={charge} /> : editing ? null : <ProposalFooter charge={charge} onEdit={() => setEditing(true)} />;
+  const footer = draft || fixing ? null : mode === 'items' ? <ItemsFooter charge={charge} /> : editing || charge.receipt ? null : <ProposalFooter charge={charge} onEdit={() => setEditing(true)} />;
 
   return (
     <Page title={charge.merchant} subtitle={`Paid by ${payer} with the ${group.name} card · ${ago(now, charge.createdAt)}`} footer={footer ?? undefined}>
@@ -122,11 +129,20 @@ function ChargeSplit({group, charge, picker}: {group: Group; charge: Charge; pic
               </T>
             </View>
           )}
-          <Segmented options={[['items', 'By item'], ['proposal', 'Percent / amount']]} value={mode} onChange={setMode} />
+          <Segmented options={[['items', 'By item'], ['proposal', 'Percent / amount']]} value={mode} onChange={next => { setMode(next); setFixing(false); }} />
           {mode === 'items' ? (
-            charge.receipt ? <ClaimBoard key={charge.receipt.scannedAt} group={group} charge={charge} receipt={charge.receipt} /> : <ScanPrompt charge={charge} onSend={sendFirst} />
+            charge.receipt ? fixing ? (
+              <ReceiptEditor charge={charge} receipt={charge.receipt} onDone={() => setFixing(false)} />
+            ) : (
+              <ClaimBoard group={group} charge={charge} receipt={charge.receipt} onFix={() => setFixing(true)} />
+            ) : <ScanPrompt charge={charge} onSend={sendFirst} />
           ) : draft ? (
             <ProposalEditor key={p.id} group={group} charge={charge} first onSend={sendFirst} onDone={() => {}} />
+          ) : charge.receipt ? (
+            <>
+              <T style={[s.small, {marginBottom: 12}]}>Sending a proposal replaces this receipt and its claims. Everyone with a share reviews the new split.</T>
+              <ProposalEditor key={p.id} group={group} charge={charge} onDone={() => setMode('items')} />
+            </>
           ) : editing ? (
             <ProposalEditor key={p.id} group={group} charge={charge} onDone={() => setEditing(false)} />
           ) : (
@@ -202,17 +218,14 @@ function ItemsFooter({charge}: {charge: Charge}) {
   );
 }
 
-function ClaimBoard({group, charge, receipt: r}: {group: Group; charge: Charge; receipt: Receipt}) {
+function ClaimBoard({group, charge, receipt: r, onFix}: {group: Group; charge: Charge; receipt: Receipt; onFix: () => void}) {
   const {db, viewer, run} = useStore();
-  const [fixing, setFixing] = useState(false);
   const ids = memberIds(group);
   const myLock = r.locked.includes(viewer.id);
   const mine = r.items.filter(i => i.people.includes(viewer.id));
-  const myItems = mine.reduce((a, i) => a + allocate(i.amount, i.people.map(() => 1))[i.people.indexOf(viewer.id)], 0);
+  const myItems = mine.reduce((a, i) => a + allocate(i.amount, ids.map(id => i.people.includes(id) ? 1 : 0))[ids.indexOf(viewer.id)], 0);
   const forMe = r.edits.filter(e => e.targetId === viewer.id);
   const itemName = (id: string) => r.items.find(i => i.id === id)?.name ?? 'an item';
-
-  if (fixing) return <ReceiptEditor charge={charge} receipt={r} onDone={() => setFixing(false)} />;
 
   return (
     <>
@@ -232,7 +245,7 @@ function ClaimBoard({group, charge, receipt: r}: {group: Group; charge: Charge; 
 
       <Row style={{marginBottom: 4}}>
         <T style={{fontSize: 17, fontWeight: '700'}}>Items</T>
-        <Pressable accessibilityRole="button" onPress={() => setFixing(true)} style={{padding: 6}}>
+        <Pressable accessibilityRole="button" onPress={onFix} style={{padding: 6}}>
           <T style={{color: C.blue, fontWeight: '500', fontSize: 13}}>Fix receipt</T>
         </Pressable>
       </Row>
