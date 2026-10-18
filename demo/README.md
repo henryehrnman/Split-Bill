@@ -40,7 +40,7 @@ The supplied narration is preserved in the accessible chapter transcript in `sto
 | Snap the receipt | Receipt image, a staged Gemini scan, then six editable items. |
 | Claim your items | Personal selection, confirmation, and a per-person breakdown. |
 | Everyone is in sync | The app's existing group statistics menu with the original humanized Apartment history and spending by member. |
-| The market | The phone leaves; TAM / SAM / SOM rings ($2.0T US P2P flow, $60B shared spend by 18–34 groups, $1.25B chipin year 3) with counting figures. |
+| The market | The phone leaves; TAM / SAM / SOM rings ($1.7T US P2P flow, $60B shared spend by 18–34 groups, $1.25B chipin year 3) with counting figures. |
 | The competition | Feature matrix against Splitwise, Venmo, Cash App and Revolut/Monzo, filling in row by row; chipin's column is lit. |
 | How we make money | Deposits flow into the group fund, then out as 3.75% yield on the invested float and 0.9% net interchange on card taps. |
 | Projections | Three stacked revenue bars ($0.33M, $2.4M, $12.7M), then year-three float, card spend and contribution margin. |
@@ -71,7 +71,7 @@ The supplied narration is preserved in the accessible chapter transcript in `sto
 | 1:02 | Gemini scan (item review at 1:04) |
 | 1:05 | Claim items (selection at 1:06.5; grouped results at 1:08) |
 | 1:10 | Charges, balances, and next period |
-| 1:15 | The market: $2 trillion moves between friends |
+| 1:15 | The market: $1.7 trillion moves between friends |
 | 1:21 | Our wedge: 25M people, $60B of shared spend |
 | 1:26 | The competition: everyone else settles up after |
 | 1:32 | Only chipin does all of it |

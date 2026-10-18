@@ -118,7 +118,7 @@ Honest weaknesses to be ready for: no bank partner yet; members pre-fund; post-p
 
 | Layer | Size | What it is |
 |---|---|---|
-| US mobile P2P transaction value | **$2.0T (2025) → $2.27T (2026)** | Venmo, Zelle, Cash App etc. Zelle alone moved $1.2T in 2025 (+20%); Venmo ~$325B (+12%); PayPal's Venmo revenue $1.7B. |
+| US mobile P2P transaction value | **$1.7T (2024)**; eMarketer projects ~$2.2T by 2026 | Venmo, Zelle, Cash App etc. Zelle alone moved $1.2T in 2025 (+20%); Venmo ~$325B (+12%); PayPal's Venmo revenue $1.7B. |
 | US P2P users | **169.6M (68% of smartphone users)**, ~$7,200 sent per user per year and rising faster than user growth as people repay each other for rent, furniture and trips | eMarketer |
 | Bill-splitting app revenue (global) | **$1.26B (2025) → $3.9B (2035)**, 11.8% CAGR; North America 44.6%; group travel the fastest-growing use | Emergen Research |
 | US debit + prepaid interchange pool | **$34.1B / yr** (2023); prepaid cards alone $5.2B at 1.54% of value | Federal Reserve |
@@ -128,7 +128,7 @@ Honest weaknesses to be ready for: no bank partner yet; members pre-fund; post-p
 
 | | Definition | Size |
 |---|---|---|
-| **TAM** | US consumer spending that is shared between people who do not share a bank account: the $2.0T P2P flow is the visible reimbursement layer on top of it. | **$2.0T flow / ~$34B interchange pool** |
+| **TAM** | US consumer spending that is shared between people who do not share a bank account: the $1.7T P2P flow is the visible reimbursement layer on top of it. | **$1.7T flow / ~$34B interchange pool** |
 | **SAM** | Recurring shared spend by US 18–34s in standing groups (households, couples without joint accounts, friend groups) that could run through a group card. est.: 25M people × $2,400/yr of shared groceries, dining, subscriptions, trips | **≈ $60B card spend/yr → ≈ $600M revenue pool** at 0.9% net interchange + float |
 | **SOM (Year 3)** | 400k active members, $1.25B spend | **≈ 2% of SAM spend, $12.7M revenue** |
 
