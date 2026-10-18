@@ -507,7 +507,8 @@ SOFTWARE.
     const c = pending.find((charge) => charge.id === id),
       signature = itemListSignature(currentProposal(c));
     if (
-      state.selectionDrafts[id]?.signature !== signature &&
+      (state.selectionDrafts[id]?.signature !== signature ||
+        state.selectionDrafts[id]?.receiptKey !== c.receiptListKey) &&
       !prepareSelection(id)
     )
       return false;
@@ -879,7 +880,7 @@ SOFTWARE.
       members = chargePeople(c),
       self = members[0].id;
     if (result.error || !draft)
-      return `${backbar("Select items")}<p class="info-text">${esc(result.error || "Open the latest item selection.")}</p>`;
+      return `${backbar("Select your items")}<p class="info-text">${esc(result.error || "Open the latest item selection.")}</p>`;
     const selected = result.items.filter((item) => draft.ids.includes(item.id)),
       totals = selected.reduce(
         (sum, item) => ({
@@ -890,7 +891,7 @@ SOFTWARE.
         }),
         { subtotal: 0, tax: 0, tip: 0, total: 0 },
       );
-    const card = `<section class="card-section item-selection"><div class="row item-card-heading"><h2>Select items</h2>${button("Edit items", "begin-edit", `data-id="${id}"`, "text-action")}</div><div class="selection-items">${result.items
+    const card = `<section class="card-section item-selection"><div class="row item-card-heading"><h2>Select your items</h2>${button("Edit items", "begin-edit", `data-id="${id}"`, "text-action")}</div><div class="selection-items">${result.items
       .map((item) => {
         const unavailable = !!item.owner && item.owner !== self,
           checked = draft.ids.includes(item.id),
@@ -899,7 +900,7 @@ SOFTWARE.
       })
       .join(
         "",
-      )}</div><div class="selection-totals"><h2>Your selection</h2><div class="item-cost-line"><span>${selected.length} ${selected.length === 1 ? "item" : "items"}</span><span>${money(totals.subtotal / 100)}</span></div><div class="item-cost-line"><span>Tax</span><span>${money(totals.tax / 100)}</span></div><div class="item-cost-line"><span>Tip</span><span>${money(totals.tip / 100)}</span></div><div class="row selection-total"><strong>Your share</strong><strong>${money(totals.total / 100)}</strong></div></div><div class="item-card-actions split-footer-buttons">${button("Cancel", "back", "", "secondary")}${button(draft.ids.length ? "Confirm selection" : "Confirm no items", "confirm-selection", `data-id="${id}"`)}</div></section>`;
+      )}</div><div class="selection-totals"><h2>Your selection</h2><div class="item-cost-line"><span>${selected.length} ${selected.length === 1 ? "item" : "items"}</span><span>${money(totals.subtotal / 100)}</span></div><div class="item-cost-line"><span>Tax</span><span>${money(totals.tax / 100)}</span></div><div class="item-cost-line"><span>Tip</span><span>${money(totals.tip / 100)}</span></div><div class="row selection-total"><strong>Your share</strong><strong>${money(totals.total / 100)}</strong></div></div></section>`;
     return itemFlowShell(c, p, card, true, totals.total / 100);
   }
   function memberAllocations(c, p, editing = false) {
@@ -945,7 +946,7 @@ SOFTWARE.
             )
             .join("")}</div>`
         : ""
-    }${d.method === "item" && currentProposal(c).method === "item" && currentProposal(c).items.length ? '<p class="item-reset-notice">Confirming changes to this list resets everyone’s selections and approvals.</p>' : ""}<p class="draft-validation" id="draft-total" role="status">${esc(draftValidationText(c, d))}</p>${d.method === "item" ? `<div class="item-card-actions split-footer-buttons">${button("Cancel", "cancel-edit", "", "secondary")}${button("Confirm items", "submit-proposal", `data-id="${c.id}"`)}</div>` : ""}</section>`;
+    }${d.method === "item" && currentProposal(c).method === "item" && currentProposal(c).items.length ? '<p class="item-reset-notice">Confirming changes to this list resets everyone’s selections and approvals.</p>' : ""}<p class="draft-validation" id="draft-total" role="status">${esc(draftValidationText(c, d))}</p></section>`;
   }
   function itemFlowShell(
     c,
@@ -970,15 +971,13 @@ SOFTWARE.
       d = state.splitDrafts[id];
     return itemFlowShell(c, d, d.method === "item" ? itemEditor(c, d) : "");
   }
-  function splitFooter(id, editing = false) {
+  function splitFooter(id, editing = false, selecting = false) {
     const c = pending.find((c) => c.id === id),
-      p = editing ? state.splitDrafts[id] : currentProposal(c);
+      p = editing && !selecting ? state.splitDrafts[id] : currentProposal(c);
     if (!c.canReview)
       return '<div class="footer-action"><p class="info-text">This charge is frozen while a dispute is resolved.</p></div>';
     if (editing)
-      return p.method === "item"
-        ? ""
-        : `<div class="footer-action split-footer-buttons">${button("Cancel", "cancel-edit", "", "secondary")}${button("Propose changes", "submit-proposal", `data-id="${id}"`)}</div>`;
+      return `<div class="footer-action split-footer-buttons">${button("Cancel", selecting ? "back" : "cancel-edit", "", "secondary")}${button("Propose changes", selecting ? "confirm-selection" : "submit-proposal", `data-id="${id}"`)}</div>`;
     return `<div class="footer-action split-footer-buttons">${button("Make changes", "begin-edit", `data-id="${id}"`, "secondary")}${p.method === "item" ? button("Accept my share", "begin-selection", `data-id="${id}" ${!p.exclusive || p.receiptDraft || validateItemList(c, p).error ? "disabled" : ""}`) : button(state.approved[id] ? "Accepted" : "Accept my share", "accept-split", `data-id="${id}" ${state.approved[id] ? "disabled" : ""}`)}</div>`;
   }
 
@@ -1038,6 +1037,7 @@ SOFTWARE.
         break;
       case "select-items":
         html = selectItems(r.id);
+        footer = splitFooter(r.id, true, true);
         break;
       case "history":
         html = chargeHistory(r.id);
