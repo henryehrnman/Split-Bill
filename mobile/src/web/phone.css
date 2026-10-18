@@ -101,6 +101,8 @@
 }
 .phone-host .app { height: 100%; min-height: 0; }
 .phone-host .screen { min-width: 0; }
+.phone-host .split-screen .person-row,
+.phone-host .split-screen .item-owner-group { border-bottom: 0; }
 /* Phones keep the Home layout that shipped before 75004cd: the screen may scroll, and with fewer than three pending
    charges the hero shrinks and content stacks from the top instead of spreading over the whole height. */
 @media (max-width: 760px) {
