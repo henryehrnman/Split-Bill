@@ -24,7 +24,7 @@ After a purchase, the payer can photograph the receipt. The photo goes to Gemini
 
 Then a boring check runs. If the items, tax, and tip do not add up to the card charge, Gemini's lines stay as a draft. Nobody can claim them. The payer opens Fix receipt already filled in, with the read total next to the charge. Everyone else sees that the items don't match, and can review them. A discount folds into the item above it. The save has to equal the charge, and only then does the claim board open. A client cannot submit its own read.
 
-When the numbers match, the items become a claim board. Each person claims what they had. Someone can suggest that another person shared an item, and only that person can accept the suggestion. Everyone locks their own selection. Tax and tip follow the items. The split settles to the cent, on both phones, without a manual refresh.
+When the numbers match, the items become a claim board. Each person claims what they had. Someone can suggest that another person shared an item, and only that person can accept the suggestion. Everyone locks their own selection. Tax and tip follow the items. The split settles to the cent, in both browsers, without a manual refresh.
 
 We verified this on the deployed function with a synthetic receipt. A later live check on that server passed 18 of 18 steps: signup, invite, a purchase, the photo scan, claims, locks, and settlement. Demo photos should stay synthetic or redacted. A free Gemini key has quotas, and the unpaid terms are the wrong place for someone else's dinner receipt.
 

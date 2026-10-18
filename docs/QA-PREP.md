@@ -36,7 +36,7 @@ For merchants, a group check becomes one card payment instead of splitting at th
 
 **Trust and privacy?**
 - Each person sees only their own groups; other groups' data never reaches their phone, and live updates carry only a version number.
-- Search hides everyone's email and phone unless you typed it exactly; invitees' contact details stay hidden until they accept.
+- Search hides everyone's email and phone unless you typed it exactly. Another member's email and phone stay hidden after that, including once they have joined.
 - Consent guards: accepting an invite or a split requires the exact amount or version you reviewed, so a stale screen can't agree to a different number (the server returns 409 and asks you to review again).
 - Demo receipt photos are synthetic, as Google's free-tier terms require.
 
