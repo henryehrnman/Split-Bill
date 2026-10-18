@@ -2,7 +2,7 @@
 
 A group-spending app built on trust. Members of a group (roommates, partners, friends, coworkers) each deposit an equal share into a group fund. Every member gets their own virtual card on that fund, adds it to Apple Pay or Google Pay, and can pay for group purchases. After each purchase the group agrees on how to split it, and each person's balance is adjusted.
 
-**Stage:** hackathon MVP (submission 10:00am October 18, 2026). The app supports a local demo and authenticated shared accounts backed by the Supabase RPC server. Configure the server and public client settings to use shared accounts; deployment and a live two-phone check are still required. Deposits, cards, and payments remain simulated. The outline is in [`launch.txt`](launch.txt) section 8; client setup is in [`mobile/README.md`](mobile/README.md#shared-accounts-and-live-updates).
+**Stage:** hackathon MVP (submission 10:00am October 18, 2026). The app supports a local demo and authenticated shared accounts on the deployed Supabase RPC server. The hosted web app is [https://splitbill-hackathon.vercel.app](https://splitbill-hackathon.vercel.app). A check on two physical phones is still outstanding. Deposits, cards, and payments remain simulated. The outline is in [`launch.txt`](launch.txt) section 8; client setup is in [`mobile/README.md`](mobile/README.md#shared-accounts-and-live-updates).
 
 The product rules come from [`schema.txt`](schema.txt) (product schema by Connor and Saahil). This README describes what is built against it; [`backend.txt`](backend.txt) and [`launch.txt`](launch.txt) describe what comes next.
 
@@ -79,7 +79,9 @@ The shared server is deployed. Supabase project `uiwbsedibgvwaklmwjna` is runnin
 
 Point a shared-server build at it with `mobile/.env.local` or the hosted build environment: `EXPO_PUBLIC_API_URL=https://uiwbsedibgvwaklmwjna.supabase.co/functions/v1/rpc`, `EXPO_PUBLIC_SUPABASE_URL=https://uiwbsedibgvwaklmwjna.supabase.co`, and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the Supabase dashboard (Settings → API Keys).
 
-Not yet verified: two phones against this deployed server, a hosted web URL, the itemized claim board in a browser, the Home Screen install on a physical iPhone, Android, user testing.
+The hosted web app is [https://splitbill-hackathon.vercel.app](https://splitbill-hackathon.vercel.app). It is the web build pointed at this server. Shared accounts work there, and Profile still has the local demo. Two signed-in clients have been checked against the server (invite, equal split, sample-receipt claim board, and a live update).
+
+Not yet verified: two physical phones against this deployed server, the itemized claim board in a browser, the Home Screen install on a physical iPhone, Android, user testing.
 
 ## Architecture
 
@@ -106,7 +108,7 @@ For the hackathon (by 10:00am October 18; details in [`launch.txt`](launch.txt) 
 
 1. **Server (Henry):** implemented Supabase table and RPC Edge Function running `domain.ts`, sign-in to user mapping and filtered responses. Deploy using [`supabase/README.md`](supabase/README.md).
 2. **App (Connor):** implemented sign-in/sign-up and profile completion, authenticated HTTP `api.ts`, version-ping Realtime updates, remote invite search, demo-mode toggle and account isolation, loading/error/retry states. Configure the public client settings and verify against the deployed server on two phones.
-3. **Receipts, hosting, demo (Saahil):** receipt photos are implemented (Claude vision model on the server); they need `ANTHROPIC_API_KEY` set on the deployed function and a test on real receipts. Still to do: hosted web URL (Vercel or EAS Hosting), a demo group with real accounts, demo script and backup video.
+3. **Receipts, hosting, demo (Saahil):** receipt photos are implemented (Claude vision model on the server); they need `ANTHROPIC_API_KEY` set on the deployed function and a test on real receipts. The hosted web app is live at [https://splitbill-hackathon.vercel.app](https://splitbill-hackathon.vercel.app). The demo script is [`docs/DEMO.md`](docs/DEMO.md). Still to do: a demo group with real accounts, and a backup video.
 4. Stretch goal: Stripe Issuing test mode, with the "Simulate tap" button firing Stripe's real card-approval webhook.
 
 Left out until after the hackathon: real money and cards, Apple Pay, native push notifications, bank linking, saved-card debt recovery (stays simulated), scheduled jobs (`tick()` runs them on every request), normalized tables.
