@@ -31,7 +31,7 @@ const methods: Record<string, Method> = {
   fetch: () => undefined,
   searchUsers: ({db, actor}, [query, exclude]) => d.searchUsers(db, String(query ?? ''), [actor, ...(Array.isArray(exclude) ? exclude : [])]).map(u => searchResult(u, String(query ?? ''))),
   createGroup: ({db, actor, t}, [input]) => void d.createGroup(db, actor, input, t),
-  respondInvite: ({db, actor, t}, [groupId, accept]) => d.respondInvite(db, actor, groupId, !!accept, t),
+  respondInvite: ({db, actor, t}, [groupId, accept, expectedContribution]) => d.respondInvite(db, actor, groupId, !!accept, t, expectedContribution),
   deposit: ({db, actor, t}, [groupId, amount]) => d.deposit(db, actor, groupId, amount, t),
   withdraw: ({db, actor, t}, [groupId, amount]) => d.withdraw(db, actor, groupId, amount, t),
   setAutoDeposit: ({db, actor}, [groupId, on]) => d.setAutoDeposit(db, actor, groupId, !!on),

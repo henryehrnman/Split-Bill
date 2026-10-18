@@ -261,11 +261,11 @@ export function createGroup(db: Db, actor: UserId, input: {name: string; inviteI
     frozen: null,
   };
   db.groups.push(g);
-  respondInvite(db, actor, g.id, true, now);
+  respondInvite(db, actor, g.id, true, now, shares(g)[actor]);
   return g;
 }
 
-export function respondInvite(db: Db, actor: UserId, groupId: string, accept: boolean, now: number) {
+export function respondInvite(db: Db, actor: UserId, groupId: string, accept: boolean, now: number, expectedContribution?: number) {
   const g = groupById(db, groupId);
   const m = memberOf(g, actor);
   if (m.status === 'joined') fail('You already joined this group.');
@@ -280,9 +280,11 @@ export function respondInvite(db: Db, actor: UserId, groupId: string, accept: bo
     }
     return;
   }
+  const contribution = shares(g)[actor];
+  if (expectedContribution !== contribution) throw new StaleStateError('The invitation deposit changed. Review the current amount before joining.');
   if (m.failTopUps) fail('Your bank declined the deposit (demo). Turn off failed top-ups to retry.');
   m.status = 'joined';
-  credit(db, g, m, shares(g)[actor], 'deposit', now);
+  credit(db, g, m, contribution, 'deposit', now);
   issueCard(db, groupId, actor);
 }
 
@@ -612,7 +614,7 @@ export function rollPeriods(db: Db, now: number) {
       for (const m of g.members) {
         const need = owed[m.userId] - m.balance;
         if (m.status === 'joined' && need <= 0) m.fundedPeriod = g.periodStart;
-        if (m.status !== 'joined' || !m.autoDeposit || need <= 0) continue;
+        if (!isActive(g) || m.status !== 'joined' || !m.autoDeposit || need <= 0) continue;
         if (m.failTopUps) ledger(db, {groupId: g.id, userId: m.userId, kind: 'top-up-failed', amount: need, at: g.periodStart});
         else credit(db, g, m, need, 'period-top-up', g.periodStart);
       }

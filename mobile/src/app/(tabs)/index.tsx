@@ -78,7 +78,7 @@ function Invite({group}: {group: Group}) {
       <MemberRows group={group} />
       <Row style={{marginTop: 18}}>
         <View style={{flex: 1}}><Button secondary title="Decline" onPress={() => run(a => api.respondInvite(a, group.id, false), `You declined ${group.name}.`)} /></View>
-        <View style={{flex: 1.4}}><Button title={`Join · deposit ${money(share)}`} onPress={() => run(a => api.respondInvite(a, group.id, true), `You joined ${group.name}. Add your card to a wallet to start paying.`)} /></View>
+        <View style={{flex: 1.4}}><Button title={`Join · deposit ${money(share)}`} onPress={() => run(a => api.respondInvite(a, group.id, true, share), `You joined ${group.name}. Add your card to a wallet to start paying.`)} /></View>
       </Row>
     </>
   );

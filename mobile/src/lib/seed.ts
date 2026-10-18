@@ -1,4 +1,4 @@
-import {DAY, acceptSplit, addToWallet, cardFor, createGroup, currentProposal, purchase, respondInvite, setAutoDeposit, tick} from './domain.ts';
+import {DAY, acceptSplit, addToWallet, cardFor, createGroup, currentProposal, purchase, respondInvite, setAutoDeposit, shares, tick} from './domain.ts';
 import type {Db, User} from './domain.ts';
 
 export const DEMO_USERS: User[] = [
@@ -21,8 +21,8 @@ export function seed(now: number): Db {
 
   const t0 = now - 20 * DAY;
   const apt = createGroup(db, henry, {name: 'Apartment 4B', inviteIds: [maya, jordan], budget: 30000, periodDays: 14}, t0);
-  respondInvite(db, maya, apt.id, true, t0);
-  respondInvite(db, jordan, apt.id, true, t0);
+  respondInvite(db, maya, apt.id, true, t0, shares(apt)[maya]);
+  respondInvite(db, jordan, apt.id, true, t0, shares(apt)[jordan]);
   setAutoDeposit(db, jordan, apt.id, false);
   for (const id of [henry, maya, jordan]) addToWallet(db, id, cardFor(db, apt.id, id)!.id, id === jordan ? 'Google Wallet' : 'Apple Wallet');
 
@@ -35,7 +35,7 @@ export function seed(now: number): Db {
   purchase(db, maya, apt.id, {merchant: 'Juniper', amount: 15420}, at(now - 2 * 3600000));
 
   const ski = createGroup(db, connor, {name: 'Tahoe ski trip', inviteIds: [saahil, henry], budget: 60000, periodDays: 30}, now - 2 * DAY);
-  respondInvite(db, saahil, ski.id, true, now - DAY);
+  respondInvite(db, saahil, ski.id, true, now - DAY, shares(ski)[saahil]);
   addToWallet(db, connor, cardFor(db, ski.id, connor)!.id, 'Apple Wallet');
 
   tick(db, now);
