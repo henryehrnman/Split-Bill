@@ -1,5 +1,5 @@
-import React, {useEffect} from 'react';
-import {View, Text, Pressable, ScrollView, StyleSheet, TextInput, ActivityIndicator, Switch, StyleProp, TextStyle, TextProps, ViewStyle} from 'react-native';
+import React, {useEffect, useState} from 'react';
+import {AccessibilityInfo, Animated, View, Text, Pressable, ScrollView, StyleSheet, TextInput, ActivityIndicator, Switch, StyleProp, TextStyle, TextProps, ViewStyle} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {router} from 'expo-router';
 import Feather from '@expo/vector-icons/Feather';
@@ -84,22 +84,46 @@ export function Chip({label, selected, onPress, check = true}: {label: string; s
   );
 }
 
-// Floats over the top of the page so showing or dismissing it never shifts the content; confirmations clear after a few seconds, errors stay until tapped.
+// The store owns the 2.5-second lifetime; retain the content for the downward exit.
 function NoticeBanner() {
   const {notice, clearNotice} = useStore();
+  const [lastNotice, setLastNotice] = useState(notice);
+  if (notice && notice !== lastNotice) setLastNotice(notice);
+  const [reduceMotion, setReduceMotion] = useState(true);
+  const [visibility] = useState(() => new Animated.Value(0));
   useEffect(() => {
-    if (!notice || notice.kind === 'error') return;
-    const t = setTimeout(clearNotice, 4000);
-    return () => clearTimeout(t);
-  }, [notice, clearNotice]);
-  if (!notice) return null;
-  const error = notice.kind === 'error';
+    let active = true;
+    let changed = false;
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', enabled => {
+      changed = true;
+      if (active) setReduceMotion(enabled);
+    });
+    void AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
+      if (active && !changed) setReduceMotion(enabled);
+    }, () => {});
+    return () => { active = false; subscription.remove(); };
+  }, []);
+  useEffect(() => {
+    if (reduceMotion) {
+      visibility.setValue(notice ? 1 : 0);
+      return;
+    }
+    const animation = Animated.timing(visibility, {toValue: notice ? 1 : 0, duration: 200, useNativeDriver: true});
+    animation.start();
+    return () => animation.stop();
+  }, [notice, reduceMotion, visibility]);
+  const displayed = notice ?? lastNotice;
+  if (!displayed) return null;
+  const error = displayed.kind === 'error';
   return (
-    <Pressable accessibilityRole="alert" onPress={clearNotice} style={[s.notice, {backgroundColor: error ? C.softDanger : C.softSuccess, borderColor: error ? '#f3d3d6' : '#cfe6d8'}]}>
-      <Icon name={error ? 'alert-circle' : 'check-circle'} size={18} color={error ? C.danger : C.success} />
-      <T style={{flex: 1, fontSize: 13, lineHeight: 19, color: error ? C.danger : C.success}}>{notice.text}</T>
-      <Icon name="x" size={16} color={C.muted} />
-    </Pressable>
+    <Animated.View pointerEvents={notice ? 'auto' : 'none'} aria-hidden={!notice} accessibilityElementsHidden={!notice} importantForAccessibility={notice ? 'auto' : 'no-hide-descendants'}
+      style={{width: '100%', maxWidth: 448, opacity: visibility, transform: [{translateY: visibility.interpolate({inputRange: [0, 1], outputRange: [8, 0]})}]}}>
+      <Pressable accessibilityRole="alert" disabled={!notice} onPress={clearNotice} style={[s.notice, {backgroundColor: error ? C.softDanger : C.softSuccess, borderColor: error ? '#f3d3d6' : '#cfe6d8'}]}>
+        <Icon name={error ? 'alert-circle' : 'check-circle'} size={18} color={error ? C.danger : C.success} />
+        <T style={{flex: 1, fontSize: 13, lineHeight: 19, color: error ? C.danger : C.success}}>{displayed.text}</T>
+        <Icon name="x" size={16} color={C.muted} />
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -152,9 +176,9 @@ export function Page({title, subtitle, children, footer, back = false}: {title: 
           {!demoMode && <Pressable accessibilityRole="button" accessibilityLabel="Refresh group" accessibilityState={{disabled: busy || refreshing}} disabled={busy || refreshing} onPress={refresh} style={{paddingVertical: 10}}><T style={s.caption}>{live ? 'Live updates on · Tap to refresh' : 'Live updates reconnecting · Tap to refresh'}</T></Pressable>}
           {children}
         </ScrollView>
-        <View pointerEvents="box-none" style={s.noticeLayer}><NoticeBanner /></View>
       </View>
       {footer && <View style={s.footer}>{footer}</View>}
+      <View pointerEvents="box-none" style={s.noticeLayer}><NoticeBanner /></View>
     </SafeAreaView>
   );
 }
@@ -307,7 +331,7 @@ export const s = StyleSheet.create({
   cardLabel: {color: '#8899b6', fontSize: 9, letterSpacing: 1},
   cardValue: {color: '#e6ebf4', fontSize: 13, fontWeight: '500', letterSpacing: 1, marginTop: 2},
   cardArc: {position: 'absolute', width: 240, height: 240, borderRadius: 120, borderWidth: 32, borderColor: '#263750', right: -70, top: -110},
-  noticeLayer: {position: 'absolute', top: 6, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 16, zIndex: 10},
+  noticeLayer: {position: 'absolute', bottom: 80, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 16, zIndex: 100, elevation: 100},
   notice: {flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderRadius: 12, borderWidth: 1, padding: 14, width: '100%', maxWidth: 448, shadowColor: '#171e2d', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: {width: 0, height: 4}, elevation: 4},
   footer: {borderTopWidth: 1, borderColor: C.line, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 14, backgroundColor: 'white'},
   money: {fontSize: 52, lineHeight: 62, fontWeight: '500', letterSpacing: -2.2, fontVariant: ['tabular-nums']},

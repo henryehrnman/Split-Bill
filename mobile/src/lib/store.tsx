@@ -54,6 +54,12 @@ function AccountStore({children}: {children: React.ReactNode}) {
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   const [live, setLive] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const clearNotice = useCallback(() => setNotice(null), []);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(current => current === notice ? null : current), 2500);
+    return () => clearTimeout(timer);
+  }, [notice]);
   const [loadError, setLoadError] = useState('');
   const [needsProfile, setNeedsProfile] = useState(false);
   const alive = useRef(true);
@@ -157,7 +163,7 @@ function AccountStore({children}: {children: React.ReactNode}) {
   </Splash>;
   const viewer = db.users.find(u => u.id === viewerId)!;
   return <Context.Provider value={{db, now: now(db), viewer, demoMode, group, setGroupId, busy, refreshing, live,
-    refresh: () => { void refresh(); }, notice, clearNotice: () => setNotice(null), run,
+    refresh: () => { void refresh(); }, notice, clearNotice, run,
     setViewerId: id => {
       if (!demoMode || pending.current || !db.users.some(u => u.id === id)) return;
       viewerRef.current = id;
