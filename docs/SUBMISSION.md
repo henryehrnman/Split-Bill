@@ -6,6 +6,8 @@ Paste-ready copy for the project application. Money, deposits, wallets, cards, a
 
 A shared fund and a card for everyone in the group, so nobody fronts the bill.
 
+Gemini turns that card payment into a claim board: it reads the receipt, the server checks the read against the charge, and the people who were there agree before anyone's balance moves.
+
 ## 2. About the project
 
 ### Inspiration
@@ -56,6 +58,14 @@ We also learned to say the simulation out loud. Judges can watch the rules run. 
 
 A partner bank and a card issuer, then real Apple Wallet and Google Wallet provisioning, so a tap at the store is the same flow the demo already runs. A recorded two-phone walkthrough of the hosted app. Standing groups for groceries, household bills, and trips, with the period budget already in the product.
 
+## Tracks
+
+- Title: VISA: Reimagine Shopping
+- Sponsored side: SideShift Best Startup Idea
+- Non-sponsored: DubHacks NEXT, MLH Best Use of Gemini API, MLH DEV Writing Challenge
+
+Put the Gemini Project Number in the Devpost field. It is a number, not the project ID, and it is never the API key. Rubrics and the video shot list are in `docs/JUDGING.md`.
+
 ## 3. Built with
 
 React Native, Expo, TypeScript, Supabase, PostgreSQL, Google Gemini, Vercel
@@ -87,4 +97,4 @@ Frames 1 through 6 are the in-browser demo, shown as Demo · Henry.
 
 ## 6. Video demo link
 
-Leave this blank for the first submission. No demo video has been recorded. A two-phone recording of the hosted app is the backup to add later.
+Leave this blank on tonight's draft. The final submission, due 10:00 AM Sunday, must include a video under 3 minutes or the project cannot be judged. VISA is judged from that video. The team is recording it. The shot list is in `docs/JUDGING.md`.
