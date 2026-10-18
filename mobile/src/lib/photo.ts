@@ -1,3 +1,4 @@
+import {AppState} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {ImageManipulator, SaveFormat} from 'expo-image-manipulator';
 
@@ -19,4 +20,20 @@ export async function pickReceiptPhoto(camera: boolean): Promise<ReceiptPhoto | 
   const data = image.base64?.replace(/^data:[^,]*,/, '');
   if (!data) throw new Error('Could not read that photo. Try another.');
   return {data, mediaType: 'image/jpeg'};
+}
+
+/**
+ * The camera and photo library background the app. Resolves once it is active again and the
+ * screen's own AppState listener has run, so returning from the picker never reads as leaving.
+ */
+export function untilActive(): Promise<void> {
+  return new Promise(resolve => {
+    const settle = () => setTimeout(resolve, 0);
+    if (AppState.currentState === 'active') return settle();
+    const sub = AppState.addEventListener('change', state => {
+      if (state !== 'active') return;
+      sub.remove();
+      settle();
+    });
+  });
 }

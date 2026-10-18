@@ -1,7 +1,7 @@
 import {allocate, money} from './money.ts';
 import {computeSplit} from './split.ts';
 import type {ReceiptItem, Shares, SplitInput, UserId} from './split.ts';
-import {scanReceipt as ocr} from './fakeOcr.ts';
+import {fromScan, scanReceipt as ocr} from './fakeOcr.ts';
 
 export type Wallet = 'Apple Wallet' | 'Google Wallet';
 export type User = {id: UserId; name: string; initials: string; tone: number; handle: string; email: string; phone: string};
@@ -454,9 +454,10 @@ export function receiptApprovalKey(receipt: Receipt): string {
   });
 }
 
-export function scanReceipt(db: Db, actor: UserId, chargeId: string, now: number) {
+// `read` is what the server's vision model saw in a photo; without one, the demo sample scanner runs.
+export function scanReceipt(db: Db, actor: UserId, chargeId: string, now: number, read?: unknown) {
   const {c} = openCharge(db, actor, chargeId);
-  const scanned = ocr(c.merchant, c.amount, c.id);
+  const scanned = read === undefined ? ocr(c.merchant, c.amount, c.id) : fromScan(read, c.merchant, c.amount, c.id);
   c.receipt = {items: scanned.items.map(i => ({...i, people: []})), tax: scanned.tax, tip: scanned.tip, itemized: scanned.itemized, scannedAt: now, locked: [], edits: []};
   if (isDraft(c)) {
     const by = userById(db, actor).name;

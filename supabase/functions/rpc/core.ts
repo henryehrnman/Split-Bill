@@ -3,6 +3,8 @@
 import * as d from '../_shared/domain.ts';
 import type {Db, User} from '../_shared/domain.ts';
 import {seed} from '../_shared/seed.ts';
+import {checkPhoto, PhotoError} from './receipt.ts';
+import type {ReadReceipt} from './receipt.ts';
 
 export type Links = Record<string, string>; // Supabase auth user id -> domain user id
 export type State = {db: Db; links: Links; version: number};
@@ -14,7 +16,7 @@ export interface Store {
   save(next: {db: Db; links: Links}, expectedVersion: number | null): Promise<boolean>;
 }
 
-export type Options = {demo: boolean; now?: () => number};
+export type Options = {demo: boolean; now?: () => number; readReceipt?: ReadReceipt};
 export type Reply = {status: number; body: unknown};
 
 const MAX_ATTEMPTS = 6;
@@ -41,7 +43,8 @@ const methods: Record<string, Method> = {
   addToWallet: ({db, actor}, [cardId, wallet]) => d.addToWallet(db, actor, cardId, wallet),
   setCardFrozen: ({db, actor}, [cardId, frozen]) => d.setCardFrozen(db, actor, cardId, !!frozen),
   purchase: ({db, actor, t}, [groupId, input]) => void d.purchase(db, actor, groupId, input, t),
-  scanReceipt: ({db, actor, t}, [chargeId]) => void d.scanReceipt(db, actor, chargeId, t),
+  // The second argument here is the model's read, never the client's: handle() swaps the photo out first.
+  scanReceipt: ({db, actor, t}, [chargeId, read]) => void d.scanReceipt(db, actor, chargeId, t, read),
   updateReceipt: ({db, actor}, [chargeId, input]) => d.updateReceipt(db, actor, chargeId, input),
   toggleClaim: ({db, actor}, [chargeId, itemId]) => d.toggleClaim(db, actor, chargeId, itemId),
   setLocked: ({db, actor, t}, [chargeId, locked, expectedReceiptKey]) => d.setLocked(db, actor, chargeId, !!locked, t, expectedReceiptKey),
@@ -118,16 +121,28 @@ export async function handle(store: Store, authId: string | null, body: any, opt
   if (DEMO_ONLY.has(method) && !opts.demo) return fail(403, 'Demo controls are off.', 'demo_off');
   if (!authId && !opts.demo) return fail(401, 'Sign in first.', 'unauthenticated');
 
+  // Who is calling: the JWT decides. Never the body, except the demo escape hatch.
+  const actorIn = (db: Db, links: Links) => {
+    const linked = authId ? links[authId] ?? null : null;
+    if (linked) return linked;
+    const claimed = body?.actor;
+    return opts.demo && typeof claimed === 'string' && !Object.values(links).includes(claimed) && db.users.some(u => u.id === claimed) ? claimed : null;
+  };
+
+  let callArgs = args;
+  if (method === 'scanReceipt') {
+    const read = await readPhoto(store, opts, clock, actorIn, args);
+    if ('status' in read) return read;
+    callArgs = [args[0], read.read];
+  }
+
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const loaded = await store.load();
     const base: State = loaded ?? {db: seed(clock()), links: {}, version: 0};
     const expected = loaded ? loaded.version : null;
     const db = clone(base.db);
     const links = {...base.links};
-
-    // Who is calling: the JWT decides. Never the body, except the demo escape hatch.
-    let actor = authId ? links[authId] ?? null : null;
-    if (!actor && opts.demo && typeof body?.actor === 'string' && !Object.values(links).includes(body.actor) && db.users.some(u => u.id === body.actor)) actor = body.actor;
+    let actor = actorIn(db, links);
 
     try {
       const t = clock() + db.clockOffset;
@@ -148,7 +163,7 @@ export async function handle(store: Store, authId: string | null, body: any, opt
         } else if (!actor) {
           return fail(403, 'Finish setting up your profile.', 'no_profile');
         } else {
-          result = methods[method]({db, actor, t}, args);
+          result = methods[method]({db, actor, t}, callArgs);
         }
       }
 
@@ -162,4 +177,40 @@ export async function handle(store: Store, authId: string | null, body: any, opt
     }
   }
   return fail(503, 'The server is busy. Try again.', 'busy');
+}
+
+/**
+ * A photo scan calls the model once, outside the compare-and-set loop, so a lost race replays only the write.
+ * It first dry-runs the scan so callers who couldn't scan anyway (not a member, charge closed) never reach the model.
+ */
+async function readPhoto(store: Store, opts: Options, clock: () => number, actorIn: (db: Db, links: Links) => string | null, args: unknown[]): Promise<Reply | {read: unknown}> {
+  if (args[1] == null) return {read: undefined};
+  if (!opts.readReceipt) return fail(503, 'Receipt photos are not set up on this server. Use the sample scan.', 'scan_off');
+  let photo;
+  try {
+    photo = checkPhoto(args[1]);
+  } catch (e) {
+    if (e instanceof PhotoError) return fail(400, e.message, 'bad_photo');
+    throw e;
+  }
+  const loaded = await store.load();
+  const db = clone(loaded?.db ?? seed(clock()));
+  const actor = actorIn(db, loaded?.links ?? {});
+  if (!actor) return fail(403, 'Finish setting up your profile.', 'no_profile');
+  const chargeId = String(args[0]);
+  try {
+    const t = clock() + db.clockOffset;
+    d.tick(db, t);
+    d.scanReceipt(db, actor, chargeId, t);
+  } catch (e) {
+    if (e instanceof d.ApiError) return fail(400, e.message, 'rule');
+    throw e;
+  }
+  const c = db.charges.find(x => x.id === chargeId)!;
+  try {
+    return {read: await opts.readReceipt(photo, {merchant: c.merchant, amount: c.amount})};
+  } catch (e) {
+    console.error(e);
+    return fail(502, "We couldn't read that photo. Try again, or use the sample scan.", 'scan_failed');
+  }
 }

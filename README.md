@@ -66,7 +66,7 @@ Built in the local demo and shared server-backed app (all money simulated):
 - Percent / amount / equal proposals with acceptances, exact-cent allocation for any group size; default split per group.
 - Spending limited to your own balance until you add your share for the period, automatic personal-card charge for negative balances, suspension when that fails, withdrawals locked while a split is pending.
 - Budget change proposals with unanimous acceptance.
-- Simulated receipt scanning for the demo merchants (Juniper, Trader Joe's, Shell); other merchants return a single line to fix by hand.
+- Receipt photos (shared accounts): take or choose a photo and a Claude vision model on the server drafts the items, tax and tip. A read that doesn't add up to the charge becomes one line to fix by hand. The local demo and "Use sample receipt" keep the simulated scanner for the demo merchants (Juniper, Trader Joe's, Shell).
 - 7-day split deadline freeze, chargeback freeze, and a demo "support resolves dispute" action.
 - Activity (group month/all-time spend, charge details) and Profile (balance, period spend, charges, funding history).
 - **Demo user switcher**: tap the "Demo · Name" badge or use Profile to act as Henry, Maya, Jordan, Connor, or Saahil. This stands in for each person using their own phone. In the seeded data, Maya's Juniper charge is pending with her default split already sent, and Henry has a pending invite to Connor's "Tahoe ski trip".
@@ -87,7 +87,9 @@ All business rules live in plain TypeScript so they can move to a real server un
 | `mobile/src/lib/split.ts` | Split math for any number of members (equal, percent, amount, items + tax/tip) |
 | `mobile/src/lib/domain.ts` | Backend rules: groups, invites, budget periods, deposits, cards, purchases, claim board, proposals, settlement, debt recovery, disputes |
 | `mobile/src/lib/api.ts` | Async API facade: local persisted demo or authenticated HTTP RPC, selected by session mode |
-| `mobile/src/lib/fakeOcr.ts` | Stand-in for receipt OCR |
+| `mobile/src/lib/fakeOcr.ts` | Sample receipts, and the check that real photo reads add up to the charge |
+| `mobile/src/lib/photo.ts` | Takes or picks a receipt photo and shrinks it for upload |
+| `supabase/functions/rpc/receipt.ts` | Reads a receipt photo with a Claude vision model |
 | `mobile/src/lib/seed.ts` | Demo users and history, built through the same rules |
 | `mobile/src/lib/store.tsx` | Scoped account/demo state, selected group, API calls, Realtime refresh, notices |
 | `mobile/src/lib/ui.tsx` | Shared UI components and styles |
@@ -100,7 +102,7 @@ For the hackathon (by 10:00am October 18; details in [`launch.txt`](launch.txt) 
 
 1. **Server (Henry):** implemented Supabase table and RPC Edge Function running `domain.ts`, sign-in to user mapping and filtered responses. Deploy using [`supabase/README.md`](supabase/README.md).
 2. **App (Connor):** implemented sign-in/sign-up and profile completion, authenticated HTTP `api.ts`, version-ping Realtime updates, remote invite search, demo-mode toggle and account isolation, loading/error/retry states. Configure the public client settings and verify against the deployed server on two phones.
-3. **Receipts, hosting, demo (Saahil):** hosted web URL (Vercel or EAS Hosting), real receipt scanning with a vision model on the server, a demo group with real accounts, demo script and backup video. Real scans first need `domain.ts`'s `scanReceipt` to accept scanned items instead of always calling `fakeOcr.ts`.
+3. **Receipts, hosting, demo (Saahil):** receipt photos are implemented (Claude vision model on the server); they need `ANTHROPIC_API_KEY` set on the deployed function and a test on real receipts. Still to do: hosted web URL (Vercel or EAS Hosting), a demo group with real accounts, demo script and backup video.
 4. Stretch goal: Stripe Issuing test mode, with the "Simulate tap" button firing Stripe's real card-approval webhook.
 
 Left out until after the hackathon: real money and cards, Apple Pay, native push notifications, bank linking, saved-card debt recovery (stays simulated), scheduled jobs (`tick()` runs them on every request), normalized tables.

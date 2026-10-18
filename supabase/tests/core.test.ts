@@ -142,4 +142,44 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   assert.ok(viewFor(db, 'u_maya').charges.some(c => c.id === 'c_draft'));
 }
 
+// Receipt photos: the model reads once, before the write loop, and only for members of an open charge.
+{
+  const photo = {data: 'QUJD', mediaType: 'image/jpeg'};
+  const good = {items: [{name: 'Pasta', amount: 9000}, {name: 'Wine', amount: 4000}], tax: 1020, tip: 1400};
+  let reads = 0;
+  let next: unknown = good;
+  const reader = async () => { reads++; if (next instanceof Error) throw next; return next as any; };
+  const demo = {...opts, demo: true, readReceipt: reader};
+  const scan = (s: Store, o: object = demo, args: unknown[] = ['chg_o', photo]) => call(s, null, 'scanReceipt', args, o as any, {actor: 'u_henry'});
+
+  const s = memory();
+  await call(s, null, 'fetch', [], demo, {actor: 'u_henry'});
+  assert.equal((await scan(s, {...opts, demo: true})).status, 503); // no key configured
+  assert.equal((await scan(s, demo, ['chg_o', {data: 'x', mediaType: 'image/tiff'}])).status, 400);
+  assert.equal((await scan(s, demo, ['chg_missing', photo])).status, 400);
+  assert.equal((await scan(s, demo, ['chg_o', good])).status, 400); // a client can't hand in its own "read"
+  assert.equal(reads, 0);
+
+  s.failNext = 1;
+  const ok = await scan(s);
+  assert.equal(ok.status, 200);
+  assert.equal(reads, 1); // a lost race replays the write, not the model call
+  const r = s.state!.db.charges.find((c: any) => c.id === 'chg_o').receipt;
+  assert.equal(r.itemized, true);
+  assert.deepEqual(r.items.map((i: any) => [i.name, i.amount]), [['Pasta', 9000], ['Wine', 4000]]);
+
+  next = {items: [{name: 'Pasta', amount: 9000}], tax: 0, tip: 0}; // doesn't add up to $154.20
+  await scan(s);
+  const fallback = s.state!.db.charges.find((c: any) => c.id === 'chg_o').receipt;
+  assert.equal(fallback.itemized, false);
+  assert.equal(fallback.items[0].amount, 15420);
+
+  next = new Error('model down');
+  const v = s.state!.version;
+  assert.equal((await scan(s)).status, 502);
+  assert.equal(s.state!.version, v);
+
+  assert.equal((await scan(s, demo, ['chg_o'])).status, 200); // no photo: the sample scanner still works
+}
+
 console.log('server core tests passed');

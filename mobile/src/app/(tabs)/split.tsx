@@ -9,6 +9,7 @@ import {computeSplit} from '../../lib/split';
 import type {SplitInput} from '../../lib/split';
 import {createFirstSendController} from '../../lib/firstSend';
 import type {FirstSend} from '../../lib/firstSend';
+import {pickReceiptPhoto, untilActive} from '../../lib/photo';
 import {SPLIT_DEADLINE, DAY, currentProposal, isDraft, itemBoardStatus, memberIds, openCharges, receiptApprovalKey, requiredApprovers, userById, waitingOn} from '../../lib/domain';
 import type {Charge, Db, Group, Receipt} from '../../lib/domain';
 
@@ -138,18 +139,35 @@ function ChargeSplit({group, charge, picker}: {group: Group; charge: Charge; pic
 }
 
 function ScanPrompt({charge, onSend}: {charge: Charge; onSend: FirstSend<Db>}) {
-  const {run} = useStore();
-  const draft = isDraft(charge);
+  const {run, demoMode} = useStore();
+  const done = isDraft(charge) ? 'Receipt scanned and sent. Everyone has been asked to claim their items.' : 'Receipt scanned. Tap your name on the items you had.';
+  // Capture runs inside the first-send guard: a cancelled or failed photo leaves the default split unsent and retryable.
+  const scanPhoto = (camera: boolean) => onSend(async () => {
+    let photo;
+    try {
+      photo = await pickReceiptPhoto(camera);
+    } catch (error) {
+      return run(() => Promise.reject(error));
+    } finally {
+      await untilActive();
+    }
+    const picked = photo;
+    return picked ? run(a => api.scanReceipt(a, charge.id, picked), done) : null;
+  });
   return (
     <View style={[s.box, {alignItems: 'center'}]}>
       <Icon name="camera" size={22} color={C.blue} />
       <T style={{fontWeight: '700', marginTop: 10}}>Add the receipt</T>
-      <T style={[s.small, {textAlign: 'center', marginTop: 4, marginBottom: 8}]}>Scan it to pull in line items. Everyone claims what they had, locks in their selection, and the split confirms once every item is claimed.</T>
-      <Button
-        secondary
-        title="Scan receipt (demo)"
-        onPress={() => onSend(() => run(a => api.scanReceipt(a, charge.id), draft ? 'Receipt scanned and sent. Everyone has been asked to claim their items.' : 'Receipt scanned. Tap your name on the items you had.'))}
-      />
+      <T style={[s.small, {textAlign: 'center', marginTop: 4, marginBottom: 8}]}>
+        {demoMode ? 'Scan it to pull in line items.' : 'Take a photo to pull in line items. You can fix anything it misreads.'} Everyone claims what they had, locks in their selection, and the split confirms once every item is claimed.
+      </T>
+      {!demoMode && (
+        <Row style={{alignSelf: 'stretch'}}>
+          <View style={{flex: 1}}><Button title="Take photo" onPress={() => scanPhoto(true)} /></View>
+          <View style={{flex: 1}}><Button secondary title="Choose photo" onPress={() => scanPhoto(false)} /></View>
+        </Row>
+      )}
+      <Button secondary title={demoMode ? 'Scan receipt (demo)' : 'Use sample receipt'} onPress={() => onSend(() => run(a => api.scanReceipt(a, charge.id), done))} />
     </View>
   );
 }
