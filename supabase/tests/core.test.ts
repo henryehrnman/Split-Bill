@@ -378,3 +378,26 @@ console.log('server core tests passed');
   assert.equal(s.state!.db.charges.find(c => c.id === 'chg_o')!.receipt, null);
 }
 console.log('phone receipt parse tests passed');
+
+// Standalone photo reads (the hosted demo): no sign-in, nothing loaded or saved, the charge comes from the caller.
+{
+  const photo = {data: 'QUJD', mediaType: 'image/jpeg'};
+  const seen: unknown[] = [];
+  const reader = async (_p: unknown, charge: unknown) => { seen.push(charge); return {items: [{name: 'Latte', amount: 650}], tax: 50, tip: 0}; };
+  const s = memory();
+  const read = (args: unknown[], o: object = {...opts, readReceipt: reader}) => call(s, null, 'readReceiptPhoto', args, o as any);
+  assert.equal((await read([photo, {merchant: 'Blue Bottle', amount: 700}], opts)).status, 503); // no key configured
+  assert.equal((await read([{data: 'x', mediaType: 'image/tiff'}, {merchant: 'Blue Bottle', amount: 700}])).status, 400);
+  assert.equal((await read([photo, {merchant: 'Blue Bottle', amount: 0}])).status, 400);
+  assert.equal((await read([photo, {merchant: 'Blue Bottle', amount: 7.5}])).status, 400);
+  assert.equal(seen.length, 0);
+  const ok = await read([photo, {merchant: '  Blue Bottle  ', amount: 700}]);
+  assert.equal(ok.status, 200);
+  assert.deepEqual((ok.body as any).read, {items: [{name: 'Latte', amount: 650}], tax: 50, tip: 0});
+  assert.deepEqual(seen, [{merchant: 'Blue Bottle', amount: 700}]);
+  assert.equal(s.saves, 0);
+  assert.equal(s.state, null);
+  const failing = await read([photo, {merchant: 'Blue Bottle', amount: 700}], {...opts, readReceipt: async () => { throw new Error('model down'); }});
+  assert.equal(failing.status, 502);
+}
+console.log('standalone receipt read tests passed');

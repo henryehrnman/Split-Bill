@@ -1342,8 +1342,8 @@ SOFTWARE.
     if (!g.wallet && g.cardId)
       return `${backbar("Your card")}<div class="native-wallet-card">${cardVisual(g)}</div><div class="receipt-empty"><h1>Set up your card</h1><p class="info-text">Activate this simulated card for purchases in ${esc(g.name)}.</p>${button("Set up simulated wallet", "setup-wallet", `data-id="${id}"`, "full")}</div>`;
     if (c)
-      return `${backbar("")}<div class="payment-success native-success"><div class="success-circle">${icon("check")}</div><h1>Payment confirmed</h1><div class="payment-amount">${money(c.total)}</div><p>Blue Bottle</p><div class="success-card wallet-card-arrival">${cardVisual(g)}</div><p class="info-text">${c.settled ? `Your ${money(c.amount)} share is settled.` : `Your ${money(currentPersonalAllocation(c))} share is ready to review.`}</p>${c.settled ? "" : button("Review split", "wallet-review", "", "full")}${button("Back to group", "wallet-done", "", c.settled ? "full" : "secondary full")}</div>`;
-    return `${backbar("")}<div class="native-wallet-card wallet-card-arrival">${cardVisual(g)}</div><div class="reader-prompt">${contactless()}<h1>Hold Near Reader</h1></div><form class="wallet-bottom" data-form="payment" data-id="${id}"><label class="wallet-amount-widget"><span>Amount<small>Blue Bottle</small></span><span class="wallet-amount-input"><span>$</span><input name="amount" aria-label="Purchase amount in dollars" type="number" min="0.01" step=".01" value="24.00" required></span></label><p class="form-error" role="alert"></p><button class="button full payment-button" type="submit" ${state.frozen[id] || g.forming ? "disabled" : ""}>Simulate payment</button>${state.frozen[id] || g.forming ? `<p class="form-footnote">${state.frozen[id] ? "Unfreeze this card to continue." : "This group must activate before purchases."}</p>` : ""}</form>`;
+      return `${backbar("")}<div class="payment-success native-success"><div class="success-circle">${icon("check")}</div><h1>Payment confirmed</h1><div class="payment-amount">${money(c.total)}</div><p>${esc(c.merchant || c.name)}</p><div class="success-card wallet-card-arrival">${cardVisual(g)}</div><p class="info-text">${c.settled ? `Your ${money(c.amount)} share is settled.` : `Your ${money(currentPersonalAllocation(c))} share is ready to review.`}</p>${c.settled ? "" : button("Review split", "wallet-review", "", "full")}${button("Back to group", "wallet-done", "", c.settled ? "full" : "secondary full")}</div>`;
+    return `${backbar("")}<div class="native-wallet-card wallet-card-arrival">${cardVisual(g)}</div><div class="reader-prompt">${contactless()}<h1>Hold Near Reader</h1></div><form class="wallet-bottom" data-form="payment" data-id="${id}"><div class="wallet-amount-widget"><label class="wallet-merchant"><span>Merchant</span><input name="merchant" aria-label="Merchant name" type="text" maxlength="60" autocomplete="off" spellcheck="false" value="Blue Bottle" required></label><label class="wallet-amount-input"><span>$</span><input name="amount" aria-label="Purchase amount in dollars" type="number" min="0.01" step=".01" value="24.00" required></label></div><p class="form-error" role="alert"></p><button class="button full payment-button" type="submit" ${state.frozen[id] || g.forming ? "disabled" : ""}>Simulate payment</button>${state.frozen[id] || g.forming ? `<p class="form-footnote">${state.frozen[id] ? "Unfreeze this card to continue." : "This group must activate before purchases."}</p>` : ""}</form>`;
   }
 
   function loadSampleItems(id) {
@@ -2259,7 +2259,7 @@ SOFTWARE.
   async function submitForm(form, id, f) {
       switch (form.dataset.form) {
         case "payment":
-          await simulatePayment(id, "Blue Bottle", f.get("amount"));
+          await simulatePayment(id, String(f.get("merchant") || "").trim(), f.get("amount"));
           break;
         case "group-edit":
           await call("updateGroup", [

@@ -83,8 +83,14 @@ const fakeApi = {
   setCardFrozen: (actor: UserId, cardId: string, frozen: boolean) => mutate(x => d.setCardFrozen(x, actor, cardId, frozen)),
   purchase: (actor: UserId, groupId: string, input: {merchant: string; amount: number}) => mutate((x, t) => void d.purchase(x, actor, groupId, input, t)),
   setChargeNote: (actor: UserId, chargeId: string, text: string) => mutate((x, t) => d.setChargeNote(x, actor, chargeId, text, t)),
-  scanReceipt: (actor: UserId, chargeId: string, _photo?: ReceiptPhoto) => mutate((x, t) => void d.scanReceipt(x, actor, chargeId, t)),
-  parseReceipt: async (actor: UserId, chargeId: string, _photo?: ReceiptPhoto): Promise<ScannedReceipt> => d.parseReceipt(await load(), actor, chargeId),
+  scanReceipt: async (actor: UserId, chargeId: string, photo?: ReceiptPhoto) => {
+    const read = await demoRead(chargeId, photo);
+    return mutate((x, t) => void d.scanReceipt(x, actor, chargeId, t, read));
+  },
+  parseReceipt: async (actor: UserId, chargeId: string, photo?: ReceiptPhoto): Promise<ScannedReceipt> => {
+    const read = await demoRead(chargeId, photo);
+    return d.parseReceipt(await load(), actor, chargeId, read);
+  },
   confirmReceiptList: (actor: UserId, chargeId: string, input: d.ReceiptListInput, expectedEditKey: string) => mutate((x, t) => d.confirmReceiptList(x, actor, chargeId, input, t, expectedEditKey)),
   confirmItemSelection: (actor: UserId, chargeId: string, itemIds: string[], expectedReceiptListKey: string) => mutate((x, t) => d.confirmItemSelection(x, actor, chargeId, itemIds, expectedReceiptListKey, t)),
   updateReceipt: (actor: UserId, chargeId: string, input: {items: {id: string; name: string; amount: number}[]; tax: number; tip: number}) => mutate(x => d.updateReceipt(x, actor, chargeId, input)),
@@ -114,6 +120,25 @@ const fakeApi = {
 const rpc = createRpcClient({url: apiUrl, publishableKey, getToken: accessToken});
 // Vision processing can take longer than ordinary group actions.
 const photoRpc = createRpcClient({url: apiUrl, publishableKey, getToken: accessToken, timeoutMs: 60000});
+// The demo has no session, so it calls readReceiptPhoto with the public key; the server needs no sign-in for it.
+const demoPhotoRpc = createRpcClient({url: apiUrl, publishableKey, getToken: async () => publishableKey, timeoutMs: 60000});
+
+// Demo data lives on this device, so the server only reads the photo. The domain still checks the read against the charge.
+async function demoRead(chargeId: string, photo?: ReceiptPhoto): Promise<unknown> {
+  if (!photo) return undefined;
+  if (!apiUrl || !publishableKey) throw new RpcError('Receipt photos need the server. Use the sample scan.', 503, 'scan_off');
+  const charge = (await load()).charges.find(c => c.id === chargeId);
+  if (!charge) return undefined;
+  try {
+    const {read} = await demoPhotoRpc.request<{read: unknown}>('readReceiptPhoto', [photo, {merchant: charge.merchant, amount: charge.amount}]);
+    return read;
+  } catch (e) {
+    // A server deployed before readReceiptPhoto answers bad_method.
+    if (e instanceof RpcError && e.code === 'bad_method') throw new RpcError('Receipt photos are not live on the server yet. Use the sample scan.', 503, 'scan_off');
+    throw e;
+  }
+}
+
 let remoteQueue: Promise<unknown> = Promise.resolve();
 let remoteViewer: {identity: ReturnType<typeof backendIdentity>; id: UserId} | null = null;
 export const remoteViewerId = () => remoteViewer?.identity === backendIdentity() ? remoteViewer.id : null;

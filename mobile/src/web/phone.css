@@ -219,3 +219,9 @@
 @media (orientation: landscape) and (max-height: 500px) {
   .phone-host .phone { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 }
+
+/* Apple Pay screen: the merchant name is editable beside the amount. */
+.phone-host .wallet-merchant{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0;margin-right:12px}
+.phone-host .wallet-merchant>span{font-size:9px;font-weight:400;color:var(--muted)}
+.phone-host .wallet-merchant input{width:100%;min-width:0;background:transparent;border:0;border-bottom:1px solid #e2e6ee;border-radius:0;padding:3px 0;font-size:16px;font-weight:600;letter-spacing:-.3px;color:var(--ink)}
+.phone-host .wallet-merchant input:focus{outline:none;border-bottom-color:var(--blue)}

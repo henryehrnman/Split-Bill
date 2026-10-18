@@ -156,6 +156,7 @@ export async function handle(store: Store, authId: string | null, body: any, opt
   const args = Array.isArray(body?.args) ? body.args : [];
   const clock = opts.now ?? Date.now;
   const isCreate = method === 'createUser';
+  if (method === 'readReceiptPhoto') return readStandalonePhoto(opts, args);
   if (!isCreate && !Object.hasOwn(methods, method)) return fail(400, 'Unknown method.', 'bad_method');
   if (DEMO_ONLY.has(method) && !opts.demo) return fail(403, 'Demo controls are off.', 'demo_off');
   if (!authId && !opts.demo) return fail(401, 'Sign in first.', 'unauthenticated');
@@ -234,6 +235,31 @@ export async function handle(store: Store, authId: string | null, body: any, opt
     }
   }
   return fail(503, 'The server is busy. Try again.', 'busy');
+}
+
+/**
+ * Reads a receipt photo for a charge the server does not hold: the hosted demo keeps its data in the browser.
+ * Nothing is loaded or saved, so no sign-in is needed; the caller still checks the read against its charge with fromScan.
+ */
+async function readStandalonePhoto(opts: Options, args: unknown[]): Promise<Reply> {
+  if (!opts.readReceipt) return fail(503, 'Receipt photos are not set up on this server. Use the sample scan.', 'scan_off');
+  let photo;
+  try {
+    photo = checkPhoto(args[0]);
+  } catch (e) {
+    if (e instanceof PhotoError) return fail(400, e.message, 'bad_photo');
+    throw e;
+  }
+  const charge = args[1] as {merchant?: unknown; amount?: unknown} | null;
+  const merchant = typeof charge?.merchant === 'string' ? charge.merchant.trim().slice(0, 60) : '';
+  const amount = charge?.amount;
+  if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0 || amount > 1_000_000) return fail(400, 'Send the charge amount in cents.', 'bad_charge');
+  try {
+    return ok({read: await opts.readReceipt(photo, {merchant, amount})});
+  } catch (e) {
+    console.error(e);
+    return fail(502, "We couldn't read that photo. Try again, or use the sample scan.", 'scan_failed');
+  }
 }
 
 /**

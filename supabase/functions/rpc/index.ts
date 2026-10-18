@@ -48,6 +48,17 @@ const store: Store = {
   },
 };
 
+// readReceiptPhoto needs no sign-in (the hosted demo has none), so cap it per address to protect the model quota.
+const photoReads = new Map<string, number[]>();
+function allowPhotoRead(address: string) {
+  const now = Date.now();
+  const recent = (photoReads.get(address) ?? []).filter(t => now - t < 60_000);
+  if (recent.length >= 6) return false;
+  if (photoReads.size > 5000) photoReads.clear();
+  photoReads.set(address, [...recent, now]);
+  return true;
+}
+
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response(null, {status: 204, headers: cors});
   if (req.method !== 'POST') return json(405, {error: 'POST only.'});
@@ -56,6 +67,9 @@ Deno.serve(async req => {
     body = await req.json();
   } catch {
     return json(400, {error: 'Send JSON.'});
+  }
+  if ((body as {method?: unknown} | null)?.method === 'readReceiptPhoto' && !allowPhotoRead(req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown')) {
+    return json(429, {error: 'Too many receipt photos. Wait a minute and try again.', code: 'rate_limited'});
   }
   const jwt = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
   let authId: string | null = null;
