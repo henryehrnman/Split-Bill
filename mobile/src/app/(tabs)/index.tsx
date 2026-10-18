@@ -5,7 +5,7 @@ import {Page, T, Button, Avatar, Icon, Pill, Segmented, Field, GroupPicker, Empt
 import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents, toInput} from '../../lib/money';
-import {DAY, availableFunds, currentProposal, isActive, isDraft, itemBoardStatus, memberOf, nextPeriodAt, notificationsFor, openBudgetProposal, openCharges, shares, standing, userById, waitingOn} from '../../lib/domain';
+import {DAY, availableFunds, currentProposal, isActive, isDraft, itemBoardStatus, memberOf, nextPeriodAt, notificationsFor, openBudgetProposal, openCharges, periodShares, shares, standing, userById, waitingOn} from '../../lib/domain';
 import type {Charge, Db, Group} from '../../lib/domain';
 
 export default function Home() {
@@ -35,7 +35,8 @@ function HomeFooter({group}: {group: Group}) {
 
 function MemberRows({group}: {group: Group}) {
   const {db, viewer} = useStore();
-  const owed = shares(group);
+  const owed = periodShares(group);
+  const joining = shares(group);
   return (
     <>
       {group.members.map(m => {
@@ -46,7 +47,7 @@ function MemberRows({group}: {group: Group}) {
             <View style={{flex: 1}}>
               <T style={{fontWeight: '500'}}>{user.name}{m.userId === viewer.id ? ' (you)' : ''}</T>
               <T style={s.caption}>
-                {m.status === 'invited' ? `Share ${money(owed[m.userId])} per period` : `Balance ${money(m.balance)} of ${money(owed[m.userId])}${m.autoDeposit ? ' · auto-refill' : ''}`}
+                {m.status === 'invited' ? `Share ${money(joining[m.userId])} per period` : `Balance ${money(m.balance)} of ${money(owed[m.userId])} this period${m.autoDeposit ? ' · auto-refill' : ''}`}
               </T>
             </View>
             <StandingPill standing={standing(group, m.userId)} />
@@ -78,7 +79,7 @@ function Invite({group}: {group: Group}) {
       <MemberRows group={group} />
       <Row style={{marginTop: 18}}>
         <View style={{flex: 1}}><Button secondary title="Decline" onPress={() => run(a => api.respondInvite(a, group.id, false), `You declined ${group.name}.`)} /></View>
-        <View style={{flex: 1.4}}><Button title={`Join · deposit ${money(share)}`} onPress={() => run(a => api.respondInvite(a, group.id, true), `You joined ${group.name}. Add your card to a wallet to start paying.`)} /></View>
+        <View style={{flex: 1.4}}><Button title={`Join · deposit ${money(share)}`} onPress={() => run(a => api.respondInvite(a, group.id, true, share), `You joined ${group.name}. Add your card to a wallet to start paying.`)} /></View>
       </Row>
     </>
   );
@@ -117,6 +118,7 @@ function pendingLine(db: Db, c: Charge, viewerId: string) {
 
 function ActiveGroup({group}: {group: Group}) {
   const {db, viewer, now, run} = useStore();
+  const currentBudget = group.periodBudget ?? group.budget;
   const open = openCharges(db, group.id);
   const proposal = openBudgetProposal(db, group.id);
   const daysLeft = Math.max(0, Math.ceil((nextPeriodAt(group) - now) / DAY));
@@ -136,7 +138,8 @@ function ActiveGroup({group}: {group: Group}) {
           <Pill label={status[0]} tone={status[1]} />
         </Row>
         <T style={{fontSize: 20, fontWeight: '700', marginTop: 18, letterSpacing: -0.4}}>{group.name}</T>
-        <T style={[s.small, {marginTop: 4}]}>{money(group.budget)} {periodLabel(group.periodDays)} · resets in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}</T>
+        <T style={[s.small, {marginTop: 4}]}>Current budget {money(currentBudget)} {periodLabel(group.periodDays)} · resets in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}</T>
+        {group.budget !== currentBudget && <T style={s.caption}>Approved for next period: {money(group.budget)}</T>}
         <T style={[s.money, {marginTop: 14}]}>{money(Math.max(0, availableFunds(db, group)))}</T>
         <T style={s.small}>Available in the group fund</T>
         {open.map(pending => (
@@ -161,8 +164,8 @@ function ActiveGroup({group}: {group: Group}) {
           </T>
           <T style={[s.small, {marginTop: 4}]}>
             {proposal.amount > group.budget
-              ? `Your share would be ${money(shares(group, proposal.amount)[viewer.id])}. The difference is collected at the start of the next period.`
-              : 'Balances stay as they are; any surplus is kept.'}{' '}
+              ? `Your share next period would be ${money(shares(group, proposal.amount)[viewer.id])}. The difference is collected at the start of that period.`
+              : `Your share next period would be ${money(shares(group, proposal.amount)[viewer.id])}. Balances stay as they are; any surplus is kept.`}{' '}
             Accepted by {proposal.acceptedBy.length} of {group.members.length}.
           </T>
           {!proposal.acceptedBy.includes(viewer.id) && (

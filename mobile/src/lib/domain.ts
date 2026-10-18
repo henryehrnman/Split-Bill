@@ -22,6 +22,8 @@ export type Group = {
   createdBy: UserId;
   createdAt: number;
   budget: number;
+  // Funding target for this period; older saved groups fall back to the approved budget.
+  periodBudget?: number;
   periodDays: number;
   periodStart: number;
   members: Member[];
@@ -126,6 +128,8 @@ export function shares(g: Group, budget = g.budget): Record<UserId, number> {
   return Object.fromEntries(g.members.map((m, i) => [m.userId, parts[i]]));
 }
 
+export const periodShares = (g: Group): Record<UserId, number> => shares(g, g.periodBudget ?? g.budget);
+
 // Members who haven't brought their balance up to their share this period can only spend their own balance.
 export type Standing = 'on-track' | 'restricted' | 'suspended' | 'invited';
 export function standing(g: Group, userId: UserId): Standing {
@@ -173,7 +177,7 @@ export function purchaseBlocker(db: Db, groupId: string, userId: UserId): string
   if (s === 'suspended') return 'Your account is suspended until you repay what you owe the group.';
   const pending = pendingCharge(db, groupId);
   if (pending && g.singleOpenCharge) return `Agree on the split for ${pending.merchant} before the next purchase.`;
-  if (s === 'restricted' && unreservedBalance(db, g, userId) <= 0) return `Add your ${money(shares(g)[userId])} share for this period to use the card.`;
+  if (s === 'restricted' && unreservedBalance(db, g, userId) <= 0) return `Add your ${money(periodShares(g)[userId])} share for this period to use the card.`;
   if (fundBalance(g) <= 0) return 'The group fund is empty.';
   if (availableFunds(db, g) <= 0) return 'The rest of the group fund is held for splits that are still being agreed.';
   if (!card) return 'You don’t have a card for this group yet.';
@@ -234,7 +238,7 @@ function issueCard(db: Db, groupId: string, userId: UserId) {
 function credit(db: Db, g: Group, m: Member, amount: number, kind: LedgerEntry['kind'], now: number) {
   m.balance += amount;
   if (m.suspended && m.balance >= 0) m.suspended = false;
-  if (m.balance >= shares(g)[m.userId]) m.fundedPeriod = g.periodStart;
+  if (m.balance >= periodShares(g)[m.userId]) m.fundedPeriod = g.periodStart;
   ledger(db, {groupId: g.id, userId: m.userId, kind, amount, at: now});
 }
 
@@ -253,6 +257,7 @@ export function createGroup(db: Db, actor: UserId, input: {name: string; inviteI
     createdBy: actor,
     createdAt: now,
     budget: input.budget,
+    periodBudget: input.budget,
     periodDays: input.periodDays,
     periodStart: now,
     members: ids.map(userId => ({userId, status: 'invited', balance: 0, autoDeposit: true, failTopUps: false, suspended: false, fundedPeriod: null})),
@@ -261,11 +266,11 @@ export function createGroup(db: Db, actor: UserId, input: {name: string; inviteI
     frozen: null,
   };
   db.groups.push(g);
-  respondInvite(db, actor, g.id, true, now);
+  respondInvite(db, actor, g.id, true, now, shares(g)[actor]);
   return g;
 }
 
-export function respondInvite(db: Db, actor: UserId, groupId: string, accept: boolean, now: number) {
+export function respondInvite(db: Db, actor: UserId, groupId: string, accept: boolean, now: number, expectedContribution?: number) {
   const g = groupById(db, groupId);
   const m = memberOf(g, actor);
   if (m.status === 'joined') fail('You already joined this group.');
@@ -280,9 +285,12 @@ export function respondInvite(db: Db, actor: UserId, groupId: string, accept: bo
     }
     return;
   }
+  const contribution = shares(g)[actor];
+  if (expectedContribution === undefined) throw new StaleStateError('Reload the app to review the invitation deposit before joining.');
+  if (expectedContribution !== contribution) throw new StaleStateError('The invitation deposit changed. Review the current amount before joining.');
   if (m.failTopUps) fail('Your bank declined the deposit (demo). Turn off failed top-ups to retry.');
   m.status = 'joined';
-  credit(db, g, m, shares(g)[actor], 'deposit', now);
+  credit(db, g, m, contribution, 'deposit', now);
   issueCard(db, groupId, actor);
 }
 
@@ -358,6 +366,7 @@ export function respondBudget(db: Db, actor: UserId, proposalId: string, accept:
 function settleBudget(db: Db, p: BudgetProposal) {
   const g = groupById(db, p.groupId);
   if (!g.members.every(m => p.acceptedBy.includes(m.userId))) return;
+  g.periodBudget ??= g.budget;
   g.budget = p.amount;
   db.budgetProposals = db.budgetProposals.filter(x => x.id !== p.id);
 }
@@ -608,11 +617,12 @@ export function rollPeriods(db: Db, now: number) {
   for (const g of db.groups) {
     while (now >= nextPeriodAt(g)) {
       g.periodStart = nextPeriodAt(g);
-      const owed = shares(g);
+      g.periodBudget = g.budget;
+      const owed = periodShares(g);
       for (const m of g.members) {
         const need = owed[m.userId] - m.balance;
         if (m.status === 'joined' && need <= 0) m.fundedPeriod = g.periodStart;
-        if (m.status !== 'joined' || !m.autoDeposit || need <= 0) continue;
+        if (!isActive(g) || m.status !== 'joined' || !m.autoDeposit || need <= 0) continue;
         if (m.failTopUps) ledger(db, {groupId: g.id, userId: m.userId, kind: 'top-up-failed', amount: need, at: g.periodStart});
         else credit(db, g, m, need, 'period-top-up', g.periodStart);
       }

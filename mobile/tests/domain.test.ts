@@ -43,11 +43,11 @@ d.setDefaultSplit(db, 'u_henry', g.id, {method: 'percent', percents: {u_henry: 4
 d.respondInvite(db, 'u_connor', g.id, false, T0);
 assert.deepEqual(d.shares(g), {u_henry: 10000, u_maya: 10000, u_jordan: 10000});
 assert.deepEqual(g.defaultSplit, {method: 'equal'});
-d.respondInvite(db, 'u_maya', g.id, true, T0);
+d.respondInvite(db, 'u_maya', g.id, true, T0, d.shares(g)['u_maya']);
 d.setFailTopUps(db, 'u_jordan', g.id, true);
-throws(() => d.respondInvite(db, 'u_jordan', g.id, true, T0), /declined/);
+throws(() => d.respondInvite(db, 'u_jordan', g.id, true, T0, d.shares(g)['u_jordan']), /declined/);
 d.setFailTopUps(db, 'u_jordan', g.id, false);
-d.respondInvite(db, 'u_jordan', g.id, true, T0);
+d.respondInvite(db, 'u_jordan', g.id, true, T0, d.shares(g)['u_jordan']);
 assert.deepEqual(bal(g), [7500, 10000, 10000]);
 assert.equal(d.standing(g, 'u_henry'), 'on-track');
 assert.equal(db.cards.filter(c => c.groupId === g.id).length, 3);
@@ -255,7 +255,7 @@ throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
   d.setDefaultSplit(db, 'u_henry', g.id, {method: 'percent', percents: {u_henry: 70, u_maya: 30, u_jordan: 0}});
   d.respondInvite(db, 'u_jordan', g.id, false, T0);
   assert.deepEqual(g.defaultSplit, {method: 'percent', percents: {u_henry: 70, u_maya: 30}});
-  d.respondInvite(db, 'u_maya', g.id, true, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, d.shares(g)['u_maya']);
   d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
   const c = d.purchase(db, 'u_henry', g.id, {merchant: 'Custom default', amount: 1001}, T0);
   assert.deepEqual(d.currentProposal(c).shares, {u_henry: 701, u_maya: 300});
@@ -265,7 +265,7 @@ throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
 {
   const db = seed(T0);
   const g = d.createGroup(db, 'u_henry', {name: 'Mixed reservations', inviteIds: ['u_maya'], budget: 20000, periodDays: 30}, T0);
-  d.respondInvite(db, 'u_maya', g.id, true, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, d.shares(g)['u_maya']);
   d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
   d.setSingleOpenCharge(db, 'u_henry', g.id, false);
   const older = d.purchase(db, 'u_henry', g.id, {merchant: 'Older', amount: 2000}, T0);
@@ -303,7 +303,7 @@ throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
 {
   const db = seed(T0);
   const g = d.createGroup(db, 'u_henry', {name: 'Settled chargeback', inviteIds: ['u_maya'], budget: 20000, periodDays: 30}, 0);
-  d.respondInvite(db, 'u_maya', g.id, true, 0);
+  d.respondInvite(db, 'u_maya', g.id, true, 0, d.shares(g)['u_maya']);
   d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
   const c = d.purchase(db, 'u_henry', g.id, {merchant: 'Settled', amount: 1000}, 0);
   d.sendDefaultSplit(db, 'u_henry', c.id, 0);
@@ -328,7 +328,7 @@ throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
 {
   const db = seed(T0);
   const g = d.createGroup(db, 'u_henry', {name: 'Reviewed proposal', inviteIds: ['u_maya'], budget: 20000, periodDays: 30}, T0);
-  d.respondInvite(db, 'u_maya', g.id, true, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, d.shares(g)['u_maya']);
   d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
   const c = d.purchase(db, 'u_henry', g.id, {merchant: 'Review first', amount: 1000}, T0);
   d.sendDefaultSplit(db, 'u_henry', c.id, T0);
@@ -352,7 +352,7 @@ throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
 {
   const db = seed(T0);
   const g = d.createGroup(db, 'u_henry', {name: 'Reviewed receipt', inviteIds: ['u_maya'], budget: 20000, periodDays: 30}, T0);
-  d.respondInvite(db, 'u_maya', g.id, true, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, d.shares(g)['u_maya']);
   d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
   const c = d.purchase(db, 'u_henry', g.id, {merchant: 'Shared plate', amount: 1300}, T0);
   d.scanReceipt(db, 'u_henry', c.id, T0);
@@ -394,7 +394,7 @@ throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
 {
   const db = seed(T0);
   const g = d.createGroup(db, 'u_henry', {name: 'Debt-backed balance', inviteIds: ['u_maya'], budget: 20000, periodDays: 30}, T0);
-  d.respondInvite(db, 'u_maya', g.id, true, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, d.shares(g)['u_maya']);
   d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
   d.setFailTopUps(db, 'u_maya', g.id, true);
   const c = d.purchase(db, 'u_henry', g.id, {merchant: 'Shared debt', amount: 15000}, T0);
@@ -419,4 +419,132 @@ throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
   assert.equal(d.availableFunds(db, g), 0);
 }
 
-console.log('PASS domain: invite search, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock and pooled-fund cap, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with held funds, period refills, budget changes, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');
+// Joining deposits only the amount the invitee reviewed, including after another invitee declines.
+{
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Reviewed deposit', inviteIds: ['u_maya', 'u_jordan'], budget: 30000, periodDays: 7}, T0);
+  const reviewed = d.shares(g).u_maya;
+  assert.equal(reviewed, 10000);
+  const beforeMissing = JSON.parse(JSON.stringify(db));
+  assert.throws(() => d.respondInvite(db, 'u_maya', g.id, true, T0), error => error instanceof d.StaleStateError);
+  assert.deepEqual(db, beforeMissing, 'missing deposit consent cannot change membership, balances, cards, ledger, or IDs');
+
+  d.respondInvite(db, 'u_jordan', g.id, false, T0); // Declining needs no reviewed deposit.
+  assert.equal(d.shares(g).u_maya, 15000);
+  const beforeStale = JSON.parse(JSON.stringify(db));
+  assert.throws(() => d.respondInvite(db, 'u_maya', g.id, true, T0, reviewed), error => error instanceof d.StaleStateError);
+  assert.deepEqual(db, beforeStale, 'the old $100 consent cannot authorize a $150 deposit');
+  assert.equal(d.memberOf(g, 'u_maya').status, 'invited');
+  assert.equal(d.cardFor(db, g.id, 'u_maya'), null);
+
+  d.respondInvite(db, 'u_maya', g.id, true, T0, 15000);
+  assert.equal(d.memberOf(g, 'u_maya').status, 'joined');
+  assert.equal(d.memberOf(g, 'u_maya').balance, 15000);
+  assert.equal(db.cards.filter(c => c.groupId === g.id && c.userId === 'u_maya').length, 1);
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id && e.userId === 'u_maya').map(e => [e.kind, e.amount]), [['deposit', 15000]]);
+  const joined = JSON.parse(JSON.stringify(db));
+  throws(() => d.respondInvite(db, 'u_maya', g.id, true, T0, 15000), /already joined/);
+  assert.deepEqual(db, joined, 'retrying a completed join cannot deposit twice');
+}
+
+// A group left with one member cannot collect a larger refill after everyone else declines.
+for (const bankDeclines of [false, true]) {
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Unaccepted group', inviteIds: ['u_maya', 'u_jordan'], budget: 30000, periodDays: 1}, T0);
+  d.respondInvite(db, 'u_maya', g.id, false, T0);
+  d.respondInvite(db, 'u_jordan', g.id, false, T0);
+  d.setFailTopUps(db, 'u_henry', g.id, bankDeclines);
+  const ledger = db.ledger.filter(e => e.groupId === g.id);
+  d.rollPeriods(db, T0 + 2 * d.DAY);
+  assert.equal(g.periodStart, T0 + 2 * d.DAY, 'inactive groups still advance their period');
+  assert.equal(d.isActive(g), false);
+  assert.deepEqual(bal(g), [10000]);
+  assert.equal(d.memberOf(g, 'u_henry').fundedPeriod, T0);
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledger, 'no refill or failed bank attempt occurs while inactive');
+}
+
+// Waiting for a final invite preserves funded balances without collecting from short members.
+{
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Waiting across periods', inviteIds: ['u_maya', 'u_jordan'], budget: 30000, periodDays: 1}, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, 10000);
+  d.withdraw(db, 'u_henry', g.id, 2000, T0);
+  const ledger = db.ledger.filter(e => e.groupId === g.id);
+  d.rollPeriods(db, T0 + d.DAY);
+  assert.equal(g.periodStart, T0 + d.DAY);
+  assert.deepEqual(bal(g), [8000, 10000, 0]);
+  assert.equal(d.standing(g, 'u_henry'), 'restricted');
+  assert.equal(d.standing(g, 'u_maya'), 'on-track', 'a sufficient balance still funds the current period');
+  assert.equal(d.memberOf(g, 'u_jordan').fundedPeriod, null);
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledger);
+
+  d.respondInvite(db, 'u_jordan', g.id, true, T0 + d.DAY, 10000);
+  assert.equal(d.isActive(g), true);
+  assert.equal(d.standing(g, 'u_maya'), 'on-track');
+  d.rollPeriods(db, T0 + 2 * d.DAY);
+  assert.deepEqual(bal(g), [10000, 10000, 10000]);
+  assert(g.members.every(m => m.fundedPeriod === g.periodStart));
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id && e.kind === 'period-top-up').map(e => [e.userId, e.amount]), [['u_henry', 2000]]);
+}
+
+// Approved budgets change the next period's target, including for groups saved before periodBudget existed.
+for (const legacy of [false, true]) {
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Budget timing', inviteIds: ['u_maya'], budget: 20000, periodDays: 1}, T0);
+  assert.equal(g.periodBudget, 20000);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, 10000);
+  d.setAutoDeposit(db, 'u_maya', g.id, false);
+  d.withdraw(db, 'u_maya', g.id, 10000, T0);
+  d.rollPeriods(db, T0 + d.DAY);
+  if (legacy) delete g.periodBudget; // Simulate a previously persisted group without the optional field.
+  assert.deepEqual(d.periodShares(g), {u_henry: 10000, u_maya: 10000});
+  assert.equal(d.standing(g, 'u_maya'), 'restricted');
+
+  const ledgerBeforeRaise = db.ledger.filter(e => e.groupId === g.id);
+  d.proposeBudget(db, 'u_henry', g.id, 40000, T0 + d.DAY);
+  assert.equal(g.budget, 20000, 'a proposal alone does not change the budget');
+  d.respondBudget(db, 'u_maya', d.openBudgetProposal(db, g.id)!.id, true);
+  assert.equal(g.periodBudget, 20000, 'capture the old budget before changing a legacy group');
+  assert.equal(g.budget, 40000);
+  assert.deepEqual(d.periodShares(g), {u_henry: 10000, u_maya: 10000});
+  assert.deepEqual(d.shares(g), {u_henry: 20000, u_maya: 20000}, 'next-period refill uses the approved budget');
+  assert.deepEqual(bal(g), [10000, 0]);
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledgerBeforeRaise);
+  assert.match(d.purchaseBlocker(db, g.id, 'u_maya')!, /Add your \$100\.00 share/);
+  d.deposit(db, 'u_maya', g.id, 6000, T0 + d.DAY);
+  assert.equal(d.standing(g, 'u_maya'), 'restricted');
+  d.deposit(db, 'u_maya', g.id, 4000, T0 + d.DAY);
+  assert.equal(d.standing(g, 'u_maya'), 'on-track', 'adding this period’s $100 share restores pooled spending');
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 20000);
+
+  d.proposeBudget(db, 'u_henry', g.id, 60000, T0 + d.DAY);
+  d.respondBudget(db, 'u_maya', d.openBudgetProposal(db, g.id)!.id, true);
+  assert.equal(g.periodBudget, 20000, 'another approval cannot overwrite the current-period snapshot');
+  assert.equal(g.budget, 60000);
+  d.rollPeriods(db, T0 + 2 * d.DAY);
+  assert.equal(g.periodBudget, 60000);
+  assert.deepEqual(d.periodShares(g), {u_henry: 30000, u_maya: 30000});
+  assert.deepEqual(bal(g), [30000, 10000]);
+  assert.equal(d.standing(g, 'u_henry'), 'on-track');
+  assert.equal(d.standing(g, 'u_maya'), 'restricted', 'manual refill now requires the new target');
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id && e.kind === 'period-top-up').map(e => [e.userId, e.amount]), [['u_henry', 20000]]);
+
+  const ledgerBeforeCut = db.ledger.filter(e => e.groupId === g.id);
+  d.proposeBudget(db, 'u_henry', g.id, 20000, T0 + 2 * d.DAY);
+  d.respondBudget(db, 'u_maya', d.openBudgetProposal(db, g.id)!.id, true);
+  assert.equal(g.periodBudget, 60000);
+  assert.deepEqual(d.shares(g), {u_henry: 10000, u_maya: 10000});
+  assert.deepEqual(bal(g), [30000, 10000]);
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledgerBeforeCut, 'approving a cut does not refund or collect money');
+  d.deposit(db, 'u_maya', g.id, 5000, T0 + 2 * d.DAY);
+  assert.equal(d.standing(g, 'u_maya'), 'restricted', 'a future cut cannot reduce this period’s funding requirement');
+  const ledgerBeforeRollover = db.ledger.filter(e => e.groupId === g.id);
+  d.rollPeriods(db, T0 + 3 * d.DAY);
+  assert.equal(g.periodBudget, 20000);
+  assert.deepEqual(d.periodShares(g), {u_henry: 10000, u_maya: 10000});
+  assert.deepEqual(bal(g), [30000, 15000], 'the lower target preserves surplus balances');
+  assert(g.members.every(m => m.fundedPeriod === g.periodStart));
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledgerBeforeRollover, 'balances already above the lower target need no refill');
+}
+
+console.log('PASS domain: invite search, reviewed invitation deposits, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock and pooled-fund cap, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with held funds, active-only period refills, current and next-period budget targets, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');

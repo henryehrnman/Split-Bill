@@ -7,7 +7,7 @@ import {useSession} from '../lib/session';
 import {apiUrl} from '../lib/config';
 import {api} from '../lib/api';
 import {money, cents} from '../lib/money';
-import {DAY, currentProposal, groupById, groupsFor, isActive, memberOf, nextPeriodAt, openCharges, pendingCharge, periodSpend, shares, spendSummary, standing} from '../lib/domain';
+import {DAY, currentProposal, groupById, groupsFor, isActive, memberOf, nextPeriodAt, openCharges, pendingCharge, periodShares, periodSpend, shares, spendSummary, standing} from '../lib/domain';
 import type {Group, LedgerEntry} from '../lib/domain';
 
 const LEDGER_LABEL: Record<LedgerEntry['kind'], string> = {
@@ -118,7 +118,9 @@ function GroupBalance({group}: {group: Group}) {
   const {db, viewer, now, run, demoMode, busy, setGroupId} = useStore();
   const [amount, setAmount] = useState('');
   const me = memberOf(group, viewer.id);
-  const share = shares(group)[viewer.id];
+  const currentBudget = group.periodBudget ?? group.budget;
+  const share = periodShares(group)[viewer.id];
+  const nextShare = shares(group)[viewer.id];
   const used = periodSpend(db, group, viewer.id);
   const spend = spendSummary(db, group.id, now, viewer.id);
   const pending = pendingCharge(db, group.id);
@@ -131,14 +133,15 @@ function GroupBalance({group}: {group: Group}) {
         <T style={{fontSize: 17, fontWeight: '700'}}>{group.name}</T>
         <StandingPill standing={standing(group, viewer.id)} />
       </Row>
-      <T style={s.caption}>{money(group.budget)} {periodLabel(group.periodDays)} · next period in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}</T>
+      <T style={s.caption}>Current budget {money(currentBudget)} {periodLabel(group.periodDays)} · next period in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}</T>
+      {group.budget !== currentBudget && <T style={s.caption}>Next period: {money(group.budget)} budget · your share {money(nextShare)}</T>}
       <Row style={{marginTop: 14}}>
         <View>
           <T style={s.caption}>Your balance</T>
           <T style={{fontSize: 26, fontWeight: '700', fontVariant: ['tabular-nums'], color: me.balance < 0 ? C.danger : C.ink}}>{money(me.balance)}</T>
         </View>
         <View style={{alignItems: 'flex-end'}}>
-          <T style={s.caption}>Your share per period</T>
+          <T style={s.caption}>Your share this period</T>
           <T style={{fontSize: 17, fontWeight: '500', fontVariant: ['tabular-nums']}}>{money(share)}</T>
         </View>
       </Row>
@@ -159,7 +162,7 @@ function GroupBalance({group}: {group: Group}) {
           <Row style={{paddingTop: 10}}>
             <View style={{flex: 1}}>
               <T style={{fontSize: 14}}>Auto-refill each period</T>
-              <T style={s.caption}>Charge my bank back up to {money(share)} when a new period starts</T>
+              <T style={s.caption}>Charge my bank back up to {money(nextShare)} when a new period starts</T>
             </View>
             <Switch disabled={busy} accessibilityLabel={`Auto-refill for ${group.name}`} value={me.autoDeposit} trackColor={{false: '#dfe3ea', true: C.blue}} onValueChange={v => { run(a => api.setAutoDeposit(a, group.id, v)); }} />
           </Row>

@@ -31,7 +31,7 @@ function harness() {
   };
   // The adapter stands in for JWT verification, then runs the actual server handler.
   // Separate verified auth identities are used; DEMO_MODE and its actor escape hatch stay off.
-  const tokens = new Map([['jwt-alice', 'auth-alice'], ['jwt-bob', 'auth-bob']]);
+  const tokens = new Map([['jwt-alice', 'auth-alice'], ['jwt-bob', 'auth-bob'], ['jwt-charlie', 'auth-charlie']]);
   function client(token: string, forgedActor?: string) {
     return createRpcClient({url: endpoint, publishableKey: 'public-key', getToken: () => token, fetch: async (input, init) => {
       assert.equal(input, endpoint);
@@ -64,7 +64,7 @@ async function pendingCharge(h: ReturnType<typeof harness>) {
   const {alice, bob, bobId} = people;
   const created = await alice.state('createGroup', [{name: 'Proposal revisions', inviteIds: [bobId], budget: 20000, periodDays: 7}]);
   const groupId = created.db.groups[0].id;
-  await bob.state('respondInvite', [groupId, true]);
+  await bob.state('respondInvite', [groupId, true, 10000]);
   await alice.state('addToWallet', [created.db.cards[0].id, 'Apple Wallet']);
   const purchased = await alice.state('purchase', [groupId, {merchant: 'Shared dinner', amount: 9001}]);
   const chargeId = purchased.db.charges[0].id;
@@ -129,7 +129,7 @@ test('two authenticated HTTP clients create profiles, find each other, join and 
   scoped(invited, groupId, [aliceId, bobId]);
   assert.equal(invited.db.groups[0].members.find(m => m.userId === bobId)?.status, 'invited');
   assert.equal(invited.db.cards.length, 0);
-  const joined = await bob.state('respondInvite', [groupId, true]);
+  const joined = await bob.state('respondInvite', [groupId, true, 10000]);
   assert(joined.db.groups[0].members.every(m => m.status === 'joined' && m.balance === 10000));
   const aliceCard = created.db.cards[0].id;
   const bobCard = joined.db.cards[0].id;
@@ -159,6 +159,58 @@ test('two authenticated HTTP clients create profiles, find each other, join and 
     const debit = settled.db.ledger.find(entry => entry.kind === 'charge');
     assert.equal(debit?.amount, settled.viewerId === aliceId ? -4501 : -4500);
   }
+});
+
+test('joining requires the reviewed deposit amount and rejects missing or mismatched consent without writes', async () => {
+  const h = harness();
+  const {alice, bob, bobId} = await accounts(h);
+  const created = await alice.state('createGroup', [{name: 'Reviewed invitation', inviteIds: [bobId], budget: 20000, periodDays: 7}]);
+  const groupId = created.db.groups[0].id;
+  const before = clone(h.state!);
+  const saves = h.saves;
+
+  for (const args of [[groupId, true], [groupId, true, null], [groupId, true, '10000'], [groupId, true, 9999]]) {
+    await assert.rejects(bob.state('respondInvite', args), error => error instanceof RpcError && error.status === 409 && error.code === 'stale');
+    assert.equal(h.saves, saves);
+    assert.deepEqual(h.state, before, 'an unreviewed deposit cannot change any persisted state');
+  }
+  const joined = await bob.state('respondInvite', [groupId, true, 10000]);
+  assert.equal(joined.db.groups[0].members.find(m => m.userId === bobId)!.balance, 10000);
+  assert.equal(joined.db.cards.length, 1);
+  assert.deepEqual(joined.db.ledger.map(e => [e.kind, e.amount]), [['deposit', 10000]]);
+});
+
+test('CAS replay rejects a reviewed invitation amount when another invitee declines before the join saves', async () => {
+  const h = harness();
+  const {alice, bob, bobId} = await accounts(h);
+  const charlie = h.client('jwt-charlie');
+  const c = await charlie.state('createUser', [{name: 'Charlie Tester', handle: 'charlie.test', email: 'charlie@t.dev', phone: '555-0103'}]);
+  const created = await alice.state('createGroup', [{name: 'Concurrent invitations', inviteIds: [bobId, c.viewerId], budget: 30000, periodDays: 7}]);
+  const groupId = created.db.groups[0].id;
+  const saves = h.saves;
+  const conflicts = h.conflicts;
+  const requests = h.requests.length;
+  let declinedState: State | null = null;
+  h.beforeSave(async () => {
+    await charlie.state('respondInvite', [groupId, false]);
+    declinedState = clone(h.state!);
+  });
+
+  await assert.rejects(bob.state('respondInvite', [groupId, true, 10000]), error => error instanceof RpcError && error.status === 409 && error.code === 'stale');
+
+  assert(declinedState, 'Charlie declined after Bob reviewed $100 but before his join saved');
+  assert.equal(h.requests.length, requests + 2, 'both clients send one request; the server revalidates on replay');
+  assert.equal(h.conflicts, conflicts + 1);
+  assert.equal(h.saves, saves + 1, 'only the decline committed');
+  assert.deepEqual(h.state, declinedState, 'the discarded join must not deposit funds, issue a card, or alter membership');
+  assert.equal(h.state!.db.groups.find(g => g.id === groupId)!.members.find(m => m.userId === bobId)!.status, 'invited');
+  assert.equal(h.state!.db.cards.some(card => card.groupId === groupId && card.userId === bobId), false);
+  assert.equal(h.state!.db.ledger.some(entry => entry.groupId === groupId && entry.userId === bobId), false);
+
+  const joined = await bob.state('respondInvite', [groupId, true, 15000]);
+  assert.equal(joined.db.groups[0].members.find(m => m.userId === bobId)!.balance, 15000);
+  assert.equal(joined.db.cards.length, 1);
+  assert.deepEqual(joined.db.ledger.map(e => [e.kind, e.amount]), [['deposit', 15000]]);
 });
 
 test('accepting a previously viewed split rejects a replacement proposal without writing state', async () => {
@@ -359,7 +411,7 @@ test('a forged actor cannot change the authenticated viewer or the member receiv
   const {alice, bob, aliceId, bobId} = await accounts(h);
   const created = await alice.state('createGroup', [{name: 'Identity check', inviteIds: [bobId], budget: 20000, periodDays: 7}]);
   const groupId = created.db.groups[0].id;
-  await bob.state('respondInvite', [groupId, true]);
+  await bob.state('respondInvite', [groupId, true, 10000]);
   const forged = h.client('jwt-bob', aliceId);
   assert.equal((await forged.state('fetch')).viewerId, bobId);
   const deposited = await forged.state('deposit', [groupId, 200]);
@@ -374,7 +426,7 @@ test('concurrent clients preserve both writes through the server compare-and-set
   const {alice, bob, aliceId, bobId} = await accounts(h);
   const created = await alice.state('createGroup', [{name: 'Concurrent deposits', inviteIds: [bobId], budget: 20000, periodDays: 7}]);
   const groupId = created.db.groups[0].id;
-  await bob.state('respondInvite', [groupId, true]);
+  await bob.state('respondInvite', [groupId, true, 10000]);
   const version = h.state!.version;
   const requestCount = h.requests.length;
   await Promise.all([alice.state('deposit', [groupId, 101]), bob.state('deposit', [groupId, 203])]);
