@@ -83,6 +83,16 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   const found = await call(s, 'auth-cy', 'searchUsers', ['Tester', []]);
   assert.ok(!(found.body as any[]).some(u => u.handle === 'cy1'));
   assert.ok((found.body as any[]).length >= 2);
+
+  // Search hides contact details of people you only found, unless you typed them exactly.
+  const ann = (found.body as any[]).find(u => u.handle === 'ann1');
+  assert.equal(ann.email, 'a***@t.dev');
+  assert.equal(ann.phone, '');
+  const byEmail = (await call(s, 'auth-cy', 'searchUsers', ['ann@t.dev', []])).body as any[];
+  assert.equal(byEmail.find(u => u.handle === 'ann1').email, 'ann@t.dev');
+  const byPhone = (await call(s, 'auth-cy', 'searchUsers', ['(555) 0100', []])).body as any[];
+  assert.equal(byPhone.find(u => u.handle === 'ann1').phone, '555-0100');
+  assert.equal((await call(s, 'auth-cy', 'createGroup', [{name: 'x'.repeat(40_000), inviteIds: [], budget: 100, periodDays: 7}])).status, 413);
 }
 
 // Optimistic version check: a lost race is replayed, a constant loser gets 503.
