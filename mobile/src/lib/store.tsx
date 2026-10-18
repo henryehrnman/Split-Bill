@@ -49,6 +49,7 @@ function AccountStore({children}: {children: React.ReactNode}) {
   const pending = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const fetching = useRef(false);
+  const loaded = useRef(false);
   const refreshAgain = useRef(false);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   const [live, setLive] = useState(false);
@@ -66,6 +67,7 @@ function AccountStore({children}: {children: React.ReactNode}) {
     viewerRef.current = id;
     setViewerId(id);
     setDb(next);
+    loaded.current = true;
     setLoadError('');
     setNeedsProfile(false);
   }, [current, demoMode]);
@@ -90,7 +92,13 @@ function AccountStore({children}: {children: React.ReactNode}) {
       }
       apply(next);
     } catch (error) {
-      if (current()) { setLoadError(message(error)); setNotice({kind: 'error', text: message(error)}); }
+      if (!current()) return;
+      // Background refreshes (Realtime pings, the 15 s poll, returning to the app) retry on their own. While data is
+      // already on screen, a dropped or slow read is not worth an error banner; only problems that need the person
+      // (an expired session, a server error) are shown.
+      if (loaded.current && error instanceof RpcError && (error.code === 'timeout' || error.code === 'network_error')) return;
+      setLoadError(message(error));
+      setNotice({kind: 'error', text: message(error)});
     } finally {
       fetching.current = false;
       if (current()) setRefreshing(false);
