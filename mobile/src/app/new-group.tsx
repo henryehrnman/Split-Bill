@@ -1,31 +1,57 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {View, Pressable, TextInput} from 'react-native';
 import {router} from 'expo-router';
 import {Page, T, Button, Field, Avatar, Icon, Label, Segmented, Row, periodLabel, s, C} from '../lib/ui';
 import {useStore} from '../lib/store';
 import {api} from '../lib/api';
 import {allocate, cents, money} from '../lib/money';
-import {searchUsers, userById} from '../lib/domain';
+import type {User} from '../lib/domain';
 
 const PERIODS: [string, string][] = [['7', 'Weekly'], ['14', 'Every 2 weeks'], ['30', 'Monthly'], ['custom', 'Custom']];
 
 export default function NewGroup() {
-  const {db, viewer, run, setGroupId} = useStore();
+  const {viewer, run, setGroupId, demoMode} = useStore();
   const [name, setName] = useState('');
-  const [invites, setInvites] = useState<string[]>([]);
+  const [invites, setInvites] = useState<User[]>([]);
   const [query, setQuery] = useState('');
+  const [searchAttempt, setSearchAttempt] = useState(0);
+  const [search, setSearch] = useState<{key: string; users: User[]; error: string} | null>(null);
   const [budget, setBudget] = useState('300');
   const [period, setPeriod] = useState('14');
   const [customDays, setCustomDays] = useState('10');
   const amount = cents(budget);
   const days = period === 'custom' ? Number(customDays) : Number(period);
   const validDays = Number.isInteger(days) && days >= 1 && days <= 365;
-  const people = [viewer.id, ...invites];
+  const people = [viewer, ...invites];
   const each = amount ? allocate(amount, people.map(() => 1)) : [];
-  const results = searchUsers(db, query, [viewer.id, ...invites]);
+  const searchKey = JSON.stringify([viewer.id, demoMode, query, invites.map(u => u.id), searchAttempt]);
+  const shouldSearch = query.trim().length >= 2;
+  const currentSearch = search?.key === searchKey ? search : null;
+  const results = shouldSearch ? currentSearch?.users ?? [] : [];
+  const searching = shouldSearch && !currentSearch;
+  const searchError = shouldSearch ? currentSearch?.error : '';
+
+  useEffect(() => {
+    if (query.trim().length < 2) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      api.searchUsers(viewer.id, query, invites.map(u => u.id)).then(
+        users => {
+          if (active) setSearch({key: searchKey, users, error: ''});
+        },
+        () => {
+          if (active) setSearch({key: searchKey, users: [], error: 'Could not search for people. Try again.'});
+        },
+      );
+    }, 300);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [viewer.id, demoMode, query, invites, searchKey, searchAttempt]);
 
   const create = () =>
-    run(a => api.createGroup(a, {name, inviteIds: invites, budget: amount ?? 0, periodDays: days}), `${name.trim()} created. You deposited ${money(each[0] ?? 0)}; the card works once everyone responds.`).then(next => {
+    run(a => api.createGroup(a, {name, inviteIds: invites.map(u => u.id), budget: amount ?? 0, periodDays: days}), `${name.trim()} created. You deposited ${money(each[0] ?? 0)}; the card works once everyone responds.`).then(next => {
       if (!next) return;
       setGroupId(next.groups[next.groups.length - 1].id);
       router.replace('/');
@@ -63,9 +89,16 @@ export default function NewGroup() {
         onChangeText={setQuery}
         style={s.input}
       />
-      {query.trim().length >= 2 && !results.length && <T style={[s.small, {marginTop: 8}]}>No one found. Try their exact username, email or phone number.</T>}
+      {searching && <T style={[s.small, {marginTop: 8}]}>Searching for people…</T>}
+      {!!searchError && (
+        <View style={{marginTop: 8}}>
+          <T accessibilityRole="alert" style={[s.small, {color: C.danger}]}>{searchError}</T>
+          <Button secondary title="Retry search" onPress={() => setSearchAttempt(attempt => attempt + 1)} />
+        </View>
+      )}
+      {shouldSearch && !searching && !searchError && !results.length && <T style={[s.small, {marginTop: 8}]}>No one found. Try their exact username, email or phone number.</T>}
       {results.map(u => (
-        <Pressable key={u.id} accessibilityRole="button" accessibilityLabel={`Invite ${u.name}`} onPress={() => { setInvites([...invites, u.id]); setQuery(''); }} style={s.listRow}>
+        <Pressable key={u.id} accessibilityRole="button" accessibilityLabel={`Invite ${u.name}`} onPress={() => { setInvites(current => current.some(invitee => invitee.id === u.id) ? current : [...current, u]); setQuery(''); }} style={s.listRow}>
           <Avatar user={u} size={34} />
           <View style={{flex: 1}}>
             <T style={{fontWeight: '500'}}>{u.name}</T>
@@ -74,11 +107,11 @@ export default function NewGroup() {
           <Icon name="user-plus" size={18} color={C.blue} />
         </Pressable>
       ))}
-      <T style={[s.caption, {marginTop: 8}]}>Demo users: maya.l, jordanr, connorz, saahil — or search by email or phone.</T>
+      {demoMode && <T style={[s.caption, {marginTop: 8}]}>Demo users: maya.l, jordanr, connorz, saahil — or search by email or phone.</T>}
 
       <View style={{marginTop: 14}}>
-        {people.map((id, i) => {
-          const u = userById(db, id);
+        {people.map((u, i) => {
+          const id = u.id;
           return (
             <Row key={id} style={{paddingVertical: 8}}>
               <Avatar user={u} size={30} />
@@ -88,7 +121,7 @@ export default function NewGroup() {
               </View>
               {!!amount && <T style={s.strong}>{money(each[i])}</T>}
               {id !== viewer.id && (
-                <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${u.name}`} onPress={() => setInvites(invites.filter(x => x !== id))} style={{padding: 6}}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${u.name}`} onPress={() => setInvites(invites.filter(x => x.id !== id))} style={{padding: 6}}>
                   <Icon name="x" size={16} color={C.muted} />
                 </Pressable>
               )}
