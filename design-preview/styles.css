@@ -55,9 +55,9 @@
 .custom-allocation{gap:0}.custom-input{max-width:110px;min-width:1ch}.custom-allocation input+span{margin-left:2px}
 
 /* Balance the heading shift so Home keeps the same total layout height. */
-.home-screen .section-heading{margin:12px 0 -10px}.home-screen .more-pending{align-self:flex-end}
-@container app (max-height:780px){.home-screen .section-heading{margin:8px 0 -6px}}
-@container app (max-height:700px){.home-screen .section-heading{margin:5px 0 -3px}}
+.home-screen .section-heading{margin:12px 0 -10px}.home-screen .more-pending{align-self:flex-end;position:relative;top:-8px}
+@container app (max-height:780px){.home-screen .section-heading{margin:8px 0 -6px}.home-screen .more-pending{top:-6px}}
+@container app (max-height:700px){.home-screen .section-heading{margin:5px 0 -3px}.home-screen .more-pending{top:-3px}}
 .receipt-upload-action{position:relative;cursor:pointer}.receipt-upload-action:focus-within{outline:3px solid #7b9cff;outline-offset:4px}.receipt-entry-actions{margin:18px 0 0}.edit-receipt-empty{padding-bottom:12px}.receipt-sample{padding:9px 0;min-height:34px;width:fit-content;border:0;border-radius:0;background:transparent;color:var(--blue);font-size:10px;margin:5px 0 6px}.draft-validation:empty{display:none}.item-editor>.receipt-entry-actions{margin-bottom:16px}.edit-receipt-empty .receipt-entry-actions .button{margin-top:0}
 
 /* Item entry precedes exclusive, current-user selection. */
