@@ -656,6 +656,10 @@ SOFTWARE.
     safeRender();
   }
   function nav(tab) {
+    if (activeTabTransition) {
+      activeTabTransition.nextTab = tab;
+      return;
+    }
     if (!state.stack.length && state.tab === tab) return;
     const tabs = ["home", "groups", "spending"],
       direction = state.stack.length
@@ -958,7 +962,7 @@ SOFTWARE.
             )
             .join("")}</div>`
         : ""
-    }${d.method === "item" && currentProposal(c).method === "item" && currentProposal(c).items.length ? '<p class="item-reset-notice">Confirming changes to this list resets everyone’s selections and approvals.</p>' : ""}<p class="draft-validation" id="draft-total" role="status">${esc(draftValidationText(c, d))}</p>${d.method === "item" ? `<div class="item-card-actions split-footer-buttons">${button("Cancel", "cancel-edit", "", "secondary")}${button("Confirm items", "confirm-item-list", `data-id="${c.id}"`)}</div>` : ""}</section>`;
+    }${d.method === "item" && currentProposal(c).method === "item" && currentProposal(c).items.length ? '<p class="item-reset-notice">Confirming changes to this list resets everyone’s selections and approvals.</p>' : ""}<p class="draft-validation" id="draft-total" role="status">${esc(draftValidationText(c, d))}</p>${d.method === "item" && d.items.length > 0 ? `<div class="item-card-actions split-footer-buttons">${button("Cancel", "cancel-edit", "", "secondary")}${button("Confirm items", "confirm-item-list", `data-id="${c.id}"`)}</div>` : ""}</section>`;
   }
   function itemFlowShell(
     c,
@@ -1002,13 +1006,49 @@ SOFTWARE.
   let renderRevision = 0,
     renderedRouteKey = null,
     renderedHeaderHtml = null,
-    activeScreenAnimation = null;
+    activeTabTransition = null;
+  function finishTabTransition(flush = false) {
+    const transition = activeTabTransition;
+    if (!transition) return;
+    activeTabTransition = null;
+    transition.outgoing.remove();
+    transition.incoming.classList.remove("tab-incoming");
+    transition.animations.forEach((animation) => animation.cancel());
+    if (!flush || disposed) return;
+    if (transition.nextTab && transition.nextTab !== state.tab) {
+      nav(transition.nextTab);
+      syncRoute();
+    } else if (transition.refresh) safeRender();
+  }
   function render(enter = false, options = {}) {
     const r = current(),
       key = routeKey(),
       app = $("#app"),
       oldScreen = $(".screen", app),
       sameRoute = renderedRouteKey === key;
+    // URL echoes and live snapshots must not replace a pane in the middle of its swipe.
+    if (activeTabTransition && sameRoute) {
+      activeTabTransition.refresh = true;
+      return;
+    }
+    finishTabTransition();
+    const tabs = ["home:", "groups:", "spending:"],
+      direction = options.tabDirection || (
+        tabs.includes(key) && tabs.includes(renderedRouteKey)
+          ? Math.sign(tabs.indexOf(key) - tabs.indexOf(renderedRouteKey))
+          : 0
+      ),
+      sliding = direction && oldScreen?.animate && !state.stack.length &&
+        !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+      outgoingScroll = oldScreen?.scrollTop || 0,
+      outgoingStyle = sliding ? {
+        top: `${oldScreen.offsetTop}px`,
+        left: `${oldScreen.offsetLeft}px`,
+        width: `${oldScreen.offsetWidth}px`,
+        height: `${oldScreen.offsetHeight}px`,
+        // Preserve padding normally supplied by the adjacent root-header selector.
+        padding: window.getComputedStyle(oldScreen).padding,
+      } : null;
     const desiredScroll = options.resetScroll
       ? 0
       : sameRoute && oldScreen
@@ -1020,8 +1060,6 @@ SOFTWARE.
           ? { ...focused.dataset }
           : null;
     const revision = ++renderRevision;
-    activeScreenAnimation?.cancel();
-    activeScreenAnimation = null;
     let html = "",
       footer = "";
     switch (r.type) {
@@ -1146,21 +1184,37 @@ SOFTWARE.
       screen.scrollTop = desiredScroll;
       state.scroll[key] = screen.scrollTop;
     });
-    if (
-      options.tabDirection &&
-      screen.animate &&
-      !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-    ) {
-      activeScreenAnimation = screen.animate(
-        [
-          {
-            transform: `translateX(${options.tabDirection > 0 ? 22 : -22}%)`,
-            opacity: 0.3,
-          },
-          { transform: "translateX(0)", opacity: 1 },
-        ],
-        { duration: 280, easing: "cubic-bezier(.2,.8,.2,1)" },
-      );
+    if (sliding) {
+      oldScreen.classList.remove("enter");
+      oldScreen.classList.add("tab-outgoing");
+      oldScreen.inert = true;
+      oldScreen.setAttribute("aria-hidden", "true");
+      oldScreen.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+      Object.assign(oldScreen.style, outgoingStyle);
+      app.insertBefore(oldScreen, $(".bottom-nav", app));
+      oldScreen.scrollTop = outgoingScroll;
+      screen.classList.add("tab-incoming");
+      const timing = { duration: 300, easing: "cubic-bezier(.4,0,.2,1)", fill: "both" },
+        transition = {
+          incoming: screen,
+          outgoing: oldScreen,
+          animations: [
+            oldScreen.animate([
+              { transform: "translateX(0)" },
+              { transform: `translateX(${-direction * 100}%)` },
+            ], timing),
+            screen.animate([
+              { transform: `translateX(${direction * 100}%)` },
+              { transform: "translateX(0)" },
+            ], timing),
+          ],
+          refresh: false,
+          nextTab: null,
+        };
+      activeTabTransition = transition;
+      Promise.all(transition.animations.map((animation) => animation.finished)).then(() => {
+        if (activeTabTransition === transition) finishTabTransition(true);
+      }).catch(() => {});
     }
   }
   let lastFocus;
@@ -1419,8 +1473,10 @@ SOFTWARE.
   function update(next) {
     if (disposed) return;
     adopt(next);
-    if (!busy && !root.contains(document.activeElement?.closest("form")))
-      safeRender();
+    if (!busy) {
+      routeChanged();
+      if (!root.contains(document.activeElement?.closest("form"))) safeRender();
+    }
   }
   function safeRender() {
     const previousRoute = routeKey();
@@ -2289,18 +2345,13 @@ SOFTWARE.
   return {
     update(next) {
       update(next);
-      if (!busy) {
-        routeChanged();
-        if (!root.contains(document.activeElement?.closest("form")))
-          safeRender();
-      }
     },
     destroy() {
       disposed = true;
       listeners.abort();
       clearTimeout(toastTimer);
       clearTimeout(searchTimer);
-      activeScreenAnimation?.cancel();
+      finishTabTransition();
       root.querySelector("#app").innerHTML = "";
       root.querySelector("#modal-root").innerHTML = "";
     },
