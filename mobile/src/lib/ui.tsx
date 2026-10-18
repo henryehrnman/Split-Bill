@@ -136,7 +136,7 @@ export function Page({title, subtitle, children, footer, back = false}: {title: 
         {subtitle && <T style={s.sub}>{subtitle}</T>}
         <NoticeBanner />
         {(busy || refreshing) && <View accessibilityLiveRegion="polite" style={[s.row, {justifyContent: 'flex-start', marginBottom: 12}]}><ActivityIndicator size="small" color={C.blue} /><T style={s.small}>{busy ? 'Saving…' : 'Updating…'}</T></View>}
-        {!demoMode && !live && <Pressable accessibilityRole="button" onPress={refresh} style={{paddingVertical: 10}}><T style={s.caption}>Live updates reconnecting · Tap to refresh</T></Pressable>}
+        {!demoMode && <Pressable accessibilityRole="button" accessibilityLabel="Refresh group" accessibilityState={{disabled: busy || refreshing}} disabled={busy || refreshing} onPress={refresh} style={{paddingVertical: 10}}><T style={s.caption}>{live ? 'Live updates on · Tap to refresh' : 'Live updates reconnecting · Tap to refresh'}</T></Pressable>}
         {children}
       </ScrollView>
       {footer && <View style={s.footer}>{footer}</View>}

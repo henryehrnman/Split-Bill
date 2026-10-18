@@ -9,6 +9,7 @@ import {backendIdentity} from './auth';
 import {RpcError} from './http';
 import {subscribeToChanges} from './realtime';
 import AuthScreen from './AuthScreen';
+import {finishProfile} from './profileSetup';
 
 export type Notice = {kind: 'error' | 'success'; text: string};
 type Ctx = {
@@ -80,11 +81,10 @@ function AccountStore({children}: {children: React.ReactNode}) {
         if (!(error instanceof RpcError) || error.code !== 'no_profile' || demoMode) throw error;
         const meta = session?.user.user_metadata;
         if (!meta?.name || !meta?.handle) { if (current()) setNeedsProfile(true); return; }
-        try { next = await createProfile({name: meta.name, handle: meta.handle, phone: meta.phone ?? '', email: session?.user.email ?? ''}); }
+        try { next = await finishProfile(() => createProfile({name: meta.name, handle: meta.handle, phone: meta.phone ?? '', email: session?.user.email ?? ''}), () => api.fetch()); }
         catch (profileError) {
-          // Another tab may have created this account's profile after our fetch.
-          if (profileError instanceof RpcError && profileError.code === 'has_profile') next = await api.fetch();
-          else { if (current()) setNeedsProfile(true); throw profileError; }
+          if (current()) setNeedsProfile(true);
+          throw profileError;
         }
       }
       apply(next);
@@ -139,7 +139,7 @@ function AccountStore({children}: {children: React.ReactNode}) {
 
   if (needsProfile) return <AuthScreen profileOnly onDemo={enterDemo} onSignOut={signOut}
     onSignIn={async () => {}} onSignUp={async () => {}}
-    onCompleteProfile={async profile => { apply(await createProfile({...profile, email: session?.user.email ?? ''})); }} />;
+    onCompleteProfile={async profile => { apply(await finishProfile(() => createProfile({...profile, email: session?.user.email ?? ''}), () => api.fetch())); }} />;
   if (!db) return <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16}}>
     {refreshing && <ActivityIndicator />}
     <Text accessibilityRole={loadError ? 'alert' : undefined}>{loadError || 'Loading Split Bill…'}</Text>

@@ -3,8 +3,10 @@ import {createClient, processLock} from '@supabase/supabase-js';
 import {Platform} from 'react-native';
 import {apiUrl, configurationError, publishableKey, supabaseUrl} from './config';
 import {RpcError} from './http';
+import {createAuthFetch} from './authFetch';
 
 export const supabase = apiUrl && !configurationError ? createClient(supabaseUrl, publishableKey, {
+  global: {fetch: createAuthFetch()},
   auth: {
     storage: AsyncStorage,
     persistSession: true,
