@@ -4,6 +4,7 @@ import {router, useFocusEffect, useLocalSearchParams} from 'expo-router';
 import {Page, T, Button, Avatar, Icon, Pill, Segmented, Chip, Field, GroupPicker, EmptyState, Row, ago, s, C} from '../../lib/ui';
 import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
+import {ChargeNote} from '../../lib/ChargeNote';
 import {money, cents, toInput, allocate} from '../../lib/money';
 import {computeSplit} from '../../lib/split';
 import type {SplitInput} from '../../lib/split';
@@ -123,6 +124,7 @@ function ChargeSplitPane({group, charge, picker, sendFirst}: {group: Group; char
           {group.singleOpenCharge ? 'the card stays locked until this is settled' : 'held from the group fund until settled'}
         </T>
       </View>
+      <ChargeNote charge={charge} readOnly />
       {draft && !mine ? (
         <View style={[s.box, {alignItems: 'center'}]}>
           <Icon name="clock" size={22} color={C.muted} />
