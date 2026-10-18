@@ -1601,7 +1601,7 @@ SOFTWARE.
         )
         .join(
           "",
-        )}</div><section class="card-section"><label class="field"><span>Default split</span><select id="default-split" data-id="${id}"><option value="equal" ${g.defaultSplit === "equal" ? "selected" : ""}>Equally</option><option value="item" ${g.defaultSplit === "item" ? "selected" : ""}>By item</option></select><small>By item starts with equal shares until a receipt is confirmed.</small></label></section>`;
+        )}</div><section class="card-section"><label class="field"><span>Default split</span><select id="default-split" data-id="${id}">${g.defaultSplit === "custom" ? '<option value="custom" selected disabled>Custom percentages</option>' : ""}<option value="equal" ${g.defaultSplit === "equal" ? "selected" : ""}>Equally</option><option value="item" ${g.defaultSplit === "item" ? "selected" : ""}>By item</option></select><small>By item starts with equal shares until a receipt is confirmed.</small></label></section>`;
     return backbar(title) + body;
   }
   function createGroup() {
