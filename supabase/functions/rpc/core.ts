@@ -43,6 +43,7 @@ const methods: Record<string, Method> = {
   addToWallet: ({db, actor}, [cardId, wallet]) => d.addToWallet(db, actor, cardId, wallet),
   setCardFrozen: ({db, actor}, [cardId, frozen]) => d.setCardFrozen(db, actor, cardId, !!frozen),
   purchase: ({db, actor, t}, [groupId, input]) => void d.purchase(db, actor, groupId, input, t),
+  setChargeNote: ({db, actor, t}, [chargeId, text]) => d.setChargeNote(db, actor, chargeId, text, t),
   // The second argument here is the model's read, never the client's: handle() swaps the photo out first.
   scanReceipt: ({db, actor, t}, [chargeId, read]) => void d.scanReceipt(db, actor, chargeId, t, read),
   updateReceipt: ({db, actor}, [chargeId, input]) => d.updateReceipt(db, actor, chargeId, input),

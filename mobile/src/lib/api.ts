@@ -80,6 +80,7 @@ const fakeApi = {
   addToWallet: (actor: UserId, cardId: string, wallet: Wallet) => mutate(x => d.addToWallet(x, actor, cardId, wallet)),
   setCardFrozen: (actor: UserId, cardId: string, frozen: boolean) => mutate(x => d.setCardFrozen(x, actor, cardId, frozen)),
   purchase: (actor: UserId, groupId: string, input: {merchant: string; amount: number}) => mutate((x, t) => void d.purchase(x, actor, groupId, input, t)),
+  setChargeNote: (actor: UserId, chargeId: string, text: string) => mutate((x, t) => d.setChargeNote(x, actor, chargeId, text, t)),
   scanReceipt: (actor: UserId, chargeId: string, _photo?: ReceiptPhoto) => mutate((x, t) => void d.scanReceipt(x, actor, chargeId, t)),
   updateReceipt: (actor: UserId, chargeId: string, input: {items: {id: string; name: string; amount: number}[]; tax: number; tip: number}) => mutate(x => d.updateReceipt(x, actor, chargeId, input)),
   toggleClaim: (actor: UserId, chargeId: string, itemId: string) => mutate(x => d.toggleClaim(x, actor, chargeId, itemId)),

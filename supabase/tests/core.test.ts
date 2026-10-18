@@ -166,6 +166,78 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   assert.ok(viewFor(db, 'u_maya').charges.some(c => c.id === 'c_draft'));
 }
 
+// Charge notes use the JWT author, preserve draft privacy, and never change payment or consent state.
+{
+  const s = memory();
+  const annId = ((await call(s, 'auth-ann', 'createUser', [profile('Ann')])).body as any).viewerId;
+  const boId = ((await call(s, 'auth-bo', 'createUser', [profile('Bo')])).body as any).viewerId;
+  await call(s, 'auth-cy', 'createUser', [profile('Cy')]);
+  const created = (await call(s, 'auth-ann', 'createGroup', [{name: 'Dinner notes', inviteIds: [boId], budget: 20000, periodDays: 7}])).body as any;
+  const gid = created.db.groups[0].id;
+  assert.equal((await call(s, 'auth-bo', 'respondInvite', [gid, true, 10000])).status, 200);
+  await call(s, 'auth-ann', 'addToWallet', [created.db.cards[0].id, 'Apple Wallet']);
+  const purchased = (await call(s, 'auth-ann', 'purchase', [gid, {merchant: 'Dinner', amount: 1001}])).body as any;
+  const cid = purchased.db.charges[0].id;
+  const charge = () => s.state!.db.charges.find(c => c.id === cid)!;
+  const withoutNotes = () => JSON.stringify({
+    ...s.state!.db,
+    charges: s.state!.db.charges.map(({note: _note, ...c}) => c),
+  });
+
+  const draft = withoutNotes();
+  assert.equal((await call(s, 'auth-ann', 'setChargeNote', [cid, '  Birth\u0000day \tdinner\n\u007f\u0085\u009f  '])).status, 200);
+  assert.deepEqual(charge().note, {authorId: annId, text: 'Birthday dinner', at: T0});
+  assert.equal(withoutNotes(), draft, 'writing a note changes no other domain state');
+  assert.equal(((await call(s, 'auth-bo', 'fetch')).body as any).db.charges.length, 0);
+  for (const auth of ['auth-bo', 'auth-cy']) {
+    const before = JSON.stringify(s.state);
+    assert.equal((await call(s, auth, 'setChargeNote', [cid, 'Forged draft note'], opts, {actor: annId})).status, 400);
+    assert.equal(JSON.stringify(s.state), before);
+  }
+
+  assert.equal((await call(s, 'auth-ann', 'sendDefaultSplit', [cid])).status, 200);
+  const pending = withoutNotes();
+  const version = s.state!.version;
+  s.failNext = 1;
+  assert.equal((await call(s, 'auth-bo', 'setChargeNote', [cid, 'I had the pasta'], {...opts, now: () => T0 + 1}, {actor: annId})).status, 200);
+  assert.equal(s.state!.version, version + 1, 'CAS retry persists the replacement once');
+  assert.deepEqual(charge().note, {authorId: boId, text: 'I had the pasta', at: T0 + 1}, 'the verified member can replace the note, but cannot forge its author');
+  assert.equal(withoutNotes(), pending, 'replacing a note cannot alter approvals, reservations, balances, ledger, notifications, or ID sequence');
+  for (const auth of ['auth-ann', 'auth-bo']) {
+    const viewed = (await call(s, auth, 'fetch')).body as any;
+    assert.deepEqual(viewed.db.charges.find((c: any) => c.id === cid).note, charge().note);
+  }
+  assert.equal(((await call(s, 'auth-cy', 'fetch')).body as any).db.charges.length, 0);
+  const beforeOutsider = JSON.stringify(s.state);
+  assert.equal((await call(s, 'auth-cy', 'setChargeNote', [cid, 'Not a member'], opts, {actor: annId})).status, 400);
+  assert.equal(JSON.stringify(s.state), beforeOutsider);
+  assert.equal((await call(s, 'auth-ann', 'setChargeNote', [cid, ' \n\t\u0080 '])).status, 200);
+  assert.equal(charge().note, undefined, 'empty text after control stripping clears the note');
+  assert.equal(withoutNotes(), pending, 'clearing the note changes no other domain state');
+  assert.equal((await call(s, 'auth-bo', 'setChargeNote', [cid, `\u0000${'x'.repeat(280)}\n`])).status, 200);
+  assert.equal(charge().note!.text, 'x'.repeat(280), 'the limit applies after controls are stripped');
+  for (const text of [undefined, null, 42, {}, ['note'], 'x'.repeat(281)]) {
+    const before = JSON.stringify(s.state);
+    assert.equal((await call(s, 'auth-bo', 'setChargeNote', [cid, text])).status, 400);
+    assert.equal(JSON.stringify(s.state), before, 'invalid text must not write state or allocate an ID');
+  }
+
+  assert.equal((await call(s, 'auth-bo', 'acceptSplit', [cid, charge().proposals.at(-1)!.id])).status, 200);
+  assert.equal(charge().status, 'settled');
+  const settled = withoutNotes();
+  assert.equal((await call(s, 'auth-bo', 'setChargeNote', [cid, 'Thanks for dinner!'])).status, 200);
+  assert.deepEqual(charge().note, {authorId: boId, text: 'Thanks for dinner!', at: T0});
+  assert.equal(withoutNotes(), settled, 'a settled note cannot change agreed shares or debit anyone again');
+  assert.equal((await call(s, 'auth-ann', 'setChargeNote', [cid, ''])).status, 200);
+  assert.equal(charge().note, undefined);
+  assert.equal(withoutNotes(), settled);
+  assert.equal((await call(s, 'auth-ann', 'fileChargeback', [cid])).status, 200);
+  const disputed = withoutNotes();
+  assert.equal((await call(s, 'auth-bo', 'setChargeNote', [cid, 'Support context'])).status, 200);
+  assert.deepEqual(charge().note, {authorId: boId, text: 'Support context', at: T0});
+  assert.equal(withoutNotes(), disputed, 'notes remain available without changing the dispute or freeze');
+}
+
 // Receipt photos: the model reads once, before the write loop, and only for members of an open charge.
 {
   const photo = {data: 'QUJD', mediaType: 'image/jpeg'};
