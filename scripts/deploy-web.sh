@@ -20,8 +20,10 @@ if [ -d "$out/assets/node_modules" ]; then
   done
 fi
 if find "$out" -name node_modules -print -quit | grep -q .; then echo "A node_modules folder is still in the export; Vercel would skip it." >&2; exit 1; fi
+# The standalone video presentation is plain static files, served at /demo/ next to the app.
+cp -R "$root/demo" "$out/demo"
 cat > "$out/vercel.json" <<'JSON'
-{"rewrites": [{"source": "/((?!assets/|_expo/).*)", "destination": "/index.html"}]}
+{"redirects": [{"source": "/demo", "destination": "/demo/"}], "rewrites": [{"source": "/((?!assets/|_expo/|demo/).*)", "destination": "/index.html"}]}
 JSON
 
 # The project link lives in the ignored root .vercel/ so every deploy targets the same Vercel project.
