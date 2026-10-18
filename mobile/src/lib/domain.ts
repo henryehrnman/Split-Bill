@@ -2,6 +2,7 @@ import {allocate, money} from './money.ts';
 import {computeSplit} from './split.ts';
 import type {ReceiptItem, Shares, SplitInput, UserId} from './split.ts';
 import {fromScan, scanReceipt as ocr} from './fakeOcr.ts';
+import type {ReceiptDraft} from './fakeOcr.ts';
 
 export type Wallet = 'Apple Wallet' | 'Google Wallet';
 export type User = {id: UserId; name: string; initials: string; tone: number; handle: string; email: string; phone: string};
@@ -34,7 +35,8 @@ export type Group = {
 };
 export type Card = {id: string; groupId: string; userId: UserId; last4: string; wallet: Wallet | null; frozen: boolean};
 export type ItemEdit = {id: string; itemId: string; targetId: UserId; action: 'add' | 'remove'; authorId: UserId; createdAt: number};
-export type Receipt = {items: ReceiptItem[]; tax: number; tip: number; itemized: boolean; scannedAt: number; locked: UserId[]; edits: ItemEdit[]};
+// draft holds a photo read that didn't add up to the charge, for the payer to fix; it is never claimable.
+export type Receipt = {items: ReceiptItem[]; tax: number; tip: number; itemized: boolean; scannedAt: number; locked: UserId[]; edits: ItemEdit[]; draft?: ReceiptDraft};
 export type Proposal = {id: string; authorId: UserId | null; createdAt: number; input: SplitInput; shares: Shares; acceptedBy: UserId[]};
 export type Charge = {
   id: string;
@@ -477,7 +479,7 @@ export function receiptApprovalKey(receipt: Receipt): string {
 export function scanReceipt(db: Db, actor: UserId, chargeId: string, now: number, read?: unknown) {
   const {c} = openCharge(db, actor, chargeId);
   const scanned = read === undefined ? ocr(c.merchant, c.amount, c.id) : fromScan(read, c.merchant, c.amount, c.id);
-  c.receipt = {items: scanned.items.map(i => ({...i, people: []})), tax: scanned.tax, tip: scanned.tip, itemized: scanned.itemized, scannedAt: now, locked: [], edits: []};
+  c.receipt = {items: scanned.items.map(i => ({...i, people: []})), tax: scanned.tax, tip: scanned.tip, itemized: scanned.itemized, scannedAt: now, locked: [], edits: [], ...(scanned.draft && {draft: scanned.draft})};
   const by = userById(db, actor).name;
   notify(db, c, memberIds(groupById(db, c.groupId)).filter(id => id !== actor), () => `${by} scanned the ${c.merchant} receipt (${money(c.amount)}). Claim the items you had.`, now);
   c.sentAt ??= now;
@@ -496,6 +498,8 @@ export function updateReceipt(db: Db, actor: UserId, chargeId: string, input: {i
   r.items = input.items.map(i => ({id: i.id, name: i.name.trim(), amount: i.amount, people: r.items.find(x => x.id === i.id)?.people ?? []}));
   r.tax = input.tax;
   r.tip = input.tip;
+  r.itemized = true;
+  delete r.draft;
   r.locked = [];
   r.edits = r.edits.filter(e => r.items.some(i => i.id === e.itemId));
 }
