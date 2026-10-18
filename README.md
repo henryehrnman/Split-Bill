@@ -73,9 +73,13 @@ Built in the local demo and shared server-backed app (all money simulated):
 - Demo controls: skip to the next budget period, skip ahead 7 days, simulate bank declines, reset demo data.
 - Installable on iPhone from Safari (Share → Add to Home Screen, "Open as Web App" on): opens full screen with its own icon.
 
-Verified: TypeScript, lint, and unit tests for split math and all backend rules (invites, periods, share-added spending rule, debt recovery, suspension, first proposal and notifications, claim board) pass, and the web bundle exports. Clicked through in headless Chrome: purchase, the payer's first proposal (sent by hand, sent automatically on leaving, and leaving someone out), notifications, accepting and settling, and the layout at iPhone size.
+Verified: TypeScript, lint, and unit tests for split math and all backend rules (invites, periods, share-added spending rule, debt recovery, suspension, first proposal and notifications, claim board) pass, and the web bundle exports. Clicked through in headless Chrome: purchase, the payer's first proposal (sent by hand, sent automatically on leaving, and leaving someone out), notifications, accepting and settling, and the layout at iPhone size. `npm ci` in `mobile/` matches `package.json` as of main `7126984`.
 
-Not yet verified: the itemized claim board in a browser, the Home Screen install on a physical iPhone, Android, user testing.
+The shared server is deployed. Supabase project `uiwbsedibgvwaklmwjna` is running the code on main: migration `0001` is applied and the `rpc` Edge Function is active. Email confirmation is off. An unauthenticated call returns 401, a CORS preflight returns 204, and a signed-in call with no profile returns 403 `no_profile`, so sign-in, the function, and `app_state` work together. `DEMO_MODE` is off, so a signed-in user cannot wipe every account. Receipt photo scans return 503 `scan_off` until `ANTHROPIC_API_KEY` is set on the function.
+
+Point a shared-server build at it with `mobile/.env.local` or the hosted build environment: `EXPO_PUBLIC_API_URL=https://uiwbsedibgvwaklmwjna.supabase.co/functions/v1/rpc`, `EXPO_PUBLIC_SUPABASE_URL=https://uiwbsedibgvwaklmwjna.supabase.co`, and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the Supabase dashboard (Settings → API Keys).
+
+Not yet verified: two phones against this deployed server, a hosted web URL, the itemized claim board in a browser, the Home Screen install on a physical iPhone, Android, user testing.
 
 ## Architecture
 
