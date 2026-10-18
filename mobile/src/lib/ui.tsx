@@ -166,23 +166,54 @@ export function Row({children, style}: {children: React.ReactNode; style?: Style
   return <View style={[s.row, style]}>{children}</View>;
 }
 
-export function CardVisual({holder, groupName, last4, limit, frozen}: {holder: string; groupName: string; last4: string; limit: string; frozen: boolean}) {
+// The card has no stored expiry, so derive a stable one from its number.
+const cardExpiry = (last4: string) => {
+  const n = Number(last4) || 0;
+  return `${String((n % 12) + 1).padStart(2, '0')}/${30 + (n % 4)}`;
+};
+
+// A standard card face: issuer and contactless on top, chip, masked number, cardholder, expiry, network mark.
+export function CardVisual({holder, groupName, last4, frozen}: {holder: string; groupName: string; last4: string; frozen: boolean}) {
   return (
-    <View style={[s.card, frozen && {opacity: 0.6}]}>
+    <View
+      accessible
+      accessibilityLabel={`Visa card ending in ${last4}, ${holder}, ${groupName}${frozen ? ', frozen' : ''}`}
+      style={[s.card, frozen && {opacity: 0.6}]}
+    >
       <View accessible={false} style={s.cardArc} />
-      <View accessible={false} style={[s.cardArc, {right: -65, top: 35, borderColor: '#334870'}]} />
+      <View accessible={false} style={[s.cardArc, {right: -65, top: 35, borderColor: '#2f4466'}]} />
       <View style={s.row}>
-        <T style={{color: 'white', fontWeight: '700', fontSize: 21, letterSpacing: -0.8}}>splitbill</T>
-        <Icon name={frozen ? 'lock' : 'wifi'} size={23} color="#ccd5e5" />
-      </View>
-      <T style={{color: '#aebbd1', fontSize: 11, marginTop: 32, marginBottom: 5}}>YOU CAN SPEND</T>
-      <T style={{color: 'white', fontSize: 34, fontWeight: '500', fontVariant: ['tabular-nums'], letterSpacing: -1}}>{limit}</T>
-      <View style={[s.row, {marginTop: 30}]}>
-        <View>
-          <T style={{color: '#d4dbea', fontSize: 12}}>{holder} · {groupName}</T>
-          <T style={{color: '#8899b6', fontSize: 10, marginTop: 4}}>VISA · VIRTUAL · DEMO ONLY</T>
+        <View style={{flexShrink: 1}}>
+          <T style={{color: 'white', fontWeight: '700', fontSize: 20, letterSpacing: -0.6}}>splitbill</T>
+          <T numberOfLines={1} style={{color: '#aebbd1', fontSize: 11, marginTop: 1}}>{groupName}</T>
         </View>
-        <T style={{color: '#d4dbea', fontSize: 12, letterSpacing: 2}}>•••• {last4}</T>
+        {frozen ? (
+          <View style={s.cardFrozen}>
+            <Icon name="lock" size={12} color="white" />
+            <T style={{color: 'white', fontSize: 10, fontWeight: '700', letterSpacing: 1}}>FROZEN</T>
+          </View>
+        ) : (
+          <View style={{transform: [{rotate: '90deg'}]}}>
+            <Icon name="wifi" size={22} color="#ccd5e5" />
+          </View>
+        )}
+      </View>
+      <View style={s.cardChip}>
+        <View style={[s.cardChipLine, {top: 11}]} />
+        <View style={[s.cardChipLine, {top: 21}]} />
+        <View style={s.cardChipCenter} />
+      </View>
+      <T style={{color: 'white', fontSize: 19, letterSpacing: 2.5, fontVariant: ['tabular-nums']}}>•••• •••• •••• {last4}</T>
+      <View style={[s.row, {alignItems: 'flex-end', marginTop: 'auto'}]}>
+        <View style={{flexShrink: 1}}>
+          <T style={s.cardLabel}>CARDHOLDER</T>
+          <T numberOfLines={1} style={s.cardValue}>{holder.toUpperCase()}</T>
+        </View>
+        <View style={{marginHorizontal: 12}}>
+          <T style={s.cardLabel}>VALID THRU</T>
+          <T style={[s.cardValue, {fontVariant: ['tabular-nums']}]}>{cardExpiry(last4)}</T>
+        </View>
+        <T style={{color: 'white', fontSize: 26, fontWeight: '700', fontStyle: 'italic', letterSpacing: -0.5}}>VISA</T>
       </View>
     </View>
   );
@@ -242,7 +273,13 @@ export const s = StyleSheet.create({
   divider: {height: 1, backgroundColor: C.line, marginVertical: 20},
   small: {fontSize: 12, color: C.muted, lineHeight: 18},
   section: {fontSize: 17, lineHeight: 24, fontWeight: '700', marginTop: 28, marginBottom: 10, letterSpacing: -0.3},
-  card: {backgroundColor: C.dark, borderRadius: 20, padding: 24, marginBottom: 18, overflow: 'hidden'},
+  card: {backgroundColor: C.dark, borderRadius: 16, padding: 22, marginBottom: 14, overflow: 'hidden', width: '100%', maxWidth: 420, aspectRatio: 1.586, alignSelf: 'center'},
+  cardChip: {width: 44, height: 33, borderRadius: 6, backgroundColor: '#d8b45a', marginTop: 14, marginBottom: 12, overflow: 'hidden'},
+  cardChipLine: {position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: '#a8873a'},
+  cardChipCenter: {position: 'absolute', left: 15, top: 6, width: 14, height: 21, borderRadius: 3, borderWidth: 1, borderColor: '#a8873a'},
+  cardFrozen: {flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3},
+  cardLabel: {color: '#8899b6', fontSize: 9, letterSpacing: 1},
+  cardValue: {color: '#e6ebf4', fontSize: 13, fontWeight: '500', letterSpacing: 1, marginTop: 2},
   cardArc: {position: 'absolute', width: 240, height: 240, borderRadius: 120, borderWidth: 32, borderColor: '#263750', right: -70, top: -110},
   footer: {borderTopWidth: 1, borderColor: C.line, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 14, backgroundColor: 'white'},
   money: {fontSize: 52, lineHeight: 62, fontWeight: '500', letterSpacing: -2.2, fontVariant: ['tabular-nums']},

@@ -46,14 +46,18 @@ export default function Card() {
   return (
     <Page title="Your card" subtitle={`${group.name} · each member has their own card on the same fund`}>
       <GroupPicker />
-      <CardVisual holder={viewer.name} groupName={group.name} last4={card.last4} limit={money(limit)} frozen={card.frozen || !!group.frozen} />
-      <Row style={{marginBottom: 8}}>
-        <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+      <CardVisual holder={viewer.name} groupName={group.name} last4={card.last4} frozen={card.frozen || !!group.frozen} />
+      <Row style={{marginBottom: 4, alignItems: 'flex-end'}}>
+        <View>
+          <T style={s.caption}>Available to spend</T>
+          <T style={{fontSize: 26, fontWeight: '500', fontVariant: ['tabular-nums'], letterSpacing: -0.6}}>{money(limit)}</T>
+        </View>
+        <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6}}>
           <View style={{width: 6, height: 6, borderRadius: 3, backgroundColor: blocker ? '#ac742d' : C.success}} />
           <T style={{fontSize: 12, color: C.muted}}>{blocker ? 'Not ready to pay' : `Ready in ${card.wallet}`}</T>
         </View>
-        <T style={s.caption}>Demo virtual card</T>
       </Row>
+      <T style={[s.caption, {marginBottom: 8}]}>Virtual Visa · payments are simulated</T>
       {blocker && (
         <View style={[s.box, {backgroundColor: C.softWarn, borderColor: C.softWarn, flexDirection: 'row', gap: 10}]}>
           <Icon name="alert-circle" size={18} color={C.warn} />
