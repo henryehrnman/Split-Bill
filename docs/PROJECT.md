@@ -1,6 +1,13 @@
 # Split Bill — project plan and progress
 Updated: October 18, 2026, Pacific. Owners: Henry Ehrnman, Connor Zacharias. Stage: hackathon MVP.
 
+## UI polish — October 18, 2026 (Saahil)
+Copy and layout only. No rule or server change.
+`26c4514` polishes sign-in, Split, Card, and New group: a sign-in pitch with Explore the demo, "Your share" under the total, "Change split", a Card callout with "Open the split" and "Add to Apple Wallet", and a "2 weeks" period chip. The same commit updates the demo script's photo steps.
+`cc2cf6d` pins "Join · deposit" in the Home footer and folds the default split, purchases, and budget behind one Group settings row. The invite button label is unchanged, and the current-period versus next-period funding labels stay.
+`af1c72b` (hosted as `7bc29c0`) makes a selected claim chip an outline with a check and bold text, and colors Profile funding history green for money in and red for a failed charge.
+The hosted app is https://splitbill-hackathon.vercel.app. The sign-in, Split, Card, New group, and Home rounds were each followed by a two-browser invite on that site. The screenshots in `docs/screenshots/` are from before the Home settings fold; the top of Home is still accurate.
+
 ## Deployed server — October 17–18, 2026
 PR3 reliability and consent guards are merged, and receipt photos are merged. `npm ci` in `mobile/` works after the lockfile fix at `7126984`. The shared server is deployed: Supabase project `uiwbsedibgvwaklmwjna` is running main, migration `0001` is applied, and the `rpc` Edge Function is active. Email confirmation is off and `DEMO_MODE` is off. A live check passed from sign-in through the function: an unauthenticated call returns 401, and a signed-in call with no profile returns 403 `no_profile`. Two authenticated clients then completed an invite, an equal split, a sample-receipt claim board, and a live update on that server. On October 18, 2026 the hosted itemized claim board was checked in two browsers at https://splitbill-hackathon.vercel.app (sample receipt, separate claims, an accepted edit, both locks, and a live settle). A check on two physical phones is still outstanding. Receipt photo scans return 503 `scan_off` until `ANTHROPIC_API_KEY` is set. README current state was updated at `797cae3`. The hosted web app is live at https://splitbill-hackathon.vercel.app (main `bd99060`).
 
