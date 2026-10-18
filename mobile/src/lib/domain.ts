@@ -281,6 +281,7 @@ export function respondInvite(db: Db, actor: UserId, groupId: string, accept: bo
     return;
   }
   const contribution = shares(g)[actor];
+  if (expectedContribution === undefined) throw new StaleStateError('Reload the app to review the invitation deposit before joining.');
   if (expectedContribution !== contribution) throw new StaleStateError('The invitation deposit changed. Review the current amount before joining.');
   if (m.failTopUps) fail('Your bank declined the deposit (demo). Turn off failed top-ups to retry.');
   m.status = 'joined';
