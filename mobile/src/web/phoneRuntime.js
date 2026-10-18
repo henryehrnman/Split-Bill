@@ -625,11 +625,13 @@ SOFTWARE.
   const avatar = (p = people[0], large = false) =>
     `<span class="avatar ${p.tone} ${large ? "large" : ""}">${esc(p.initials)}</span>`;
   function toast(message) {
+    // A new runtime message replaces any older store notification.
+    bridge.clearNotice?.();
     clearTimeout(toastTimer);
     const el = $("#toast");
     el.textContent = message;
     el.classList.add("visible");
-    toastTimer = setTimeout(() => el.classList.remove("visible"), 4200);
+    toastTimer = setTimeout(() => el.classList.remove("visible"), 2500);
   }
   function current() {
     return state.stack.at(-1) || { type: state.tab };
@@ -1510,10 +1512,13 @@ SOFTWARE.
   }
   async function call(method, args) {
     const result = await bridge.call(method, args);
-    if (!result)
-      throw Error(
+    if (!result) {
+      const error = Error(
         "The change could not be saved. Refresh to check its status before trying again.",
       );
+      if (bridge.handlesNotices) error.noticeShown = true;
+      throw error;
+    }
     if (bridge.snapshot) adopt(bridge.snapshot(result));
     return result;
   }
@@ -1528,7 +1533,7 @@ SOFTWARE.
       await work();
     } catch (error) {
       failed = true;
-      toast(error.message || "Could not complete this action.");
+      if (!error.noticeShown) toast(error.message || "Could not complete this action.");
     } finally {
       busy = false;
       root.removeAttribute("aria-busy");

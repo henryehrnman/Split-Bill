@@ -144,6 +144,8 @@
 .phone-host input, .phone-host select, .phone-host textarea { font-size: 16px !important; }
 .phone-host .item-draft-fields .custom-input { min-width: 4.5ch; }
 .phone-host .field, .phone-host .custom-allocation { min-width: 0; }
+/* Notifications stay above sheets and their backdrop without blocking the rest of the UI. */
+.phone-host .toast { z-index: 100; }
 .phone-host .phone-notice {
   position: absolute;
   left: 18px;
@@ -153,7 +155,11 @@
   background: var(--navy);
   color: white;
   border-radius: 13px;
-  z-index: 35;
+  z-index: 101;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity .2s, transform .2s;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -161,6 +167,7 @@
   line-height: 1.5;
   box-shadow: 0 8px 28px #171e2d24;
 }
+.phone-host .phone-notice.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
 .phone-host .phone-notice > span { flex: 1; min-width: 0; }
 .phone-host .phone-notice > button { color: white; padding: 8px; font-size: 20px; line-height: 1; }
 @media (max-width: 360px) {

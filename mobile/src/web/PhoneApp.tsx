@@ -1,5 +1,5 @@
 /// <reference types="expo/types" />
-import React, {useEffect, useMemo, useRef} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {router, useLocalSearchParams} from 'expo-router';
 import {api} from '../lib/api';
 import type {Db} from '../lib/domain';
@@ -13,6 +13,9 @@ type PhoneRoute = {type: string; id?: string; tab?: string};
 
 export default function PhoneApp() {
   const store = useStore();
+  // Keep the text mounted while the dismissed notice slides out.
+  const [displayedNotice, setDisplayedNotice] = useState(store.notice);
+  if (store.notice && store.notice !== displayedNotice) setDisplayedNotice(store.notice);
   const session = useSession();
   const params = useLocalSearchParams<{view?: string; entity?: string; tab?: string}>();
   const host = useRef<HTMLElement>(null);
@@ -42,6 +45,8 @@ export default function PhoneApp() {
     });
     const bridge = {
       ...backend,
+      handlesNotices: true,
+      clearNotice: () => current.current.store.clearNotice(),
       initialSnapshot: latestSnapshot.current,
       snapshot: (db?: Db) => ({
         ...projectPhoneSnapshot(db ?? current.current.store.db, current.current.store.viewer.id, current.current.store.now),
@@ -75,15 +80,22 @@ export default function PhoneApp() {
 
   useEffect(() => { runtime.current?.update(snapshot); }, [snapshot]);
 
+  useEffect(() => {
+    if (!store.notice) return;
+    // A new store notification replaces any older runtime message.
+    host.current?.querySelector('#toast')?.classList.remove('visible');
+  }, [store.notice]);
+  const visibleNotice = store.notice ?? displayedNotice;
+
   return <div className="phone-host">
     <main ref={host} className="phone" aria-label="chipin application" aria-busy={store.busy}>
       <div id="app" className="app" />
       <div id="toast" className="toast" role="status" aria-live="polite" />
       <div id="modal-root" />
-      {store.notice && <div className="phone-notice" role={store.notice.kind === 'error' ? 'alert' : 'status'}>
-        <span>{store.notice.text}</span>
-        <button type="button" onClick={store.clearNotice} aria-label="Dismiss message">×</button>
-      </div>}
+      <div className={`phone-notice${store.notice ? ' visible' : ''}`} role={visibleNotice?.kind === 'error' ? 'alert' : 'status'} aria-hidden={!store.notice}>
+        <span>{visibleNotice?.text}</span>
+        <button type="button" onClick={store.clearNotice} tabIndex={store.notice ? 0 : -1} aria-label="Dismiss message">×</button>
+      </div>
     </main>
   </div>;
 }
