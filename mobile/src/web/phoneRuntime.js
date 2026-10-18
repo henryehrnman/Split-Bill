@@ -710,7 +710,7 @@ SOFTWARE.
     return `<button class="group-summary" data-action="group" data-id="${g.id}" aria-label="${esc(g.name)}, ${g.members} members, ${money(g.power)} available, ${esc(activity.text)}"><div class="group-summary-heading">${stamp(g, "summary-photo")}<div><h2>${esc(g.name)}</h2><p>${g.members} member${g.members === 1 ? "" : "s"}</p></div>${icon("chevron-right")}</div><div class="group-summary-amount"><strong>${money(g.power)}</strong><span>available</span></div><p class="group-summary-activity">${esc(activity.text)}</p></button>`;
   }
   function groupsPage() {
-    return `${rootHeader()}<div class="groups-page-heading"><div><h1 class="page-title">Your groups</h1><p class="eyebrow">Better together, everyday.</p></div></div>${groupActions()}<div class="groups-stack">${groups.map(groupSummaryCard).join("")}</div>`;
+    return `<div class="groups-page-heading"><div><h1 class="page-title">Your groups</h1><p class="eyebrow">Better together, everyday.</p></div></div>${groupActions()}<div class="groups-stack">${groups.map(groupSummaryCard).join("")}</div>`;
   }
   function cardVisual(g) {
     return `<div class="bank-card ${state.frozen[g.id] ? "frozen" : ""}" role="img" aria-label="${esc(g.name)} simulated virtual card ending ${esc(g.last4 || "••••")}${state.frozen[g.id] ? ", frozen" : ""}"><div class="bank-top"><span>chipin<span style="color:#7a9eff">.</span></span>${icon(state.frozen[g.id] ? "lock" : "credit-card")}</div><div class="bank-chip"></div><div class="bank-number">•••• &nbsp; •••• &nbsp; •••• &nbsp; ${esc(g.last4 || "••••")}</div><div class="bank-bottom"><span>${esc(state.fullName.toUpperCase())}<br><span style="font-size:8px;display:block;margin-top:5px;color:#8397b7">${esc(g.name.toUpperCase())}</span></span><strong>VISA</strong></div></div>`;
@@ -983,6 +983,7 @@ SOFTWARE.
 
   let renderRevision = 0,
     renderedRouteKey = null,
+    renderedHeaderHtml = null,
     activeScreenAnimation = null;
   function render(enter = false, options = {}) {
     const r = current(),
@@ -1061,19 +1062,39 @@ SOFTWARE.
         html = groupMenu(r.type, r.id);
     }
     const markup = `<section class="screen ${enter ? "enter" : ""} ${["split", "split-edit", "select-items"].includes(r.type) ? "split-screen" : ""} ${r.type === "wallet" ? "wallet-screen" : ""} ${r.type === "home" ? "home-screen" + (pending.length < 3 ? " home-sparse" : "") : ""}" tabindex="-1">${html}</section>${footer}`;
-    const persistentNav = !state.stack.length ? $(".bottom-nav", app) : null;
+    // On the three root tabs the header (avatar, logo, bell) and the bottom nav stay put; only the screen between
+    // them is replaced, so switching tabs slides the content without the chrome jumping.
+    const rootLevel = !state.stack.length,
+      persistentNav = rootLevel ? $(".bottom-nav", app) : null;
     if (persistentNav) {
       oldScreen?.remove();
       $(".footer-action", app)?.remove();
-      app.insertAdjacentHTML("afterbegin", markup);
+      const header = $(".root-header", app),
+        headerHtml = rootHeader();
+      if (header && renderedHeaderHtml === headerHtml) {
+        header.insertAdjacentHTML("afterend", markup);
+      } else {
+        header?.remove();
+        app.insertAdjacentHTML("afterbegin", headerHtml + markup);
+      }
+      renderedHeaderHtml = headerHtml;
       persistentNav.querySelectorAll("[data-tab]").forEach((button) => {
         const selected = button.dataset.tab === state.tab;
         button.classList.toggle("active", selected);
         if (selected) button.setAttribute("aria-current", "page");
         else button.removeAttribute("aria-current");
       });
-    } else app.innerHTML = markup + (!state.stack.length ? navBar() : "");
+    } else {
+      renderedHeaderHtml = rootLevel ? rootHeader() : null;
+      app.innerHTML = (renderedHeaderHtml || "") + markup + (rootLevel ? navBar() : "");
+    }
     const screen = $(".screen", app);
+    // Entry animations belong to the first paint of a route. A realtime refresh of the same route must not replay
+    // them, or the confirmation card keeps flying in while the person reads it.
+    if (sameRoute)
+      screen
+        .querySelectorAll(".wallet-card-arrival")
+        .forEach((el) => el.classList.remove("wallet-card-arrival"));
     renderedRouteKey = key;
     screen.scrollTop = desiredScroll;
     bindSplitPin();
@@ -1115,12 +1136,12 @@ SOFTWARE.
       activeScreenAnimation = screen.animate(
         [
           {
-            transform: `translateX(${options.tabDirection > 0 ? 24 : -24}%)`,
-            opacity: 0.65,
+            transform: `translateX(${options.tabDirection > 0 ? 22 : -22}%)`,
+            opacity: 0.3,
           },
           { transform: "translateX(0)", opacity: 1 },
         ],
-        { duration: 230, easing: "cubic-bezier(.2,.8,.2,1)" },
+        { duration: 280, easing: "cubic-bezier(.2,.8,.2,1)" },
       );
     }
   }
@@ -1232,12 +1253,15 @@ SOFTWARE.
     return `<svg class="contactless" viewBox="0 0 72 72" fill="none" aria-hidden="true"><circle cx="36" cy="36" r="32" stroke="#1683ff" stroke-width="4"/><path d="M20 63V28a6 6 0 0 1 6-6h20a6 6 0 0 1 6 6v35" stroke="#1683ff" stroke-width="2.5"/><path d="M33 27h6" stroke="#1683ff" stroke-width="2.5" stroke-linecap="round"/></svg>`;
   }
   function wallet(id) {
+    // A tiny purchase in a group whose split needs nobody else settles at once, so look past the pending list.
     const g = gById(id),
-      c = pending.find((c) => c.id === state.paymentResult);
+      c =
+        pending.find((c) => c.id === state.paymentResult) ||
+        charges.find((c) => c.id === state.paymentResult);
     if (!g.wallet && g.cardId)
       return `${backbar("Your card")}<div class="native-wallet-card">${cardVisual(g)}</div><div class="receipt-empty"><h1>Set up your card</h1><p class="info-text">Activate this simulated card for purchases in ${esc(g.name)}.</p>${button("Set up simulated wallet", "setup-wallet", `data-id="${id}"`, "full")}</div>`;
     if (c)
-      return `${backbar("")}<div class="payment-success native-success"><div class="success-circle">${icon("check")}</div><h1>Payment confirmed</h1><div class="payment-amount">${money(c.total)}</div><p>Blue Bottle</p><div class="wallet-card-arrival">${cardVisual(g)}</div><p class="info-text">Your ${money(currentPersonalAllocation(c))} share is ready to review.</p>${button("Review split", "wallet-review", "", "full")}${button("Back to group", "wallet-done", "", "secondary full")}</div>`;
+      return `${backbar("")}<div class="payment-success native-success"><div class="success-circle">${icon("check")}</div><h1>Payment confirmed</h1><div class="payment-amount">${money(c.total)}</div><p>Blue Bottle</p><div class="success-card wallet-card-arrival">${cardVisual(g)}</div><p class="info-text">${c.settled ? `Your ${money(c.amount)} share is settled.` : `Your ${money(currentPersonalAllocation(c))} share is ready to review.`}</p>${c.settled ? "" : button("Review split", "wallet-review", "", "full")}${button("Back to group", "wallet-done", "", c.settled ? "full" : "secondary full")}</div>`;
     return `${backbar("")}<div class="native-wallet-card wallet-card-arrival">${cardVisual(g)}</div><div class="reader-prompt">${contactless()}<h1>Hold Near Reader</h1></div><form class="wallet-bottom" data-form="payment" data-id="${id}"><label class="wallet-amount-widget"><span>Amount<small>Blue Bottle</small></span><span class="wallet-amount-input"><span>$</span><input name="amount" aria-label="Purchase amount in dollars" type="number" min="0.01" step=".01" value="24.00" required></span></label><p class="form-error" role="alert"></p><button class="button full payment-button" type="submit" ${state.frozen[id] || g.forming ? "disabled" : ""}>Simulate payment</button>${state.frozen[id] || g.forming ? `<p class="form-footnote">${state.frozen[id] ? "Unfreeze this card to continue." : "This group must activate before purchases."}</p>` : ""}</form>`;
   }
 
@@ -1409,7 +1433,9 @@ SOFTWARE.
     if (bridge.snapshot) adopt(bridge.snapshot(result));
     return result;
   }
-  async function act(work) {
+  // renderOnFailure: for work that may have partly succeeded (a payment whose split failed to send), the screen
+  // must still catch up, or the person retries a form that would repeat the first step.
+  async function act(work, { renderOnFailure = false } = {}) {
     if (busy) return;
     busy = true;
     root.setAttribute("aria-busy", "true");
@@ -1422,7 +1448,8 @@ SOFTWARE.
     } finally {
       busy = false;
       root.removeAttribute("aria-busy");
-      if (!disposed && !failed && !$(".modal")) safeRender();
+      if (!disposed && (!failed || renderOnFailure) && !$(".modal"))
+        safeRender();
     }
   }
   const periodDays = (label) =>
@@ -1498,7 +1525,7 @@ SOFTWARE.
   function home() {
     const month = snapshot.calendar.month,
       total = money(spendingTotal(month)).split(".");
-    return `${rootHeader()}<div class="home-welcome"><h1 class="greeting">Hey, ${esc(state.displayName)} <span style="font-size:22px">✦</span></h1><div class="eyebrow greeting-sub">${new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening"}</div></div><section class="hero" aria-label="Settled spending"><div class="hero-head"><span>Your spend this month</span><span>${displayMonth(month)}</span></div><div class="hero-amount">${total[0]}<span class="cents">.${total[1]}</span></div>${homeSparkline()}<div class="hero-foot"><span>${new Date(snapshot.calendar.year, month, 1).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span><span>${new Date(snapshot.calendar.year, month, snapshot.calendar.day).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span></div></section><div class="section-heading"><h2>Pending charges</h2></div><div class="pending-list">${pending.length ? pending.slice(0, 3).map(pendingCard).join("") : '<div class="empty"><p>You’re all caught up.</p></div>'}</div>${pending.length > 3 ? button("+" + (pending.length - 3) + " more " + icon("arrow-right"), "all-pending", "", "more-pending") : ""}`;
+    return `<div class="home-welcome"><h1 class="greeting">Hey, ${esc(state.displayName)} <span style="font-size:22px">✦</span></h1><div class="eyebrow greeting-sub">${new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening"}</div></div><section class="hero" aria-label="Settled spending"><div class="hero-head"><span>Your spend this month</span><span>${displayMonth(month)}</span></div><div class="hero-amount">${total[0]}<span class="cents">.${total[1]}</span></div>${homeSparkline()}<div class="hero-foot"><span>${new Date(snapshot.calendar.year, month, 1).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span><span>${new Date(snapshot.calendar.year, month, snapshot.calendar.day).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span></div></section><div class="section-heading"><h2>Pending charges</h2></div><div class="pending-list">${pending.length ? pending.slice(0, 3).map(pendingCard).join("") : '<div class="empty"><p>You’re all caught up.</p></div>'}</div>${pending.length > 3 ? button("+" + (pending.length - 3) + " more " + icon("arrow-right"), "all-pending", "", "more-pending") : ""}`;
   }
   function spending() {
     const selected = state.filter === "all" ? null : state.filter,
@@ -1518,7 +1545,7 @@ SOFTWARE.
         .map((c) => ({ ...c, isPending: true })),
       ...monthCharges(state.month),
     ].filter((c) => !selected || c.group === selected);
-    return `${rootHeader()}<h1 class="page-title">Spending</h1><p class="eyebrow">A clearer picture of your shared life.</p>${monthSelector()}<section class="card-section"><div class="eyebrow">Your total spending</div><div class="spending-total">${money(total)}</div><p class="spending-caption">Settled purchases</p><div class="chart-wrap">${chart(series)}</div><div class="legend">${groups.map((g) => `<button class="${selected === g.id ? "selected" : selected ? "dimmed" : ""}" data-action="legend" data-id="${g.id}" aria-pressed="${!selected || selected === g.id}"><span class="legend-dot" style="background:${colors[g.id]}"></span>${esc(g.name)}</button>`).join("")}</div></section><div class="section-heading"><h2>All charges</h2><select class="filter-select" id="charge-filter" aria-label="Filter charges by group"><option value="all">All groups</option>${groups.map((g) => `<option value="${g.id}" ${selected === g.id ? "selected" : ""}>${esc(g.name)}</option>`).join("")}</select></div>${rows.length ? rows.map(chargeRow).join("") : '<div class="empty"><p>No charges this month.</p></div>'}`;
+    return `<h1 class="page-title">Spending</h1><p class="eyebrow">A clearer picture of your shared life.</p>${monthSelector()}<section class="card-section"><div class="eyebrow">Your total spending</div><div class="spending-total">${money(total)}</div><p class="spending-caption">Settled purchases</p><div class="chart-wrap">${chart(series)}</div><div class="legend">${groups.map((g) => `<button class="${selected === g.id ? "selected" : selected ? "dimmed" : ""}" data-action="legend" data-id="${g.id}" aria-pressed="${!selected || selected === g.id}"><span class="legend-dot" style="background:${colors[g.id]}"></span>${esc(g.name)}</button>`).join("")}</div></section><div class="section-heading"><h2>All charges</h2><select class="filter-select" id="charge-filter" aria-label="Filter charges by group"><option value="all">All groups</option>${groups.map((g) => `<option value="${g.id}" ${selected === g.id ? "selected" : ""}>${esc(g.name)}</option>`).join("")}</select></div>${rows.length ? rows.map(chargeRow).join("") : '<div class="empty"><p>No charges this month.</p></div>'}`;
   }
   function monthSelector(id = null) {
     const month = id
@@ -1686,12 +1713,23 @@ SOFTWARE.
     toast("You accepted your share.");
   }
   async function simulatePayment(id, merchant, amount) {
-    const prior = new Set(pending.map((c) => c.id));
+    const prior = new Set([...pending, ...charges].map((c) => c.id));
     await call("purchase", [id, { merchant, amount: cents(amount) }]);
-    const created = pending.find((c) => c.group === id && !prior.has(c.id));
+    const created =
+      pending.find((c) => c.group === id && !prior.has(c.id)) ||
+      charges.find((c) => c.group === id && !prior.has(c.id));
     if (!created) throw Error("Payment saved. Refresh to see the charge.");
+    // The card has been charged from here on; whatever happens to the split, the form must not come back.
     state.paymentResult = created.id;
-    await call("sendDefaultSplit", [created.id]);
+    state.scroll[routeKey()] = 0;
+    if (created.settled) return;
+    try {
+      await call("sendDefaultSplit", [created.id]);
+    } catch (error) {
+      throw Error(
+        `Payment saved, but the split could not be sent: ${error.message || "try again"}. Open the split to send it.`,
+      );
+    }
   }
   async function photoData(file, maxChars = 250000) {
     if (!file.type.startsWith("image/") || file.size > 15 * 1024 * 1024)
@@ -2067,12 +2105,33 @@ SOFTWARE.
     e.preventDefault();
     if (busy || !form.reportValidity()) return;
     const f = new FormData(form),
-      id = form.dataset.id;
+      id = form.dataset.id,
+      submit = form.querySelector('[type="submit"]');
+    // Show the press at once; the server round trip is long enough that a silent button invites a second tap.
+    if (submit) {
+      submit.setAttribute("aria-disabled", "true");
+      submit.classList.add("is-processing");
+      submit.dataset.label = submit.textContent;
+      submit.textContent = "Processing…";
+    }
+    const restore = () => {
+      if (!submit?.isConnected) return;
+      submit.removeAttribute("aria-disabled");
+      submit.classList.remove("is-processing");
+      submit.textContent = submit.dataset.label || submit.textContent;
+    };
     void act(async () => {
+      try {
+        await submitForm(form, id, f);
+      } finally {
+        restore();
+      }
+    }, { renderOnFailure: form.dataset.form === "payment" });
+  });
+  async function submitForm(form, id, f) {
       switch (form.dataset.form) {
         case "payment":
           await simulatePayment(id, "Blue Bottle", f.get("amount"));
-          state.scroll[routeKey()] = 0;
           break;
         case "group-edit":
           await call("updateGroup", [
@@ -2133,8 +2192,7 @@ SOFTWARE.
         }
       }
       syncRoute();
-    });
-  });
+  }
   on("change", (e) => {
     const target = e.target;
     if (target.id === "charge-filter") {
