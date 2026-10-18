@@ -1,4 +1,4 @@
-# Split Bill — first submission
+# chipin — first submission
 
 Paste-ready copy for the project application. Money, deposits, wallets, cards, and debt recovery are simulated. There is no real wallet provisioning and no in-store payment.
 
@@ -26,7 +26,7 @@ Payments are simulated. The rules that would approve a real tap are the ones run
 
 ### How we built it
 
-Split Bill is a shared group fund with a virtual card per member. Three people and their AI agents built it for this hackathon. The app is React Native and Expo, so the same screens run on iOS, Android, and the web. The hosted app is https://splitbill-hackathon.vercel.app.
+chipin is a shared group fund with a virtual card per member. Three people and their AI agents built it for this hackathon. The app is React Native and Expo, so the same screens run on iOS, Android, and the web. The hosted app is https://splitbill-hackathon.vercel.app.
 
 The backend is Supabase. Auth handles accounts. One Postgres row holds the app state, and writes use compare-and-set. A single Edge Function runs the same TypeScript rules the app uses offline (`domain.ts`), so every invite, split, refill, and settlement is checked on the server for the signed-in caller. Realtime pings refresh every member's screen without sending other groups' data.
 
@@ -54,7 +54,7 @@ A vision model is useful only with a check. If the read does not match the charg
 
 We also learned to say the simulation out loud. Judges can watch the rules run. They should not be asked to believe a browser charged a real card.
 
-### What's next for Split Bill
+### What's next for chipin
 
 A partner bank and a card issuer, then real Apple Wallet and Google Wallet provisioning, so a tap at the store is the same flow the demo already runs. A recorded two-phone walkthrough of the hosted app. Standing groups for groceries, household bills, and trips, with the period budget already in the product.
 
@@ -97,4 +97,6 @@ Frames 1 through 6 are the in-browser demo, shown as Demo · Henry.
 
 ## 6. Video demo link
 
-Leave this blank on tonight's draft. The final submission, due 10:00 AM Sunday, must include a video under 3 minutes or the project cannot be judged. VISA is judged from that video. The team is recording it. The shot list is in `docs/JUDGING.md`.
+https://youtu.be/Mg6M-th_mH4
+
+Put that link in the Devpost video field. VISA is judged from the video. The shot list is in `docs/JUDGING.md`.

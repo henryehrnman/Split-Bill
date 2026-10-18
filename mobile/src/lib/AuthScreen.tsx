@@ -1,5 +1,5 @@
 import React, {useRef, useState} from 'react';
-import {ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
+import {ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
 import type {TextInputProps} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
@@ -27,12 +27,16 @@ const STEPS: [React.ComponentProps<typeof Feather>['name'], string, string][] = 
 
 function Brand() {
   return (
-    <View style={s.brandRow} accessibilityRole="header" accessibilityLabel="splitbill">
-      <View style={s.mark}>
-        <View style={s.markLine} />
-        <View style={[s.markLine, {transform: [{rotate: '-24deg'}]}]} />
-      </View>
-      <Text style={s.brand}>splitbill</Text>
+    <View style={s.brandRow} accessibilityRole="header" accessibilityLabel="chipin">
+      {Platform.OS === 'web' ? (
+        <Image source={{uri: '/phone-assets/chipin-mark.png'}} style={s.markImage} resizeMode="contain" />
+      ) : (
+        <View style={s.mark}>
+          <View style={s.markLine} />
+          <View style={[s.markLine, {transform: [{rotate: '-24deg'}]}]} />
+        </View>
+      )}
+      <Text style={s.brand}>chipin</Text>
     </View>
   );
 }
@@ -240,6 +244,7 @@ const s = StyleSheet.create({
   page: {padding: 24, paddingBottom: 32, width: '100%', maxWidth: 480, alignSelf: 'center'},
   brandRow: {flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 36},
   mark: {width: 24, height: 25, flexDirection: 'row', gap: 3, alignItems: 'center'},
+  markImage: {width: 32, height: 28},
   markLine: {width: 7, height: 21, borderRadius: 2, backgroundColor: C.blue, transform: [{rotate: '24deg'}]},
   brand: {fontFamily: 'DM-Bold', fontSize: 23, lineHeight: 28, letterSpacing: -1, color: C.ink},
   title: {fontFamily: 'DM-Bold', fontSize: 30, lineHeight: 36, letterSpacing: -0.9, color: C.ink, marginBottom: 10},

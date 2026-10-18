@@ -1,21 +1,22 @@
 import React, {useState} from 'react';
 import {View, Pressable, TextInput} from 'react-native';
 import {router} from 'expo-router';
-import {Page, T, Button, Toggle, Avatar, Icon, Pill, Segmented, Field, GroupPicker, EmptyState, Row, StandingPill, ago, periodLabel, s, C} from '../../lib/ui';
+import {Page, T, Button, Avatar, Icon, Pill, Segmented, Field, GroupPicker, EmptyState, Row, StandingPill, ago, periodLabel, s, C} from '../../lib/ui';
 import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents, toInput} from '../../lib/money';
-import {DAY, availableFunds, currentProposal, isActive, isDraft, itemBoardStatus, memberOf, nextPeriodAt, notificationsFor, openBudgetProposal, openCharges, periodShares, shares, standing, userById, waitingOn} from '../../lib/domain';
+import {DAY, currentProposal, fundBalance, isActive, isDraft, itemBoardStatus, memberOf, nextPeriodAt, notificationsFor, openBudgetProposal, openCharges, periodShares, shares, standing, userById, waitingOn} from '../../lib/domain';
 import type {Charge, Db, Group} from '../../lib/domain';
+import {groupSpendingView} from '../../lib/spendingView';
 
 export default function Home() {
   const {viewer, group} = useStore();
   const invited = group ? memberOf(group, viewer.id).status === 'invited' : false;
   return (
-    <Page title={`Hey, ${viewer.name}`} subtitle="A little less settling up." footer={group ? invited ? <InviteFooter group={group} /> : <HomeFooter group={group} /> : undefined}>
+    <Page title={`Hey, ${viewer.name}`} subtitle="A little less settling up." footer={group ? invited ? <InviteFooter group={group} /> : isActive(group) ? <HomeFooter group={group} /> : undefined : undefined}>
       <GroupPicker allowNew />
       {!group ? (
-        <EmptyState icon="users" title="No groups yet" body="Create a group, set a budget for each period, and invite people. Everyone deposits an equal share and gets their own card on the group fund." action={<Button title="Create a group" onPress={() => router.push('/new-group')} />} />
+        <EmptyState icon="users" title="No groups yet" body="Set a budget and invite people. Final equal shares are collected once the group forms. Each member gets a card on the group fund." action={<Button title="Create a group" onPress={() => router.push('/new-group')} />} />
       ) : invited ? (
         <Invite group={group} />
       ) : isActive(group) ? (
@@ -30,6 +31,7 @@ export default function Home() {
 function HomeFooter({group}: {group: Group}) {
   const {db} = useStore();
   const pending = openCharges(db, group.id).length;
+  if (!pending && !group.frozen && fundBalance(group) <= 0) return <Button title="Add funds" onPress={() => router.push('/profile')} />;
   return <Button title={pending ? `Review pending ${pending === 1 ? 'split' : 'splits'}` : 'Open your group card'} onPress={() => router.push(pending ? '/split' : '/card')} />;
 }
 
@@ -47,7 +49,7 @@ function MemberRows({group}: {group: Group}) {
             <View style={{flex: 1}}>
               <T style={{fontWeight: '500'}}>{user.name}{m.userId === viewer.id ? ' (you)' : ''}</T>
               <T style={s.caption}>
-                {m.status === 'invited' ? `Share ${money(joining[m.userId])} per period` : `Balance ${money(m.balance)} of ${money(owed[m.userId])} this period${m.autoDeposit ? ' · auto-refill' : ''}`}
+                {!isActive(group) ? `Estimated share ${money(joining[m.userId])} per period` : `Balance ${money(m.balance)} of ${money(owed[m.userId])} this period${m.autoDeposit ? ' · auto-refill' : ''}`}
               </T>
             </View>
             <StandingPill standing={standing(group, m.userId)} />
@@ -70,9 +72,9 @@ function Invite({group}: {group: Group}) {
         <T style={[s.money, {marginTop: 14}]}>{money(group.budget)}</T>
         <T style={s.small}>Group budget {periodLabel(group.periodDays)}</T>
         <View style={s.divider} />
-        <Row><T style={s.small}>Your deposit to join</T><T style={s.strong}>{money(share)}</T></Row>
+        <Row><T style={s.small}>Estimated share per period</T><T style={s.strong}>{money(share)}</T></Row>
         <T style={[s.caption, {marginTop: 8}]}>
-          At the start of each period you’re topped back up to {money(share)} (automatically, unless you turn auto-refill off). You get your own card on the group fund. Splits need agreement from everyone involved.
+          Your final share, up to {money(Math.ceil(group.budget / 2))}, is collected automatically once everyone responds and at least two members join. It can rise if someone declines. The first period starts then. Auto-refill is on for future periods unless you turn it off.
         </T>
       </View>
       <T style={s.section}>Members</T>
@@ -86,7 +88,7 @@ function InviteFooter({group}: {group: Group}) {
   const share = shares(group)[viewer.id];
   return (
     <>
-      <Button title={`Join · deposit ${money(share)}`} onPress={() => run(a => api.respondInvite(a, group.id, true, share), `You joined ${group.name}. Add your card to a wallet to start paying.`)} />
+      <Button title="Join group" onPress={() => run(a => api.respondInvite(a, group.id, true, share, Math.ceil(group.budget / 2)), `You joined ${group.name}. The group forms when everyone responds and at least two members join; your final share is collected then.`)} />
       <Pressable accessibilityRole="button" disabled={!!busy} onPress={() => run(a => api.respondInvite(a, group.id, false), `You declined ${group.name}.`)} style={{alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16, marginTop: 2}}>
         <T style={{color: C.muted, fontWeight: '500', fontSize: 14}}>Decline invitation</T>
       </Pressable>
@@ -99,14 +101,15 @@ function FormingGroup({group}: {group: Group}) {
   return (
     <>
       <View style={s.box}>
-        <Pill label="Waiting for invites" tone="warn" />
+        <Pill label={pendingInvites ? 'Waiting for invites' : 'Needs another member'} tone="warn" />
         <T style={{fontSize: 20, fontWeight: '700', marginTop: 16}}>{group.name}</T>
         <T style={[s.money, {marginTop: 14}]}>{money(group.budget)}</T>
         <T style={s.small}>Budget {periodLabel(group.periodDays)} · {pendingInvites} {pendingInvites === 1 ? 'invite' : 'invites'} pending</T>
       </View>
       <T style={s.section}>Members</T>
       <MemberRows group={group} />
-      <T style={[s.caption, {marginTop: 16}]}>Cards can be used once everyone invited has accepted or declined. Deposits are simulated.</T>
+      <T style={[s.caption, {marginTop: 16}]}>No funds are taken while the group is forming. Final equal shares are collected and the first period starts once everyone has accepted or declined and at least two members have joined.</T>
+      {!pendingInvites && group.members.length < 2 && <Button secondary title="Create a new group" onPress={() => router.push('/new-group')} />}
     </>
   );
 }
@@ -127,16 +130,23 @@ function pendingLine(db: Db, c: Charge, viewerId: string) {
 }
 
 function ActiveGroup({group}: {group: Group}) {
-  const {db, viewer, now, run} = useStore();
+  const {db, viewer, now, run, demoMode} = useStore();
   const currentBudget = group.periodBudget ?? group.budget;
   const open = openCharges(db, group.id);
+  const spending = groupSpendingView(db, group, viewer.id, demoMode);
   const proposal = openBudgetProposal(db, group.id);
   const daysLeft = Math.max(0, Math.ceil((nextPeriodAt(group) - now) / DAY));
   const status = group.frozen
     ? (['Frozen', 'danger'] as const)
-    : open.length
-      ? ([open.length === 1 ? 'Split pending' : `${open.length} splits pending`, 'warn'] as const)
-      : (['Card ready', 'success'] as const);
+    : !spending
+      ? (['Spending unavailable', 'warn'] as const)
+      : spending.pendingCount
+        ? ([spending.pendingCount === 1 ? 'Split pending' : `${spending.pendingCount} splits pending`, 'warn'] as const)
+        : fundBalance(group) <= 0
+          ? (['Fund empty', 'warn'] as const)
+          : spending.purchaseBlocker
+            ? (['Card not ready', 'warn'] as const)
+            : (['Card ready', 'success'] as const);
 
   return (
     <>
@@ -150,8 +160,11 @@ function ActiveGroup({group}: {group: Group}) {
         <T style={{fontSize: 20, fontWeight: '700', marginTop: 18, letterSpacing: -0.4}}>{group.name}</T>
         <T style={[s.small, {marginTop: 4}]}>Current budget {money(currentBudget)} {periodLabel(group.periodDays)} · resets in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}</T>
         {group.budget !== currentBudget && <T style={s.caption}>Approved for next period: {money(group.budget)}</T>}
-        <T style={[s.money, {marginTop: 14}]}>{money(Math.max(0, availableFunds(db, group)))}</T>
+        <T style={[s.money, {marginTop: 14}]}>{spending ? money(spending.availableFunds) : '—'}</T>
         <T style={s.small}>Available in the group fund</T>
+        {!group.frozen && fundBalance(group) <= 0 && <T style={[s.caption, {marginTop: 8}]}>The group fund is empty. Add funds in Your account to start spending.</T>}
+        {!spending && <T style={s.caption}>Spending information is unavailable. Refresh to try again.</T>}
+        {spending && spending.pendingCount > open.length && <T style={[s.caption, {marginTop: 12}]}>Some funds are held for purchases awaiting their first split. They’ll appear here when the payer sends a proposal.</T>}
         {open.map(pending => (
           <Pressable key={pending.id} accessibilityRole="button" onPress={() => router.push({pathname: '/split', params: {charge: pending.id}})} style={{marginTop: 16, backgroundColor: C.softWarn, borderRadius: 12, padding: 14}}>
             <Row>
@@ -191,7 +204,7 @@ function ActiveGroup({group}: {group: Group}) {
 
       <T style={s.section}>Members</T>
       <MemberRows group={group} />
-      <T style={[s.caption, {marginTop: 10}]}>Anyone who hasn’t added their share this period can only spend up to their own balance until they do.</T>
+      <T style={[s.caption, {marginTop: 10}]}>Members with a balance of $0 or more can spend the available group funds, whether or not they’ve refilled this period.</T>
 
       <GroupSettings key={group.id} group={group} />
     </>
@@ -236,7 +249,6 @@ function GroupSettings({group}: {group: Group}) {
 
   const summary = [
     group.defaultSplit.method === 'equal' ? 'Equal split' : 'Custom percentages',
-    group.singleOpenCharge ? 'one purchase at a time' : 'several open splits',
     `${money(group.periodBudget ?? group.budget)} budget`,
   ].join(' · ');
 
@@ -277,25 +289,6 @@ function GroupSettings({group}: {group: Group}) {
           }
         />
       )}
-
-      <T style={s.section}>Purchases</T>
-      <Row>
-        <View style={{flex: 1}}>
-          <T style={{fontSize: 14}}>One purchase at a time</T>
-          <T style={s.caption}>
-            {group.singleOpenCharge
-              ? 'Each split has to be agreed before the card can be used again.'
-              : 'Several splits can be open at once. Open charges are held from the fund, and from the balance of anyone who hasn’t added their share.'}
-          </T>
-        </View>
-        <Toggle
-          label={`One purchase at a time for ${group.name}`}
-          value={group.singleOpenCharge}
-          onValueChange={v => {
-            run(a => api.setSingleOpenCharge(a, group.id, v), v ? 'The card now waits for each split to be agreed.' : 'Several splits can now be open at once.');
-          }}
-        />
-      </Row>
 
       <T style={s.section}>Budget</T>
       <T style={[s.small, {marginBottom: 4}]}>Changing it needs everyone’s OK. A higher budget raises each person’s share from the next period; a lower one keeps any surplus.</T>

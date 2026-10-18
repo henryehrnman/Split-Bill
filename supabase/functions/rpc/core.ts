@@ -26,32 +26,45 @@ const READ_ONLY = new Set(['fetch', 'searchUsers']);
 type Ctx = {db: Db; actor: d.Db['users'][number]['id']; t: number};
 type Method = (c: Ctx, a: any[]) => unknown;
 
+function requiredBoolean(value: unknown): boolean {
+  if (typeof value !== 'boolean') throw new d.ApiError('Choose either yes or no.');
+  return value;
+}
+
 // Same names and argument order as mobile/src/lib/api.ts, minus the leading actor (it comes from the JWT).
 const methods: Record<string, Method> = {
   fetch: () => undefined,
   searchUsers: ({db, actor}, [query, exclude]) => d.searchUsers(db, String(query ?? ''), [actor, ...(Array.isArray(exclude) ? exclude : [])]).map(u => searchResult(u, String(query ?? ''))),
+  updateProfile: ({db, actor}, [input]) => d.updateProfile(db, actor, input),
+  updateGroup: ({db, actor}, [groupId, input]) => d.updateGroup(db, actor, groupId, input),
   createGroup: ({db, actor, t}, [input]) => void d.createGroup(db, actor, input, t),
-  respondInvite: ({db, actor, t}, [groupId, accept, expectedContribution]) => d.respondInvite(db, actor, groupId, !!accept, t, expectedContribution),
+  respondInvite: ({db, actor, t}, [groupId, accept, expectedContribution, initialContributionLimit]) => d.respondInvite(db, actor, groupId, requiredBoolean(accept), t, expectedContribution, initialContributionLimit),
   deposit: ({db, actor, t}, [groupId, amount]) => d.deposit(db, actor, groupId, amount, t),
   withdraw: ({db, actor, t}, [groupId, amount]) => d.withdraw(db, actor, groupId, amount, t),
-  setAutoDeposit: ({db, actor}, [groupId, on]) => d.setAutoDeposit(db, actor, groupId, !!on),
-  setFailTopUps: ({db, actor}, [groupId, on]) => d.setFailTopUps(db, actor, groupId, !!on),
-  setSingleOpenCharge: ({db, actor}, [groupId, on]) => d.setSingleOpenCharge(db, actor, groupId, !!on),
+  setAutoDeposit: ({db, actor}, [groupId, on]) => d.setAutoDeposit(db, actor, groupId, requiredBoolean(on)),
+  setFailTopUps: ({db, actor}, [groupId, on]) => d.setFailTopUps(db, actor, groupId, requiredBoolean(on)),
+  // One-release compatibility for cached clients; the purchase lock is no longer a setting.
+  setSingleOpenCharge: ({db, actor}, [groupId]) => {
+    if (d.memberOf(d.groupById(db, groupId), actor).status !== 'joined') throw new d.ApiError('Accept the invite to this group first.');
+  },
   setDefaultSplit: ({db, actor}, [groupId, split]) => d.setDefaultSplit(db, actor, groupId, split),
   proposeBudget: ({db, actor, t}, [groupId, amount]) => d.proposeBudget(db, actor, groupId, amount, t),
-  respondBudget: ({db, actor}, [proposalId, accept]) => d.respondBudget(db, actor, proposalId, !!accept),
+  respondBudget: ({db, actor}, [proposalId, accept]) => d.respondBudget(db, actor, proposalId, requiredBoolean(accept)),
   addToWallet: ({db, actor}, [cardId, wallet]) => d.addToWallet(db, actor, cardId, wallet),
-  setCardFrozen: ({db, actor}, [cardId, frozen]) => d.setCardFrozen(db, actor, cardId, !!frozen),
+  setCardFrozen: ({db, actor}, [cardId, frozen]) => d.setCardFrozen(db, actor, cardId, requiredBoolean(frozen)),
   purchase: ({db, actor, t}, [groupId, input]) => void d.purchase(db, actor, groupId, input, t),
   setChargeNote: ({db, actor, t}, [chargeId, text]) => d.setChargeNote(db, actor, chargeId, text, t),
   // The second argument here is the model's read, never the client's: handle() swaps the photo out first.
   scanReceipt: ({db, actor, t}, [chargeId, read]) => void d.scanReceipt(db, actor, chargeId, t, read),
+  parseReceipt: ({db, actor}, [chargeId, read]) => d.parseReceipt(db, actor, chargeId, read),
+  confirmReceiptList: ({db, actor, t}, [chargeId, input, expectedEditKey]) => d.confirmReceiptList(db, actor, chargeId, input, t, expectedEditKey),
+  confirmItemSelection: ({db, actor, t}, [chargeId, itemIds, expectedReceiptListKey]) => d.confirmItemSelection(db, actor, chargeId, itemIds, expectedReceiptListKey, t),
   updateReceipt: ({db, actor}, [chargeId, input]) => d.updateReceipt(db, actor, chargeId, input),
   toggleClaim: ({db, actor}, [chargeId, itemId]) => d.toggleClaim(db, actor, chargeId, itemId),
-  setLocked: ({db, actor, t}, [chargeId, locked, expectedReceiptKey]) => d.setLocked(db, actor, chargeId, !!locked, t, expectedReceiptKey),
+  setLocked: ({db, actor, t}, [chargeId, locked, expectedReceiptKey]) => d.setLocked(db, actor, chargeId, requiredBoolean(locked), t, expectedReceiptKey),
   suggestItemEdit: ({db, actor, t}, [chargeId, itemId, targetId]) => d.suggestItemEdit(db, actor, chargeId, itemId, targetId, t),
-  respondItemEdit: ({db, actor, t}, [chargeId, editId, accept]) => d.respondItemEdit(db, actor, chargeId, editId, !!accept, t),
-  proposeSplit: ({db, actor, t}, [chargeId, input]) => d.proposeSplit(db, actor, chargeId, input, t),
+  respondItemEdit: ({db, actor, t}, [chargeId, editId, accept]) => d.respondItemEdit(db, actor, chargeId, editId, requiredBoolean(accept), t),
+  proposeSplit: ({db, actor, t}, [chargeId, input, options]) => d.proposeSplit(db, actor, chargeId, input, t, options),
   sendDefaultSplit: ({db, actor, t}, [chargeId]) => d.sendDefaultSplit(db, actor, chargeId, t),
   acceptSplit: ({db, actor, t}, [chargeId, expectedProposalId]) => d.acceptSplit(db, actor, chargeId, t, expectedProposalId),
   fileChargeback: ({db, actor, t}, [chargeId]) => d.fileChargeback(db, actor, chargeId, t),
@@ -89,6 +102,18 @@ export function viewFor(db: Db, userId: string): Db {
     // An invitation must not reveal contacts that search deliberately masks.
     users: db.users.filter(u => people.has(u.id)).map(u => u.id === userId ? u : {...u, email: '', phone: ''}),
     groups,
+    // Private first proposals still reserve pooled funds. Calculate before filtering charges.
+    spendingView: {
+      viewerId: userId,
+      groups: Object.fromEntries(groups.map(g => [g.id, {
+        availableFunds: Math.max(0, d.availableFunds(db, g)),
+        spendLimit: d.spendLimit(db, g.id, userId),
+        purchaseBlocker: d.purchaseBlocker(db, g.id, userId),
+        pendingCount: d.openCharges(db, g.id).length,
+        withdrawalBlocked: d.memberOf(g, userId).status !== 'joined' || !!g.frozen || db.charges.some(c => c.groupId === g.id
+          && (c.status === 'pending' || (c.status === 'disputed' && c.settledAt === undefined))),
+      }])),
+    },
     cards: db.cards.filter(c => c.userId === userId),
     // A draft the cardholder has not sent yet is theirs alone.
     charges: db.charges.filter(c => groupIds.has(c.groupId) && (c.sentAt !== null || c.cardholderId === userId)),
@@ -134,7 +159,9 @@ export async function handle(store: Store, authId: string | null, body: any, opt
   if (!isCreate && !Object.hasOwn(methods, method)) return fail(400, 'Unknown method.', 'bad_method');
   if (DEMO_ONLY.has(method) && !opts.demo) return fail(403, 'Demo controls are off.', 'demo_off');
   if (!authId && !opts.demo) return fail(401, 'Sign in first.', 'unauthenticated');
-  if (method !== 'scanReceipt' && JSON.stringify(args).length > MAX_ARGS) return fail(413, 'That request is too large.', 'too_large');
+  const photoMethod = method === 'scanReceipt' || method === 'parseReceipt';
+  const maxArgs = method === 'confirmReceiptList' || method === 'updateGroup' ? MAX_ARGS + d.MAX_SHARED_IMAGE_LENGTH : MAX_ARGS;
+  if (!photoMethod && JSON.stringify(args).length > maxArgs) return fail(413, 'That request is too large.', 'too_large');
 
   // Who is calling: the JWT decides. Never the body, except the demo escape hatch.
   const actorIn = (db: Db, links: Links) => {
@@ -145,10 +172,25 @@ export async function handle(store: Store, authId: string | null, body: any, opt
   };
 
   let callArgs = args;
-  if (method === 'scanReceipt') {
+  if (photoMethod) {
     const read = await readPhoto(store, opts, clock, actorIn, args);
     if ('status' in read) return read;
     callArgs = [args[0], read.read];
+    if (method === 'parseReceipt') {
+      // Read-only draft: even tick changes stay private, and the post-OCR reload
+      // rejects a charge that settled while the model was reading the photo.
+      const loaded = await store.load();
+      const draft = clone(loaded?.db ?? seed(clock()));
+      const actor = actorIn(draft, loaded?.links ?? {});
+      if (!actor) return fail(403, 'Finish setting up your profile.', 'no_profile');
+      try {
+        d.tick(draft, clock() + draft.clockOffset);
+        return ok(d.parseReceipt(draft, actor, String(args[0]), read.read));
+      } catch (error) {
+        if (error instanceof d.ApiError) return fail(400, error.message, 'rule');
+        throw error;
+      }
+    }
   }
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {

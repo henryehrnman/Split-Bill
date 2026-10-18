@@ -7,11 +7,13 @@ import {useSession} from '../lib/session';
 import {apiUrl} from '../lib/config';
 import {api} from '../lib/api';
 import {money, cents} from '../lib/money';
-import {DAY, currentProposal, groupById, groupsFor, isActive, memberOf, nextPeriodAt, openCharges, pendingCharge, periodShares, periodSpend, shares, spendSummary, standing} from '../lib/domain';
+import {DAY, currentProposal, groupById, groupsFor, isActive, memberOf, nextPeriodAt, periodShares, periodSpend, shares, spendSummary, standing} from '../lib/domain';
 import type {Group, LedgerEntry} from '../lib/domain';
+import {groupSpendingView} from '../lib/spendingView';
 
 const LEDGER_LABEL: Record<LedgerEntry['kind'], string> = {
   deposit: 'Deposit',
+  'deposit-failed': 'Initial deposit failed',
   withdrawal: 'Withdrawal',
   'period-top-up': 'Period refill',
   'top-up-failed': 'Refill failed',
@@ -19,7 +21,7 @@ const LEDGER_LABEL: Record<LedgerEntry['kind'], string> = {
   'debt-recovery': 'Card charge to cover negative balance',
   'debt-recovery-failed': 'Card charge failed',
 };
-const FAILED: LedgerEntry['kind'][] = ['top-up-failed', 'debt-recovery-failed'];
+const FAILED: LedgerEntry['kind'][] = ['deposit-failed', 'top-up-failed', 'debt-recovery-failed'];
 
 export default function Profile() {
   const {db, viewer, setViewerId, group, now, run, demoMode, busy} = useStore();
@@ -86,7 +88,7 @@ export default function Profile() {
       {demoMode && <>
       <T style={s.section}>Demo controls</T>
       <T style={[s.small, {marginBottom: 6}]}>Shortcuts for walking through edge cases. They don’t exist in the real product.</T>
-      {group && memberOf(group, viewer.id).status === 'joined' && (
+      {group && isActive(group) && (
         <Button
           secondary
           title="Skip to next budget period"
@@ -118,12 +120,13 @@ function GroupBalance({group}: {group: Group}) {
   const {db, viewer, now, run, demoMode, busy, setGroupId} = useStore();
   const [amount, setAmount] = useState('');
   const me = memberOf(group, viewer.id);
+  const active = isActive(group);
   const currentBudget = group.periodBudget ?? group.budget;
   const share = periodShares(group)[viewer.id];
   const nextShare = shares(group)[viewer.id];
   const used = periodSpend(db, group, viewer.id);
   const spend = spendSummary(db, group.id, now, viewer.id);
-  const pending = pendingCharge(db, group.id);
+  const spending = groupSpendingView(db, group, viewer.id, demoMode);
   const daysLeft = Math.max(0, Math.ceil((nextPeriodAt(group) - now) / DAY));
   const value = cents(amount);
 
@@ -133,8 +136,8 @@ function GroupBalance({group}: {group: Group}) {
         <T style={{fontSize: 17, fontWeight: '700', flex: 1, minWidth: 0}}>{group.name}</T>
         <View style={{flexShrink: 0}}><StandingPill standing={standing(group, viewer.id)} /></View>
       </Row>
-      <T style={s.caption}>Current budget {money(currentBudget)} {periodLabel(group.periodDays)}</T>
-      <T style={s.caption}>next period in {daysLeft}{'\u00A0'}{daysLeft === 1 ? 'day' : 'days'}</T>
+      <T style={s.caption}>{active ? 'Current' : 'Planned'} budget {money(currentBudget)} {periodLabel(group.periodDays)}</T>
+      {active && <T style={s.caption}>next period in {daysLeft}{'\u00A0'}{daysLeft === 1 ? 'day' : 'days'}</T>}
       {group.budget !== currentBudget && <T style={s.caption}>Next period: {money(group.budget)} budget · your share {money(nextShare)}</T>}
       <Row style={{marginTop: 14, alignItems: 'flex-start'}}>
         <View style={{flexShrink: 0}}>
@@ -142,31 +145,34 @@ function GroupBalance({group}: {group: Group}) {
           <T style={{fontSize: 26, fontWeight: '700', fontVariant: ['tabular-nums'], color: me.balance < 0 ? C.danger : C.ink}}>{money(me.balance)}</T>
         </View>
         <View style={{alignItems: 'flex-end', flex: 1, minWidth: 0, marginLeft: 12}}>
-          <T style={s.caption}>Your share this period</T>
+          <T style={s.caption}>{active ? 'Your share this period' : 'Estimated share'}</T>
           <T style={{fontSize: 17, fontWeight: '500', fontVariant: ['tabular-nums']}}>{money(share)}</T>
         </View>
       </Row>
       <T style={[s.caption, {marginTop: 6}]}>
-        {me.status === 'joined' ? `${money(used)} of your share used this period · ` : ''}{money(spend.month)} this month · {money(spend.total)} all time
+        {active ? `${money(used)} of your share used this period · ` : ''}{money(spend.month)} this month · {money(spend.total)} all time
       </T>
-      {me.suspended && <T style={{color: C.danger, fontSize: 13, marginTop: 8}}>Suspended: we couldn’t charge your personal card for {money(-me.balance)}. The group is covering it until you add funds.</T>}
+      {me.balance < 0 && <T style={{color: C.danger, fontSize: 13, marginTop: 8}}>Suspended: we couldn’t charge your personal card for {money(-me.balance)}. The group is covering it until you add funds.</T>}
       {me.status === 'invited' ? (
         <Button title="View invitation" onPress={() => { setGroupId(group.id); router.replace('/'); }} />
       ) : (
         <>
+          {active ? <>
+          <T style={[s.caption, {marginTop: 10}]}>Review the amount below before adding funds. Payments are simulated.</T>
           <Field label="Amount ($)" value={amount} onChange={setAmount} placeholder={me.balance < share ? (Math.max(0, share - me.balance) / 100).toFixed(2) : '0.00'} />
           <Row>
-            <View style={{flex: 1, minWidth: 0}}><Button secondary title="Withdraw" disabled={!value || !!pending || !!group.frozen} onPress={() => run(a => api.withdraw(a, group.id, value ?? 0), `Withdrew ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
-            <View style={{flex: 1, minWidth: 0}}><Button title="Add funds" disabled={!value} onPress={() => run(a => api.deposit(a, group.id, value ?? 0), `Added ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
+            <View style={{flex: 1, minWidth: 0}}><Button secondary title="Withdraw" disabled={!value || !spending || spending.withdrawalBlocked} onPress={() => run(a => api.withdraw(a, group.id, value ?? 0), `Withdrew ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
+            <View style={{flex: 1, minWidth: 0}}><Button title={value ? `Add ${money(value)}` : 'Add funds'} disabled={!value} onPress={() => run(a => api.deposit(a, group.id, value ?? 0), `Added ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
           </Row>
-          {group.frozen ? <T style={s.caption}>Withdrawals are paused while this group is frozen: {group.frozen.reason}</T> : pending ? <T style={s.caption}>Withdrawals open once {openCharges(db, group.id).length > 1 ? 'every open split is' : `the ${pending.merchant} split is`} settled.</T> : null}
-          <Row style={{paddingTop: 10}}>
+          {group.frozen ? <T style={s.caption}>Withdrawals are paused while this group is frozen: {group.frozen.reason}</T> : !spending ? <T style={s.caption}>Withdrawal information is unavailable. Refresh to try again.</T> : spending.withdrawalBlocked ? <T style={s.caption}>Withdrawals are paused while any split remains unsettled.</T> : null}
+          </> : <T style={[s.caption, {marginTop: 10}]}>No funds are taken while this group is forming. Final equal shares are collected and the first period starts after everyone responds and at least two members join.</T>}
+          {active && <Row style={{paddingTop: 10}}>
             <View style={{flex: 1}}>
-              <T style={{fontSize: 14}}>Auto-refill each period</T>
-              <T style={s.caption}>Charge my bank back up to {money(nextShare)} when a new period starts</T>
+              <T style={{fontSize: 14}}>Auto-refill future periods</T>
+              <T style={s.caption}>Top up to {money(nextShare)} when a new period starts.</T>
             </View>
             <Toggle label={`Auto-refill for ${group.name}`} disabled={busy} value={me.autoDeposit} onValueChange={v => { run(a => api.setAutoDeposit(a, group.id, v)); }} />
-          </Row>
+          </Row>}
           {demoMode && <Row style={{paddingTop: 10}}>
             <View style={{flex: 1}}>
               <T style={{fontSize: 14}}>Simulate bank declines</T>
@@ -176,7 +182,6 @@ function GroupBalance({group}: {group: Group}) {
           </Row>}
         </>
       )}
-      {!isActive(group) && me.status === 'joined' && <T style={[s.caption, {marginTop: 8}]}>Waiting for everyone invited to accept or decline.</T>}
     </View>
   );
 }

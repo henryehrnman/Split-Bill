@@ -61,6 +61,9 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   assert.equal(g.status, 200);
   const annDb = (g.body as any).db;
   assert.equal(annDb.groups.length, 1);
+  assert(annDb.groups[0].members.every((m: any) => m.balance === 0));
+  assert.equal(annDb.groups[0].activatedAt, null);
+  assert.deepEqual(annDb.ledger, [], 'creating an invitation does not charge its creator');
   assert.deepEqual(annDb.users.map((u: any) => u.id).sort(), [annId, boId].sort());
   const annProfile = (a.body as any).db.users.find((u: any) => u.id === annId);
   const boProfile = (b.body as any).db.users.find((u: any) => u.id === boId);
@@ -72,6 +75,9 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   assert.deepEqual(invited.db.users.find((u: any) => u.id === annId), {...annProfile, email: '', phone: ''});
   assert.equal((await call(s, 'auth-bo', 'respondInvite', [annDb.groups[0].id, true, 10000])).status, 200);
   const joined = (await call(s, 'auth-ann', 'fetch')).body as any;
+  assert(joined.db.groups[0].members.every((m: any) => m.balance === 10000));
+  assert.equal(joined.db.groups[0].activatedAt, T0);
+  assert.deepEqual(s.state!.db.ledger.filter(entry => entry.groupId === annDb.groups[0].id).map(entry => [entry.kind, entry.amount]), [['deposit', 10000], ['deposit', 10000]], 'the final invitation collects both contributions once');
   assert.deepEqual(joined.db.users.find((u: any) => u.id === boId), {...boProfile, email: '', phone: ''});
   // Redaction affects responses only, leaving exact contact search and each user's profile intact.
   assert.deepEqual(s.state!.db.users.find(u => u.id === annId), annProfile);
@@ -88,10 +94,14 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   assert.equal(bad.status, 400);
   assert.equal(s.state!.version, before);
 
-  // Every api.ts action (except demo controls and sign-up) is exposed by name.
+  // The retired one-purchase lock cannot be re-enabled by an older client.
   const gid = annDb.groups[0].id;
-  assert.equal((await call(s, 'auth-ann', 'setSingleOpenCharge', [gid, false])).status, 200);
-  assert.equal(s.state!.db.groups.find((x: any) => x.id === gid).singleOpenCharge, false);
+  const beforeRetiredLock = JSON.parse(JSON.stringify(s.state!.db));
+  for (const enabled of [true, false]) {
+    assert.equal((await call(s, 'auth-ann', 'setSingleOpenCharge', [gid, enabled])).status, 200);
+    assert.deepEqual(s.state!.db, beforeRetiredLock, 'the retired setting is a compatibility no-op');
+    assert.equal(Object.hasOwn(s.state!.db.groups.find(group => group.id === gid)!, 'singleOpenCharge'), false);
+  }
 
   // Search never returns the caller.
   const found = await call(s, 'auth-cy', 'searchUsers', ['Tester', []]);
@@ -107,6 +117,51 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   const byPhone = (await call(s, 'auth-cy', 'searchUsers', ['(555) 0100', []])).body as any[];
   assert.equal(byPhone.find(u => u.handle === 'ann1').phone, '555-0100');
   assert.equal((await call(s, 'auth-cy', 'createGroup', [{name: 'x'.repeat(40_000), inviteIds: [], budget: 100, periodDays: 7}])).status, 413);
+}
+
+// Missing or nonboolean decisions must never decline an invite, authorize funding, or persist tick changes.
+{
+  const s = memory();
+  const annId = ((await call(s, 'auth-ann', 'createUser', [profile('Ann')])).body as any).viewerId;
+  const boId = ((await call(s, 'auth-bo', 'createUser', [profile('Bo')])).body as any).viewerId;
+  const cyId = ((await call(s, 'auth-cy', 'createUser', [profile('Cy')])).body as any).viewerId;
+  const created = (await call(s, 'auth-ann', 'createGroup', [{name: 'Explicit decisions', inviteIds: [boId, cyId], budget: 30000, periodDays: 7, initialContributionLimit: 15000}])).body as any;
+  const gid = created.db.groups[0].id;
+  const before = JSON.parse(JSON.stringify(s.state));
+  const saves = s.saves;
+  const later = {...opts, now: () => T0 + 40 * 86400000};
+  const decisions: {method: string; prefix: unknown[]; suffix?: unknown[]}[] = [
+    {method: 'respondInvite', prefix: [gid], suffix: [10000, 15000]},
+    {method: 'setAutoDeposit', prefix: [gid]},
+    {method: 'setFailTopUps', prefix: [gid]},
+    {method: 'respondBudget', prefix: ['budget-proposal']},
+    {method: 'setCardFrozen', prefix: [created.db.cards[0].id]},
+    {method: 'setLocked', prefix: ['receipt-charge'], suffix: ['receipt-revision']},
+    {method: 'respondItemEdit', prefix: ['receipt-charge', 'item-edit']},
+  ];
+  for (const {method, prefix, suffix = []} of decisions) {
+    // A truly omitted value and malformed JSON values are separate wire cases.
+    const invalidArgs = [prefix, ...[undefined, null, 'false', 'true', '', 0, 1, {}, []].map(value => [...prefix, value, ...suffix])];
+    for (const args of invalidArgs) {
+      const reply = await call(s, 'auth-bo', method, args, later);
+      assert.equal(reply.status, 400, `${method} must require an explicit boolean`);
+      assert.deepEqual(reply.body, {error: 'Choose either yes or no.', code: 'rule'});
+      assert.equal(s.saves, saves);
+      assert.deepEqual(s.state, before, 'invalid consent cannot persist membership, money movements, or unrelated time-based updates');
+    }
+  }
+
+  // Actual booleans preserve the legitimate accept/decline flow and its reviewed funding cap.
+  assert.equal((await call(s, 'auth-bo', 'respondInvite', [gid, true, 10000, 15000])).status, 200);
+  let group = s.state!.db.groups.find(value => value.id === gid)!;
+  assert.equal(group.members.find(member => member.userId === boId)!.status, 'joined');
+  assert.equal(group.activatedAt, null);
+  assert.deepEqual(s.state!.db.ledger.filter(entry => entry.groupId === gid), []);
+  assert.equal((await call(s, 'auth-cy', 'respondInvite', [gid, false])).status, 200);
+  group = s.state!.db.groups.find(value => value.id === gid)!;
+  assert.deepEqual(group.members.map(member => [member.userId, member.balance]), [[annId, 15000], [boId, 15000]]);
+  assert.equal(group.activatedAt, T0);
+  assert.equal(s.state!.db.ledger.filter(entry => entry.groupId === gid && entry.kind === 'deposit').length, 2);
 }
 
 // Optimistic version check: a lost race is replayed, a constant loser gets 503.
@@ -279,3 +334,47 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
 }
 
 console.log('server core tests passed');
+
+
+// Private receipt parsing never publishes state, even when tick or OCR would change it.
+{
+  const s = memory();
+  const demo = {...opts, demo: true};
+  await call(s, null, 'fetch', [], demo, {actor: 'u_henry'});
+  let reads = 0;
+  const photo = {mediaType: 'image/jpeg', data: 'QUJD'};
+  const reader = async () => { reads++; return {items: [{name: 'Private OCR item', amount: 14000}], tax: 1020, tip: 400}; };
+  const before = JSON.parse(JSON.stringify(s.state));
+  const saves = s.saves;
+  const parsed = await call(s, null, 'parseReceipt', ['chg_o', photo], {...demo, readReceipt: reader}, {actor: 'u_henry'});
+  assert.equal(parsed.status, 200);
+  assert.equal((parsed.body as any).items[0].name, 'Private OCR item');
+  assert.equal((parsed.body as any).itemized, true);
+  assert.equal(reads, 1);
+  assert.equal(s.saves, saves);
+  assert.deepEqual(s.state, before, 'canceling a private photo edit cannot mutate the shared board');
+  const denied = await call(s, null, 'parseReceipt', ['chg_o', photo], {...demo, readReceipt: reader}, {actor: 'u_connor'});
+  assert.equal(denied.status, 400);
+  assert.equal(reads, 1, 'outsiders cannot make a model call');
+  const noPhoto = await call(s, null, 'parseReceipt', ['chg_o'], demo, {actor: 'u_henry'});
+  assert.equal(noPhoto.status, 200);
+  assert.equal(s.saves, saves);
+  assert.deepEqual(s.state, before);
+}
+
+// An OCR response that arrives after its charge settled cannot revive or replace it.
+{
+  const s = memory();
+  const demo = {...opts, demo: true};
+  await call(s, null, 'fetch', [], demo, {actor: 'u_henry'});
+  const reader = async () => {
+    s.state!.db.charges.find(c => c.id === 'chg_o')!.status = 'settled';
+    return {items: [{name: 'Late read', amount: 15420}], tax: 0, tip: 0};
+  };
+  const saves = s.saves;
+  const parsed = await call(s, null, 'parseReceipt', ['chg_o', {mediaType: 'image/png', data: 'QUJD'}], {...demo, readReceipt: reader}, {actor: 'u_henry'});
+  assert.equal(parsed.status, 400);
+  assert.equal(s.saves, saves);
+  assert.equal(s.state!.db.charges.find(c => c.id === 'chg_o')!.receipt, null);
+}
+console.log('phone receipt parse tests passed');
