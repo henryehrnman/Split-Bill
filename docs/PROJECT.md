@@ -1,6 +1,10 @@
 # Split Bill — project plan and progress
 Updated: October 17, 2026, Pacific. Owners: Henry Ehrnman, Connor Zacharias. Stage: hackathon MVP.
 
+## Optional one-purchase lock — October 17, 2026 (Saahil)
+The one-open-charge rule (schema 2.v) is now a group setting, on by default. With it off, several charges can be open at once: every open charge is held from the group fund, and a member who hasn't added their share this period has their share of every open charge held from their own balance, so the overspending concern behind the rule still holds. Withdrawals stay locked while any split is pending. Home lists every open charge, notifications and Home rows open the matching charge, and the Split tab shows a charge picker once your own draft is sent.
+Implementation: `domain.ts` (data version 6, `Group.singleOpenCharge`, `openCharges`, `reservedFunds`, `setSingleOpenCharge`), seed, fake API, Home/Split/Profile; tests cover the lock, held funds and the restricted-member limit. TypeScript, lint and tests pass; clicked through in headless Chrome. `competitors.txt` 2.iv (Henry's) still says "one open charge at a time", which remains true by default.
+
 ## Home Screen app — October 17, 2026 (Saahil)
 The web build can be installed on an iPhone from Safari (Share → Add to Home Screen, with "Open as Web App" on) and then opens full screen with its own icon, no Safari bars. Added `mobile/public/index.html` (Apple web-app tags, `viewport-fit=cover`), `mobile/public/manifest.json` and icons generated from `assets/icon.png` (still Expo's template icon). No service worker, so deploys reach phones immediately. Checked at iPhone 15 Pro size in headless Chrome; not yet tried on a physical iPhone. This is the install path for the hosted URL in `launch.txt` section 8.
 

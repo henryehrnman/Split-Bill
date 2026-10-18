@@ -5,7 +5,7 @@ Backend plan (draft for discussion; nothing here is built yet)
   0) at a glance
     i) Server: TypeScript API (Hono) that imports domain.ts and split.ts unchanged, hosted on Vercel / Railway / Fly.io.
     ii) Database, sign-in, live updates, receipt storage: Supabase (Postgres + Auth + Realtime + Storage). Live updates matter for the claim board so locks and suggested edits show up on everyone's phone right away. [Alternative: Neon + Clerk + Ably.]
-    iii) Cards: Stripe Issuing in test mode. Each card tap is sent to us in real time and we approve or decline within about 2 seconds; that is where the share-not-added limit (own balance only), suspension, one-pending-split and frozen-group rules are enforced. [Alternative: Lithic, quicker sandbox access.]
+    iii) Cards: Stripe Issuing in test mode. Each card tap is sent to us in real time and we approve or decline within about 2 seconds; that is where the share-not-added limit (own balance only), suspension, one-pending-split (optional per group) and frozen-group rules are enforced. [Alternative: Lithic, quicker sandbox access.]
     iv) Pulling money from members' banks (deposits, period refills): Stripe Financial Connections + ACH. [Alternative: Plaid.] When a confirmed split takes someone below $0, their personal card on file is charged back to $0 (schema 3.iii): a Stripe PaymentIntent on a saved card, which succeeds or fails in seconds instead of days.
     v) Ledger: our own append-only table of balance changes in Postgres; balances are calculated from it, never edited directly.
     vi) Scheduled jobs (period rollover, 7-day deadline, retrying failed charges): Inngest or Trigger.dev. [Simpler: Vercel Cron.]
@@ -43,11 +43,12 @@ Backend plan (draft for discussion; nothing here is built yet)
       POST /groups/:id/invites/:inviteId/accept  deposit share via ACH, issue card
       POST /groups/:id/invites/:inviteId/decline
     ii) Group and money
-      GET  /groups/:id                           group, members, balances, standing, pending charge, open budget proposal
+      GET  /groups/:id                           group, members, balances, standing, open charges, open budget proposal
       POST /groups/:id/deposits                  {amount}
       POST /groups/:id/withdrawals               {amount}; rejected while a split is pending (schema 3.i)
       PATCH /groups/:id/members/me               {autoDeposit}
       PATCH /groups/:id/default-split            {method, percents?}
+      PATCH /groups/:id/settings                 {singleOpenCharge}; the one-pending-split lock (schema 2.v), on by default
       POST /groups/:id/budget-proposals          {amount}
       POST /budget-proposals/:id/respond         {accept}
     iii) Cards
@@ -72,7 +73,7 @@ Backend plan (draft for discussion; nothing here is built yet)
       POST /jobs/roll-periods  /jobs/enforce-deadlines  /jobs/send-stale-drafts   called by the scheduler
 
   3) how schema rules map to the backend
-    i) Approving a card tap (schema 2.iv, 2.v): Stripe sends issuing_authorization.request in real time and we must answer within about 2 seconds. The handler runs purchaseBlocker() and spendLimit() from domain.ts: decline if the group is frozen, a split is already pending, the member is suspended, the amount exceeds the group fund, or the member hasn't added their share this period and the amount exceeds their own balance. Approve otherwise and create the pending charge as the cardholder's draft (sent_at null); nobody else is notified until the cardholder sends the first proposal or the default split goes out.
+    i) Approving a card tap (schema 2.iv, 2.v): Stripe sends issuing_authorization.request in real time and we must answer within about 2 seconds. The handler runs purchaseBlocker() and spendLimit() from domain.ts: decline if the group is frozen, a split is already pending and the group keeps the one-pending-split lock on, the member is suspended, the amount exceeds the group fund minus open charges, or the member hasn't added their share this period and the amount exceeds their own balance minus their shares of open charges. Approve otherwise and create the pending charge as the cardholder's draft (sent_at null); nobody else is notified until the cardholder sends the first proposal or the default split goes out.
     ii) Authorization vs final amount: restaurants and gas stations often capture a different amount than they authorized (tips, pre-auth holds). The pending charge starts at the authorized amount; when the final transaction arrives we update the charge amount and, if it changed, reset acceptances and locks. Refunds create a credit split back by the agreed shares.
     iii) Deposits and refills (schema 1.i, 1.iii): ACH debits take 1-4 business days and can be returned (e.g. insufficient funds) after looking successful. For the MVP, credit the member's balance when the debit is initiated, and treat a later return like a failed charge (balance drops back; if negative, start debt recovery / suspension). Record both events in the ledger.
     iv) Settling a split (schema 3.i-3.iii): one database transaction: lock the group row, apply each share as a ledger entry, and if anyone goes negative charge their saved personal card the amount needed to bring them to $0. If that charge fails, mark the member suspended (they stay in the group; the group carries the debt).
@@ -83,7 +84,7 @@ Backend plan (draft for discussion; nothing here is built yet)
 
   4) data model (Postgres tables)
     users(id, name, handle unique, email unique, phone unique, created_at)
-    groups(id, name, created_by, budget_cents, period_days, period_start, default_split jsonb, frozen_reason, frozen_at)
+    groups(id, name, created_by, budget_cents, period_days, period_start, default_split jsonb, single_open_charge bool default true, frozen_reason, frozen_at)
     memberships(group_id, user_id, status invited|joined, auto_refill, suspended, funded_period, joined_at)  -- balance is derived from ledger
     cards(id, group_id, user_id, issuer_card_id, last4, frozen, wallet_status)
     bank_accounts(id, user_id, provider, provider_account_id, last4, status)
