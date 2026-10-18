@@ -466,6 +466,18 @@ SOFTWARE.
     }
     return { error: "Choose a split method." };
   }
+  function draftPersonalAllocation(c, d, result = calculateProposal(c, d)) {
+    if (!result.error) return result.allocation[0];
+    if (d.method !== "custom") return currentPersonalAllocation(c);
+    if (d.percentageDraft) {
+      const basis = percentageBasis(d.percentageDraft.values[0]);
+      return basis === null
+        ? null
+        : Math.round((Math.round(c.total * 100) * basis) / 10000) / 100;
+    }
+    const amount = moneyCents(d.allocation[0]);
+    return amount === null ? null : amount / 100;
+  }
   function itemListSignature(p) {
     return JSON.stringify({
       method: p.method,
@@ -820,7 +832,7 @@ SOFTWARE.
     return `${backbar("Charge history")}<h1 class="page-title">${esc(g.name)}</h1><p class="page-sub">Pending and settled purchases</p>${groupHistoryRows(id)}`;
   }
   function splitSummary(c, share = currentPersonalAllocation(c)) {
-    return `<div class="split-summary"><div class="split-pin-content"><h1>Your share</h1><div class="share" id="split-share">${money(share)}</div></div></div><div class="split-summary-details"><p class="split-summary-context">of ${money(c.total)} · ${esc(gById(c.group).name)}</p>${current().type !== "select-items" && currentProposal(c).method === "item" && currentProposal(c).items.length && !state.itemConfirmations[c.id]?.[chargePeople(c)[0].id] ? '<p class="item-selection-prompt">Select your items to calculate your share.</p>' : ""}</div>`;
+    return `<div class="split-summary"><div class="split-pin-content"><h1>Your share</h1><div class="share" id="split-share">${share === null ? "—" : money(share)}</div></div></div><div class="split-summary-details"><p class="split-summary-context">of ${money(c.total)} · ${esc(gById(c.group).name)}</p>${current().type !== "select-items" && currentProposal(c).method === "item" && currentProposal(c).items.length && !state.itemConfirmations[c.id]?.[chargePeople(c)[0].id] ? '<p class="item-selection-prompt">Select your items to calculate your share.</p>' : ""}</div>`;
   }
   const customAllocationValue = (p, index, percent) =>
     percent
@@ -915,7 +927,7 @@ SOFTWARE.
       percent = splitUnit(c) === "percent";
     if (editing && p.method === "custom" && percent && !p.percentageDraft)
       p.percentageDraft = makePercentageDraft(p.allocation);
-    return `<section class="card-section">${proposalHeading(c)}${editing ? "" : `<p class="proposal-method">${methodName(p.method)}</p>`}${members.map((person, i) => `<div class="person-row">${avatar(person)}<div class="person-info"><strong>${i === 0 ? esc(state.displayName) + " (you)" : esc(person.name)}</strong>${editing ? "" : `<small>${c.approvedBy?.includes(person.id) ? "Accepted" : "Waiting to review"}</small>`}</div>${editing && p.method === "custom" ? `<label class="custom-allocation">${percent ? "" : '<span aria-hidden="true">$</span>'}<input class="custom-input" aria-label="${esc(person.name)} share in ${percent ? "percent" : "dollars"}" inputmode="decimal" type="text" autocomplete="off" spellcheck="false" value="${esc(customAllocationValue(p, i, percent))}" style="width:${customInputWidth(customAllocationValue(p, i, percent))}" data-draft-field="${percent ? "percentage" : "allocation"}" data-person="${i}">${percent ? '<span aria-hidden="true">%</span>' : ""}</label>` : `<span class="amount" data-draft-share="${i}">${result.error ? "—" : allocationText(c, result.allocation, i)}</span>`}</div>`).join("")}</section>`;
+    return `<section class="card-section">${proposalHeading(c)}${editing ? "" : `<p class="proposal-method">${methodName(p.method)}</p>`}${members.map((person, i) => `<div class="person-row">${avatar(person)}<div class="person-info"><strong>${i === 0 ? esc(state.displayName) + " (you)" : esc(person.name)}</strong>${editing ? "" : `<small>${c.approvedBy?.includes(person.id) ? "Accepted" : "Waiting to review"}</small>`}</div>${editing && p.method === "custom" ? `<label class="custom-allocation">${percent ? "" : '<span aria-hidden="true">$</span>'}<input class="custom-input" aria-label="${esc(person.name)} share in ${percent ? "percent" : "dollars"}" inputmode="decimal" type="text" autocomplete="off" spellcheck="false" value="${esc(customAllocationValue(p, i, percent))}" style="width:${customInputWidth(customAllocationValue(p, i, percent))}" data-draft-field="${percent ? "percentage" : "allocation"}" data-person="${i}">${percent ? '<span aria-hidden="true">%</span>' : ""}</label>` : `<span class="amount" data-draft-share="${i}">${result.error ? "—" : allocationText(c, result.allocation, i)}</span>`}</div>`).join("")}${editing && p.method === "custom" ? `<p class="form-error" id="draft-total" role="status" ${result.error ? "" : "hidden"}>${esc(draftValidationText(c, p))}</p>` : ""}</section>`;
   }
   function receiptReview(c, p) {
     const owned =
@@ -946,7 +958,7 @@ SOFTWARE.
             )
             .join("")}</div>`
         : ""
-    }${d.method === "item" && currentProposal(c).method === "item" && currentProposal(c).items.length ? '<p class="item-reset-notice">Confirming changes to this list resets everyone’s selections and approvals.</p>' : ""}<p class="draft-validation" id="draft-total" role="status">${esc(draftValidationText(c, d))}</p></section>`;
+    }${d.method === "item" && currentProposal(c).method === "item" && currentProposal(c).items.length ? '<p class="item-reset-notice">Confirming changes to this list resets everyone’s selections and approvals.</p>' : ""}<p class="draft-validation" id="draft-total" role="status">${esc(draftValidationText(c, d))}</p>${d.method === "item" ? `<div class="item-card-actions split-footer-buttons">${button("Cancel", "cancel-edit", "", "secondary")}${button("Confirm items", "confirm-item-list", `data-id="${c.id}"`)}</div>` : ""}</section>`;
   }
   function itemFlowShell(
     c,
@@ -969,7 +981,13 @@ SOFTWARE.
   function splitEdit(id) {
     const c = pending.find((c) => c.id === id),
       d = state.splitDrafts[id];
-    return itemFlowShell(c, d, d.method === "item" ? itemEditor(c, d) : "");
+    return itemFlowShell(
+      c,
+      d,
+      d.method === "item" ? itemEditor(c, d) : "",
+      false,
+      draftPersonalAllocation(c, d),
+    );
   }
   function splitFooter(id, editing = false, selecting = false) {
     const c = pending.find((c) => c.id === id),
@@ -977,7 +995,7 @@ SOFTWARE.
     if (!c.canReview)
       return '<div class="footer-action"><p class="info-text">This charge is frozen while a dispute is resolved.</p></div>';
     if (editing)
-      return `<div class="footer-action split-footer-buttons">${button("Cancel", selecting ? "back" : "cancel-edit", "", "secondary")}${button("Propose changes", selecting ? "confirm-selection" : "submit-proposal", `data-id="${id}"`)}</div>`;
+      return `<div class="footer-action split-footer-buttons">${button("Cancel", selecting ? "back" : "cancel-edit", "", "secondary")}${button("Propose changes", selecting ? "confirm-selection" : "submit-proposal", `data-id="${id}" ${selecting ? "" : "data-draft-submit"} ${!selecting && p.method === "custom" && calculateProposal(c, p).error ? "disabled" : ""}`)}</div>`;
     return `<div class="footer-action split-footer-buttons">${button("Make changes", "begin-edit", `data-id="${id}"`, "secondary")}${p.method === "item" ? button("Accept my share", "begin-selection", `data-id="${id}" ${!p.exclusive || p.receiptDraft || validateItemList(c, p).error ? "disabled" : ""}`) : button(state.approved[id] ? "Accepted" : "Accept my share", "accept-split", `data-id="${id}" ${state.approved[id] ? "disabled" : ""}`)}</div>`;
   }
 
@@ -1301,6 +1319,8 @@ SOFTWARE.
   }
   function draftValidationText(c, d) {
     const result = calculateProposal(c, d);
+    if (d.method === "custom")
+      return result.error ? "Split must total to " + money(c.total) : "";
     return result.incompleteItem || (d.method === "item" && !d.items.length)
       ? ""
       : result.error || "";
@@ -1308,7 +1328,15 @@ SOFTWARE.
   function refreshDraftSummary(c, d) {
     const result = calculateProposal(c, d);
     const validation = $("#draft-total");
-    if (validation) validation.textContent = draftValidationText(c, d);
+    if (validation) {
+      validation.textContent = draftValidationText(c, d);
+      validation.hidden = !validation.textContent;
+    }
+    const share = $("#split-share"),
+      amount = draftPersonalAllocation(c, d, result),
+      submit = $("[data-draft-submit]");
+    if (share) share.textContent = amount === null ? "—" : money(amount);
+    if (submit) submit.disabled = d.method === "custom" && !!result.error;
     root
       .querySelectorAll("[data-draft-share]")
       .forEach(
@@ -2031,6 +2059,9 @@ SOFTWARE.
           break;
         case "confirm-selection":
           await confirmSelection(id);
+          break;
+        case "confirm-item-list":
+          await confirmItemList(id);
           break;
         case "submit-proposal":
           await submitSplitProposal(id);
