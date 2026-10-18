@@ -74,6 +74,7 @@ export type Db = {
 };
 
 export class ApiError extends Error {}
+export class StaleStateError extends ApiError {}
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const SPLIT_DEADLINE = 7 * DAY;
@@ -98,7 +99,9 @@ export const fundBalance = (g: Group) => g.members.reduce((a, m) => a + m.balanc
 // Oldest first; db.charges is newest first.
 export const openCharges = (db: Db, groupId: string) => db.charges.filter(c => c.groupId === groupId && c.status === 'pending').reverse();
 export const pendingCharge = (db: Db, groupId: string) => openCharges(db, groupId)[0] ?? null;
-export const reservedFunds = (db: Db, groupId: string) => openCharges(db, groupId).reduce((a, c) => a + c.amount, 0);
+// A deadline dispute still holds funds; a chargeback on an already settled charge does not hold them twice.
+const unsettledCharges = (db: Db, groupId: string) => db.charges.filter(c => c.groupId === groupId && (c.status === 'pending' || (c.status === 'disputed' && c.settledAt === undefined))).reverse();
+export const reservedFunds = (db: Db, groupId: string) => unsettledCharges(db, groupId).reduce((a, c) => a + c.amount, 0);
 export const availableFunds = (db: Db, g: Group) => fundBalance(g) - reservedFunds(db, g.id);
 export const currentProposal = (c: Charge) => c.proposals[c.proposals.length - 1];
 export const cardFor = (db: Db, groupId: string, userId: UserId) => db.cards.find(c => c.groupId === groupId && c.userId === userId) ?? null;
@@ -268,6 +271,13 @@ export function respondInvite(db: Db, actor: UserId, groupId: string, accept: bo
   if (m.status === 'joined') fail('You already joined this group.');
   if (!accept) {
     g.members = g.members.filter(x => x.userId !== actor);
+    if (g.defaultSplit.method === 'percent') {
+      const previous = g.defaultSplit.percents;
+      const percents = Object.fromEntries(memberIds(g).map(id => [id, previous[id] ?? 0]));
+      // Removing a positive share invalidates the default. Use the group's original equal fallback.
+      const result = computeSplit(memberIds(g), 10000, {method: 'percent', percents});
+      g.defaultSplit = result.error ? {method: 'equal'} : {method: 'percent', percents};
+    }
     return;
   }
   if (m.failTopUps) fail('Your bank declined the deposit (demo). Turn off failed top-ups to retry.');
@@ -288,8 +298,9 @@ export function withdraw(db: Db, actor: UserId, groupId: string, amount: number,
   const g = groupById(db, groupId);
   const m = joinedMember(g, actor);
   if (!Number.isSafeInteger(amount) || amount <= 0) fail('Enter an amount greater than $0.');
-  const pending = pendingCharge(db, groupId);
-  if (pending) fail(`You can withdraw once the ${pending.merchant} split is settled.`);
+  if (g.frozen) fail(`This group is frozen: ${g.frozen.reason}`);
+  const unsettled = unsettledCharges(db, groupId)[0];
+  if (unsettled) fail(`You can withdraw once the ${unsettled.merchant} split is settled.`);
   if (amount > m.balance) fail(`You can withdraw up to ${money(Math.max(0, m.balance))}.`);
   m.balance -= amount;
   ledger(db, {groupId, userId: actor, kind: 'withdrawal', amount: -amount, at: now});
@@ -375,6 +386,8 @@ export function purchase(db: Db, actor: UserId, groupId: string, input: {merchan
       : `Declined: the group fund only has ${money(limit)} available.`);
   }
   const first = defaultInput(g);
+  const result = computeSplit(memberIds(g), input.amount, first);
+  if (result.error) fail(result.error);
   const charge: Charge = {
     id: nextId(db, 'chg'),
     groupId,
@@ -385,7 +398,7 @@ export function purchase(db: Db, actor: UserId, groupId: string, input: {merchan
     status: 'pending',
     sentAt: null,
     receipt: null,
-    proposals: [{id: nextId(db, 'prop'), authorId: null, createdAt: now, input: first, shares: computeSplit(memberIds(g), input.amount, first).shares, acceptedBy: []}],
+    proposals: [{id: nextId(db, 'prop'), authorId: null, createdAt: now, input: first, shares: result.shares, acceptedBy: []}],
   };
   db.charges.unshift(charge);
   return charge;
@@ -431,6 +444,16 @@ function board(c: Charge) {
   return c.receipt ?? fail('Scan the receipt first.');
 }
 
+// Consent covers receipt contents and claims; other members locking or suggesting edits does not change them.
+export function receiptApprovalKey(receipt: Receipt): string {
+  return JSON.stringify({
+    scannedAt: receipt.scannedAt,
+    items: receipt.items.map(({id, name, amount, people}) => ({id, name, amount, people: [...people].sort()})),
+    tax: receipt.tax,
+    tip: receipt.tip,
+  });
+}
+
 export function scanReceipt(db: Db, actor: UserId, chargeId: string, now: number) {
   const {c} = openCharge(db, actor, chargeId);
   const scanned = ocr(c.merchant, c.amount, c.id);
@@ -465,11 +488,13 @@ export function toggleClaim(db: Db, actor: UserId, chargeId: string, itemId: str
   if (r.locked.includes(actor)) fail('Unlock your selection to change it.');
   const item = r.items.find(i => i.id === itemId) ?? fail('Item not found.');
   item.people = item.people.includes(actor) ? item.people.filter(p => p !== actor) : [...item.people, actor];
+  r.locked = [];
 }
 
-export function setLocked(db: Db, actor: UserId, chargeId: string, locked: boolean, now: number) {
+export function setLocked(db: Db, actor: UserId, chargeId: string, locked: boolean, now: number, expectedReceiptKey?: string) {
   const {c} = openCharge(db, actor, chargeId);
   const r = board(c);
+  if (locked && expectedReceiptKey !== receiptApprovalKey(r)) throw new StaleStateError('The receipt changed. Review your items before locking them.');
   r.locked = locked ? [...new Set([...r.locked, actor])] : r.locked.filter(id => id !== actor);
   confirmItemsIfReady(db, c, now);
 }
@@ -493,6 +518,7 @@ export function respondItemEdit(db: Db, actor: UserId, chargeId: string, editId:
   if (accept) {
     const item = r.items.find(i => i.id === edit.itemId);
     if (item) item.people = edit.action === 'add' ? [...new Set([...item.people, actor])] : item.people.filter(p => p !== actor);
+    r.locked = [];
   }
   confirmItemsIfReady(db, c, now);
 }
@@ -516,10 +542,11 @@ export function proposeSplit(db: Db, actor: UserId, chargeId: string, input: Spl
   announce(db, c, now);
 }
 
-export function acceptSplit(db: Db, actor: UserId, chargeId: string, now: number) {
+export function acceptSplit(db: Db, actor: UserId, chargeId: string, now: number, expectedProposalId: string) {
   const {c} = openCharge(db, actor, chargeId);
-  if (isDraft(c)) return sendDefaultSplit(db, actor, chargeId, now);
   const p = currentProposal(c);
+  if (expectedProposalId !== p.id) throw new StaleStateError('The split changed. Review the latest proposal before accepting.');
+  if (isDraft(c)) return sendDefaultSplit(db, actor, chargeId, now);
   if (!requiredApprovers(p).includes(actor)) fail('You have no share in this split, so your approval isn’t needed.');
   if (!p.acceptedBy.includes(actor)) p.acceptedBy.push(actor);
   if (!waitingOn(p).length) settle(db, c, now);
@@ -563,7 +590,7 @@ export function resolveDisputes(db: Db, groupId: string, now: number) {
   const g = groupById(db, groupId);
   if (!g.frozen) fail('This group isn’t frozen.');
   for (const c of db.charges) {
-    if (c.groupId !== groupId || c.status !== 'disputed' || c.settledAt) continue;
+    if (c.groupId !== groupId || c.status !== 'disputed' || c.settledAt !== undefined) continue;
     const p = currentProposal(c);
     p.acceptedBy = requiredApprovers(p);
     settle(db, c, now);

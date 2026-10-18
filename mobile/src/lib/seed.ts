@@ -1,4 +1,4 @@
-import {DAY, acceptSplit, addToWallet, cardFor, createGroup, purchase, respondInvite, setAutoDeposit, tick} from './domain.ts';
+import {DAY, acceptSplit, addToWallet, cardFor, createGroup, currentProposal, purchase, respondInvite, setAutoDeposit, tick} from './domain.ts';
 import type {Db, User} from './domain.ts';
 
 export const DEMO_USERS: User[] = [
@@ -27,10 +27,10 @@ export function seed(now: number): Db {
   for (const id of [henry, maya, jordan]) addToWallet(db, id, cardFor(db, apt.id, id)!.id, id === jordan ? 'Google Wallet' : 'Apple Wallet');
 
   const costco = purchase(db, maya, apt.id, {merchant: 'Costco', amount: 9630}, at(now - 18 * DAY));
-  for (const id of [maya, henry, jordan]) acceptSplit(db, id, costco.id, at(now - 18 * DAY + 3600000));
+  for (const id of [maya, henry, jordan]) acceptSplit(db, id, costco.id, at(now - 18 * DAY + 3600000), currentProposal(costco).id);
 
   const internet = purchase(db, henry, apt.id, {merchant: 'Comcast Internet', amount: 6000}, at(now - 4 * DAY));
-  for (const id of [henry, maya, jordan]) acceptSplit(db, id, internet.id, at(now - 4 * DAY + 7200000));
+  for (const id of [henry, maya, jordan]) acceptSplit(db, id, internet.id, at(now - 4 * DAY + 7200000), currentProposal(internet).id);
 
   purchase(db, maya, apt.id, {merchant: 'Juniper', amount: 15420}, at(now - 2 * 3600000));
 
