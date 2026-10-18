@@ -96,7 +96,7 @@ function ChargeSplitPane({group, charge, picker, sendFirst}: {group: Group; char
   const {db, now, viewer} = useStore();
   const [mode, setMode] = useState<Mode>(charge.receipt ? 'items' : 'proposal');
   const [editing, setEditing] = useState(false);
-  const [fixing, setFixing] = useState(false);
+  const [fixing, setFixing] = useState(() => !!charge.receipt?.draft && viewer.id === charge.cardholderId);
   const daysLeft = Math.max(0, Math.ceil((charge.createdAt + SPLIT_DEADLINE - now) / DAY));
   const p = currentProposal(charge);
   const payer = userById(db, charge.cardholderId).name;
@@ -209,7 +209,7 @@ function ScanPrompt({charge, onSend}: {charge: Charge; onSend: FirstSend<Db>}) {
 function ItemsFooter({charge}: {charge: Charge}) {
   const {db, viewer, run} = useStore();
   const r = charge.receipt;
-  if (!r) return null;
+  if (!r || r.draft) return null;
   const reviewedReceipt = receiptApprovalKey(r);
   const st = itemBoardStatus(charge);
   const locked = r.locked.includes(viewer.id);
@@ -242,6 +242,18 @@ function ClaimBoard({group, charge, receipt: r, onFix}: {group: Group; charge: C
   const myItems = mine.reduce((a, i) => a + allocate(i.amount, ids.map(id => i.people.includes(id) ? 1 : 0))[ids.indexOf(viewer.id)], 0);
   const forMe = r.edits.filter(e => e.targetId === viewer.id);
   const itemName = (id: string) => r.items.find(i => i.id === id)?.name ?? 'an item';
+
+  if (r.draft) {
+    return (
+      <View style={[s.box, {backgroundColor: C.softWarn, borderColor: C.softWarn}]}>
+        <T style={{fontWeight: '700'}}>Gemini read {r.draft.items.length} {r.draft.items.length === 1 ? 'item' : 'items'}, but they don’t match the charge</T>
+        <T style={[s.small, {marginTop: 4}]}>
+          Items, tax and tip add up to {money(draftTotal(r.draft))}; the card was charged {money(charge.amount)}. Check the amounts and add anything it missed, then save to start claiming. Or split by percent / amount instead.
+        </T>
+        <View style={{marginTop: 10}}><Button title="Review items" onPress={onFix} /></View>
+      </View>
+    );
+  }
 
   return (
     <>
@@ -326,11 +338,14 @@ function ClaimBoard({group, charge, receipt: r, onFix}: {group: Group; charge: C
 
 type ItemDraft = {id: string; name: string; amount: string};
 
+const draftTotal = (d: NonNullable<Receipt['draft']>) => d.items.reduce((a, i) => a + i.amount, 0) + d.tax + d.tip;
+
 function ReceiptEditor({charge, receipt: r, onDone}: {charge: Charge; receipt: Receipt; onDone: () => void}) {
   const {run} = useStore();
-  const [items, setItems] = useState<ItemDraft[]>(() => r.items.map(i => ({id: i.id, name: i.name, amount: toInput(i.amount)})));
-  const [tax, setTax] = useState(toInput(r.tax));
-  const [tip, setTip] = useState(toInput(r.tip));
+  const start = r.draft ? {items: r.draft.items.map((i, n) => ({id: `${charge.id}-d${n + 1}`, ...i})), tax: r.draft.tax, tip: r.draft.tip} : r;
+  const [items, setItems] = useState<ItemDraft[]>(() => start.items.map(i => ({id: i.id, name: i.name, amount: toInput(i.amount)})));
+  const [tax, setTax] = useState(toInput(start.tax));
+  const [tip, setTip] = useState(toInput(start.tip));
   const parsed = items.map(i => ({id: i.id, name: i.name, amount: cents(i.amount) ?? -1}));
   const total = parsed.reduce((a, i) => a + Math.max(0, i.amount), 0) + (cents(tax) ?? 0) + (cents(tip) ?? 0);
   const setItem = (index: number, patch: Partial<ItemDraft>) => setItems(items.map((x, i) => (i === index ? {...x, ...patch} : x)));
@@ -338,7 +353,9 @@ function ReceiptEditor({charge, receipt: r, onDone}: {charge: Charge; receipt: R
   return (
     <>
       <T style={{fontSize: 17, fontWeight: '700'}}>Fix receipt</T>
-      <T style={[s.small, {marginBottom: 6}]}>Items, tax and tip must add up to {money(charge.amount)}. Saving releases everyone’s locks so they can re-check.</T>
+      <T style={[s.small, {marginBottom: 6}]}>
+        {r.draft ? 'Gemini’s read is filled in below. ' : ''}Items, tax and tip must add up to {money(charge.amount)}. Saving releases everyone’s locks so they can re-check.
+      </T>
       {items.map((item, index) => (
         <Row key={item.id} style={{alignItems: 'flex-end'}}>
           <View style={{flex: 2, minWidth: 0}}><Field text label={`Item ${index + 1}`} value={item.name} onChange={name => setItem(index, {name})} /></View>
