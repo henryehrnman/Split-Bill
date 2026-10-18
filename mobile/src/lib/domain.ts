@@ -301,7 +301,8 @@ export function withdraw(db: Db, actor: UserId, groupId: string, amount: number,
   if (g.frozen) fail(`This group is frozen: ${g.frozen.reason}`);
   const unsettled = unsettledCharges(db, groupId)[0];
   if (unsettled) fail(`You can withdraw once the ${unsettled.merchant} split is settled.`);
-  if (amount > m.balance) fail(`You can withdraw up to ${money(Math.max(0, m.balance))}.`);
+  const limit = Math.max(0, Math.min(m.balance, availableFunds(db, g)));
+  if (amount > limit) fail(`You can withdraw up to ${money(limit)}.`);
   m.balance -= amount;
   ledger(db, {groupId, userId: actor, kind: 'withdrawal', amount: -amount, at: now});
 }
@@ -459,11 +460,9 @@ export function scanReceipt(db: Db, actor: UserId, chargeId: string, now: number
   const {c} = openCharge(db, actor, chargeId);
   const scanned = read === undefined ? ocr(c.merchant, c.amount, c.id) : fromScan(read, c.merchant, c.amount, c.id);
   c.receipt = {items: scanned.items.map(i => ({...i, people: []})), tax: scanned.tax, tip: scanned.tip, itemized: scanned.itemized, scannedAt: now, locked: [], edits: []};
-  if (isDraft(c)) {
-    const by = userById(db, actor).name;
-    notify(db, c, memberIds(groupById(db, c.groupId)).filter(id => id !== actor), () => `${by} scanned the ${c.merchant} receipt (${money(c.amount)}). Claim the items you had.`, now);
-    c.sentAt = now;
-  }
+  const by = userById(db, actor).name;
+  notify(db, c, memberIds(groupById(db, c.groupId)).filter(id => id !== actor), () => `${by} scanned the ${c.merchant} receipt (${money(c.amount)}). Claim the items you had.`, now);
+  c.sentAt ??= now;
   return c.receipt;
 }
 
@@ -494,6 +493,7 @@ export function toggleClaim(db: Db, actor: UserId, chargeId: string, itemId: str
 
 export function setLocked(db: Db, actor: UserId, chargeId: string, locked: boolean, now: number, expectedReceiptKey?: string) {
   const {c} = openCharge(db, actor, chargeId);
+  if (locked && !c.receipt) throw new StaleStateError('The receipt was replaced by a proposal. Review the latest split.');
   const r = board(c);
   if (locked && expectedReceiptKey !== receiptApprovalKey(r)) throw new StaleStateError('The receipt changed. Review your items before locking them.');
   r.locked = locked ? [...new Set([...r.locked, actor])] : r.locked.filter(id => id !== actor);
@@ -539,12 +539,15 @@ export function proposeSplit(db: Db, actor: UserId, chargeId: string, input: Spl
   const {c, g} = openCharge(db, actor, chargeId);
   const result = computeSplit(memberIds(g), c.amount, input);
   if (result.error) fail(result.error);
+  // Sending a new proposal replaces the item workflow, including every receipt approval.
+  c.receipt = null;
   c.proposals.push({id: nextId(db, 'prop'), authorId: actor, createdAt: now, input, shares: result.shares, acceptedBy: [actor]});
   announce(db, c, now);
 }
 
 export function acceptSplit(db: Db, actor: UserId, chargeId: string, now: number, expectedProposalId: string) {
   const {c} = openCharge(db, actor, chargeId);
+  if (c.receipt) throw new StaleStateError('This split now uses a receipt. Review and lock your items, or send a new proposal.');
   const p = currentProposal(c);
   if (expectedProposalId !== p.id) throw new StaleStateError('The split changed. Review the latest proposal before accepting.');
   if (isDraft(c)) return sendDefaultSplit(db, actor, chargeId, now);
