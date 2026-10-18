@@ -12,6 +12,7 @@ const endpoint = 'https://example.supabase.co/functions/v1/rpc';
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
 function harness() {
+  let now = T0;
   let state: State | null = null;
   let saves = 0;
   let conflicts = 0;
@@ -44,11 +45,11 @@ function harness() {
       assert(Array.isArray(body.args));
       if (authId) requests.push({authId, body: clone(body)});
       // Simulate a malicious caller adding actor: the server must still use the verified JWT identity.
-      const reply = await handle(store, authId, forgedActor ? {...body, actor: forgedActor} : body, {demo: false, now: () => T0});
+      const reply = await handle(store, authId, forgedActor ? {...body, actor: forgedActor} : body, {demo: false, now: () => now});
       return new Response(JSON.stringify(reply.body), {status: reply.status, headers: {'Content-Type': 'application/json'}});
     }});
   }
-  return {client, requests, beforeSave(hook: () => Promise<void>) { beforeSave = hook; }, get state() { return state; }, get saves() { return saves; }, get conflicts() { return conflicts; }};
+  return {client, requests, advanceTo(time: number) { now = time; }, beforeSave(hook: () => Promise<void>) { beforeSave = hook; }, get state() { return state; }, get saves() { return saves; }, get conflicts() { return conflicts; }};
 }
 
 async function accounts(h: ReturnType<typeof harness>) {
@@ -125,12 +126,17 @@ test('two authenticated HTTP clients create profiles, find each other, join and 
   const groupId = created.db.groups[0].id;
   scoped(created, groupId, [aliceId, bobId]);
   assert.equal(created.db.groups[0].createdBy, aliceId);
+  assert(created.db.groups[0].members.every(m => m.balance === 0));
+  assert.equal(created.db.groups[0].activatedAt, null);
+  assert.deepEqual(created.db.ledger, [], 'creating the group does not charge the creator');
   const invited = await bob.state('fetch');
   scoped(invited, groupId, [aliceId, bobId]);
   assert.equal(invited.db.groups[0].members.find(m => m.userId === bobId)?.status, 'invited');
   assert.equal(invited.db.cards.length, 0);
   const joined = await bob.state('respondInvite', [groupId, true, 10000]);
   assert(joined.db.groups[0].members.every(m => m.status === 'joined' && m.balance === 10000));
+  assert.equal(joined.db.groups[0].activatedAt, T0);
+  assert.deepEqual(h.state!.db.ledger.filter(entry => entry.groupId === groupId).map(entry => [entry.kind, entry.amount]), [['deposit', 10000], ['deposit', 10000]], 'the final invitation collects both contributions once');
   const aliceCard = created.db.cards[0].id;
   const bobCard = joined.db.cards[0].id;
   await alice.state('addToWallet', [aliceCard, 'Apple Wallet']);
@@ -161,7 +167,46 @@ test('two authenticated HTTP clients create profiles, find each other, join and 
   }
 });
 
-test('joining requires the reviewed deposit amount and rejects missing or mismatched consent without writes', async () => {
+test('zero-balance members can make concurrent purchases while private drafts reserve the shared pool', async () => {
+  const h = harness();
+  const {alice, bob, bobId} = await accounts(h);
+  const created = await alice.state('createGroup', [{name: 'Concurrent spending', inviteIds: [bobId], budget: 20000, periodDays: 7}]);
+  const groupId = created.db.groups[0].id;
+  const joined = await bob.state('respondInvite', [groupId, true, 10000]);
+  await alice.state('addToWallet', [created.db.cards[0].id, 'Apple Wallet']);
+  await bob.state('addToWallet', [joined.db.cards[0].id, 'Google Wallet']);
+  await bob.state('withdraw', [groupId, 10000]);
+  await alice.state('purchase', [groupId, {merchant: 'Private dinner', amount: 6000}]);
+
+  const viewed = await bob.state('fetch');
+  assert.equal(viewed.db.charges.length, 0);
+  assert.equal(JSON.stringify(viewed).includes('Private dinner'), false);
+  assert.deepEqual(viewed.db.spendingView?.groups[groupId], {
+    availableFunds: 4000, spendLimit: 4000, purchaseBlocker: null, pendingCount: 1, withdrawalBlocked: true,
+  });
+  await assert.rejects(bob.state('withdraw', [groupId, 100]), error => error instanceof RpcError
+    && error.status === 400 && !error.message.includes('Private dinner'));
+  await bob.state('purchase', [groupId, {merchant: 'Coffee for everyone', amount: 3000}]);
+  assert.equal((await alice.state('fetch')).db.spendingView?.groups[groupId].availableFunds, 1000);
+
+  // Two clients race for the last $10. CAS must recheck the pooled reservation.
+  const results = await Promise.allSettled([
+    alice.state('purchase', [groupId, {merchant: 'Last funds A', amount: 1000}]),
+    bob.state('purchase', [groupId, {merchant: 'Last funds B', amount: 1000}]),
+  ]);
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(results.filter(r => r.status === 'rejected').length, 1);
+  assert.equal(h.state!.db.charges.filter(c => c.groupId === groupId).length, 3);
+  for (const client of [alice, bob]) {
+    const final = await client.state('fetch');
+    assert.equal(final.db.spendingView?.groups[groupId].availableFunds, 0);
+    assert.equal(final.db.spendingView?.groups[groupId].spendLimit, 0);
+    assert.equal(final.db.spendingView?.groups[groupId].pendingCount, 3);
+  }
+  assert.equal(h.state!.db.spendingView, undefined, 'viewer projections never enter saved state');
+});
+
+test('joining requires the reviewed contribution target before the final invitation funds the group', async () => {
   const h = harness();
   const {alice, bob, bobId} = await accounts(h);
   const created = await alice.state('createGroup', [{name: 'Reviewed invitation', inviteIds: [bobId], budget: 20000, periodDays: 7}]);
@@ -172,12 +217,12 @@ test('joining requires the reviewed deposit amount and rejects missing or mismat
   for (const args of [[groupId, true], [groupId, true, null], [groupId, true, '10000'], [groupId, true, 9999]]) {
     await assert.rejects(bob.state('respondInvite', args), error => error instanceof RpcError && error.status === 409 && error.code === 'stale');
     assert.equal(h.saves, saves);
-    assert.deepEqual(h.state, before, 'an unreviewed deposit cannot change any persisted state');
+    assert.deepEqual(h.state, before, 'an unreviewed contribution target cannot change any persisted state');
   }
   const joined = await bob.state('respondInvite', [groupId, true, 10000]);
-  assert.equal(joined.db.groups[0].members.find(m => m.userId === bobId)!.balance, 10000);
+  assert(joined.db.groups[0].members.every(m => m.balance === 10000));
   assert.equal(joined.db.cards.length, 1);
-  assert.deepEqual(joined.db.ledger.map(e => [e.kind, e.amount]), [['deposit', 10000]]);
+  assert.deepEqual(joined.db.ledger.map(entry => [entry.kind, entry.amount]), [['deposit', 10000]]);
 });
 
 test('CAS replay rejects a reviewed invitation amount when another invitee declines before the join saves', async () => {
@@ -202,15 +247,86 @@ test('CAS replay rejects a reviewed invitation amount when another invitee decli
   assert.equal(h.requests.length, requests + 2, 'both clients send one request; the server revalidates on replay');
   assert.equal(h.conflicts, conflicts + 1);
   assert.equal(h.saves, saves + 1, 'only the decline committed');
-  assert.deepEqual(h.state, declinedState, 'the discarded join must not deposit funds, issue a card, or alter membership');
+  assert.deepEqual(h.state, declinedState, 'the discarded join must not issue a card or alter membership');
   assert.equal(h.state!.db.groups.find(g => g.id === groupId)!.members.find(m => m.userId === bobId)!.status, 'invited');
   assert.equal(h.state!.db.cards.some(card => card.groupId === groupId && card.userId === bobId), false);
   assert.equal(h.state!.db.ledger.some(entry => entry.groupId === groupId && entry.userId === bobId), false);
 
   const joined = await bob.state('respondInvite', [groupId, true, 15000]);
-  assert.equal(joined.db.groups[0].members.find(m => m.userId === bobId)!.balance, 15000);
+  assert(joined.db.groups[0].members.every(m => m.balance === 15000));
   assert.equal(joined.db.cards.length, 1);
-  assert.deepEqual(joined.db.ledger.map(e => [e.kind, e.amount]), [['deposit', 15000]]);
+  assert.deepEqual(joined.db.ledger.map(entry => [entry.kind, entry.amount]), [['deposit', 15000]]);
+  assert.equal(h.state!.db.ledger.filter(entry => entry.groupId === groupId).length, 2, 'both members fund the final target only after membership is resolved');
+});
+
+test('concurrent final invitations activate a waiting group and collect each contribution once', async () => {
+  const h = harness();
+  const {alice, bob, bobId} = await accounts(h);
+  const charlie = h.client('jwt-charlie');
+  const c = await charlie.state('createUser', [{name: 'Charlie Tester', handle: 'charlie.test', email: 'charlie@t.dev', phone: '555-0103'}]);
+  const created = await alice.state('createGroup', [{name: 'Waiting for everyone', inviteIds: [bobId, c.viewerId], budget: 30000, periodDays: 7}]);
+  const groupId = created.db.groups[0].id;
+
+  // Even after a full nominal period, unresolved invitations cannot trigger top-ups.
+  const activatedAt = T0 + 8 * 86400000;
+  h.advanceTo(activatedAt);
+  const waiting = await alice.state('fetch');
+  assert.equal(waiting.db.groups[0].activatedAt, null);
+  assert(waiting.db.groups[0].members.every(member => member.balance === 0));
+  assert.deepEqual(waiting.db.ledger, []);
+  const beforeDeposit = clone(h.state!);
+  await assert.rejects(alice.state('deposit', [groupId, 10000]), error => error instanceof RpcError && error.status === 400);
+  assert.deepEqual(h.state, beforeDeposit, 'funding cannot start while invitations are unresolved');
+
+  const version = h.state!.version;
+  const requests = h.requests.length;
+  const conflicts = h.conflicts;
+  await Promise.all([
+    bob.state('respondInvite', [groupId, true, 10000]),
+    charlie.state('respondInvite', [groupId, true, 10000]),
+  ]);
+  assert.equal(h.requests.length, requests + 2);
+  assert(h.conflicts > conflicts, 'simultaneous invitations replay against the latest membership');
+  assert.equal(h.state!.version, version + 2);
+  const group = h.state!.db.groups.find(value => value.id === groupId)!;
+  assert(group.members.every(member => member.status === 'joined' && member.balance === 10000));
+  assert.equal(group.activatedAt, activatedAt);
+  assert.equal(group.periodStart, activatedAt, 'the first funding period starts when the last invitation is resolved');
+  assert.equal(h.state!.db.cards.filter(card => card.groupId === groupId).length, 3, 'replay issues one card per member');
+  const deposits = h.state!.db.ledger.filter(entry => entry.groupId === groupId);
+  assert.equal(deposits.length, 3);
+  assert(deposits.every(entry => entry.kind === 'deposit' && entry.amount === 10000 && entry.at === activatedAt));
+  assert.deepEqual([...new Set(deposits.map(entry => entry.userId))].sort(), group.members.map(member => member.userId).sort(), 'activation collects exactly one contribution per remaining member');
+  const afterActivation = clone(h.state!);
+  await alice.state('fetch');
+  await bob.state('fetch');
+  assert.deepEqual(h.state, afterActivation, 'later reads do not charge members again');
+});
+
+test('a final decline collects the final equal contributions from previously joined members', async () => {
+  const h = harness();
+  const {alice, bob, bobId} = await accounts(h);
+  const charlie = h.client('jwt-charlie');
+  const c = await charlie.state('createUser', [{name: 'Charlie Tester', handle: 'charlie.test', email: 'charlie@t.dev', phone: '555-0103'}]);
+  const created = await alice.state('createGroup', [{name: 'Final membership', inviteIds: [bobId, c.viewerId], budget: 30000, periodDays: 7}]);
+  const groupId = created.db.groups[0].id;
+  const partial = await bob.state('respondInvite', [groupId, true, 10000]);
+  assert.equal(partial.db.groups[0].activatedAt, null);
+  assert(partial.db.groups[0].members.every(member => member.balance === 0));
+  assert.deepEqual(h.state!.db.ledger.filter(entry => entry.groupId === groupId), [], 'neither creator nor early acceptor is charged');
+  assert.equal(partial.db.cards.length, 1, 'accepting still issues the member card');
+
+  const activatedAt = T0 + 86400000;
+  h.advanceTo(activatedAt);
+  await charlie.state('respondInvite', [groupId, false]);
+  const activated = await alice.state('fetch');
+  assert.equal(activated.db.groups[0].activatedAt, activatedAt);
+  assert.equal(activated.db.groups[0].periodStart, activatedAt);
+  assert.deepEqual(activated.db.groups[0].members.map(member => member.balance), [15000, 15000]);
+  const deposits = h.state!.db.ledger.filter(entry => entry.groupId === groupId);
+  assert.equal(deposits.length, 2);
+  assert(deposits.every(entry => entry.kind === 'deposit' && entry.amount === 15000 && entry.at === activatedAt));
+  assert.equal(deposits.some(entry => entry.userId === c.viewerId), false, 'the declining invitee is never charged');
 });
 
 test('accepting a previously viewed split rejects a replacement proposal without writing state', async () => {
@@ -435,4 +551,5 @@ test('concurrent clients preserve both writes through the server compare-and-set
   assert.equal(h.state!.version, version + 2);
   const final = await alice.state('fetch');
   assert.deepEqual(final.db.groups[0].members.map(m => [m.userId, m.balance]), [[aliceId, 10101], [bobId, 10203]]);
+  assert.equal(h.state!.db.ledger.filter(entry => entry.groupId === groupId && entry.kind === 'deposit').length, 4, 'each activation contribution and each later explicit deposit is recorded once');
 });

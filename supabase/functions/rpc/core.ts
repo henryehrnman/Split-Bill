@@ -36,7 +36,6 @@ const methods: Record<string, Method> = {
   withdraw: ({db, actor, t}, [groupId, amount]) => d.withdraw(db, actor, groupId, amount, t),
   setAutoDeposit: ({db, actor}, [groupId, on]) => d.setAutoDeposit(db, actor, groupId, !!on),
   setFailTopUps: ({db, actor}, [groupId, on]) => d.setFailTopUps(db, actor, groupId, !!on),
-  setSingleOpenCharge: ({db, actor}, [groupId, on]) => d.setSingleOpenCharge(db, actor, groupId, !!on),
   setDefaultSplit: ({db, actor}, [groupId, split]) => d.setDefaultSplit(db, actor, groupId, split),
   proposeBudget: ({db, actor, t}, [groupId, amount]) => d.proposeBudget(db, actor, groupId, amount, t),
   respondBudget: ({db, actor}, [proposalId, accept]) => d.respondBudget(db, actor, proposalId, !!accept),
@@ -89,6 +88,18 @@ export function viewFor(db: Db, userId: string): Db {
     // An invitation must not reveal contacts that search deliberately masks.
     users: db.users.filter(u => people.has(u.id)).map(u => u.id === userId ? u : {...u, email: '', phone: ''}),
     groups,
+    // Private first proposals still reserve pooled funds. Calculate before filtering charges.
+    spendingView: {
+      viewerId: userId,
+      groups: Object.fromEntries(groups.map(g => [g.id, {
+        availableFunds: Math.max(0, d.availableFunds(db, g)),
+        spendLimit: d.spendLimit(db, g.id, userId),
+        purchaseBlocker: d.purchaseBlocker(db, g.id, userId),
+        pendingCount: d.openCharges(db, g.id).length,
+        withdrawalBlocked: d.memberOf(g, userId).status !== 'joined' || !!g.frozen || db.charges.some(c => c.groupId === g.id
+          && (c.status === 'pending' || (c.status === 'disputed' && c.settledAt === undefined))),
+      }])),
+    },
     cards: db.cards.filter(c => c.userId === userId),
     // A draft the cardholder has not sent yet is theirs alone.
     charges: db.charges.filter(c => groupIds.has(c.groupId) && (c.sentAt !== null || c.cardholderId === userId)),

@@ -61,6 +61,9 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   assert.equal(g.status, 200);
   const annDb = (g.body as any).db;
   assert.equal(annDb.groups.length, 1);
+  assert(annDb.groups[0].members.every((m: any) => m.balance === 0));
+  assert.equal(annDb.groups[0].activatedAt, null);
+  assert.deepEqual(annDb.ledger, [], 'creating an invitation does not charge its creator');
   assert.deepEqual(annDb.users.map((u: any) => u.id).sort(), [annId, boId].sort());
   const annProfile = (a.body as any).db.users.find((u: any) => u.id === annId);
   const boProfile = (b.body as any).db.users.find((u: any) => u.id === boId);
@@ -72,6 +75,9 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   assert.deepEqual(invited.db.users.find((u: any) => u.id === annId), {...annProfile, email: '', phone: ''});
   assert.equal((await call(s, 'auth-bo', 'respondInvite', [annDb.groups[0].id, true, 10000])).status, 200);
   const joined = (await call(s, 'auth-ann', 'fetch')).body as any;
+  assert(joined.db.groups[0].members.every((m: any) => m.balance === 10000));
+  assert.equal(joined.db.groups[0].activatedAt, T0);
+  assert.deepEqual(s.state!.db.ledger.filter(entry => entry.groupId === annDb.groups[0].id).map(entry => [entry.kind, entry.amount]), [['deposit', 10000], ['deposit', 10000]], 'the final invitation collects both contributions once');
   assert.deepEqual(joined.db.users.find((u: any) => u.id === boId), {...boProfile, email: '', phone: ''});
   // Redaction affects responses only, leaving exact contact search and each user's profile intact.
   assert.deepEqual(s.state!.db.users.find(u => u.id === annId), annProfile);
@@ -88,10 +94,9 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   assert.equal(bad.status, 400);
   assert.equal(s.state!.version, before);
 
-  // Every api.ts action (except demo controls and sign-up) is exposed by name.
+  // The retired one-purchase lock cannot be re-enabled by an older client.
   const gid = annDb.groups[0].id;
-  assert.equal((await call(s, 'auth-ann', 'setSingleOpenCharge', [gid, false])).status, 200);
-  assert.equal(s.state!.db.groups.find((x: any) => x.id === gid).singleOpenCharge, false);
+  assert.equal((await call(s, 'auth-ann', 'setSingleOpenCharge', [gid, true])).status, 400);
 
   // Search never returns the caller.
   const found = await call(s, 'auth-cy', 'searchUsers', ['Tester', []]);

@@ -19,7 +19,7 @@ export default function Split() {
   const {charge: linked} = useLocalSearchParams<{charge?: string}>();
   const open = group ? openCharges(db, group.id) : [];
   const myDraft = open.find(c => isDraft(c) && c.cardholderId === viewer.id);
-  const pending = myDraft ?? open.find(c => c.id === linked) ?? open[0];
+  const pending = open.find(c => c.id === linked) ?? myDraft ?? open[0];
   if (!group || !pending) {
     return (
       <Page title="Split" subtitle="Agree on who owes what after each purchase.">
@@ -34,7 +34,7 @@ export default function Split() {
     );
   }
   const picker =
-    open.length > 1 && !myDraft ? (
+    open.length > 1 && !(isDraft(pending) && pending.cardholderId === viewer.id) ? (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8, paddingBottom: 18}}>
         {open.map(c => (
           <Chip key={c.id} label={`${c.merchant} · ${money(c.amount)}`} selected={c.id === pending.id} onPress={() => router.setParams({charge: c.id})} />
@@ -121,7 +121,7 @@ function ChargeSplitPane({group, charge, picker, sendFirst}: {group: Group; char
         )}
         <T style={[s.small, {marginTop: 8, textAlign: 'center', color: daysLeft <= 2 ? C.danger : C.muted}]}>
           {daysLeft}{'\u00A0'}{daysLeft === 1 ? 'day' : 'days'} left to agree{'\n'}
-          {group.singleOpenCharge ? 'the card stays locked until this is settled' : 'held from the group fund until settled'}
+          held from the group fund until settled
         </T>
       </View>
       <ChargeNote charge={charge} readOnly />
@@ -229,7 +229,7 @@ function ItemsFooter({charge}: {charge: Charge}) {
       ) : (
         <Button
           title="Lock in my items"
-          onPress={() => run(a => api.setLocked(a, charge.id, true, reviewedReceipt), st.unlocked.length <= 1 && !st.unclaimed.length && !r.edits.length ? 'Split confirmed. Balances are updated and the card is ready again.' : 'Your items are locked in.')}
+          onPress={() => run(a => api.setLocked(a, charge.id, true, reviewedReceipt), st.unlocked.length <= 1 && !st.unclaimed.length && !r.edits.length ? 'Split confirmed. Balances are updated.' : 'Your items are locked in.')}
         />
       )}
     </>
@@ -404,7 +404,7 @@ function ProposalFooter({charge, onEdit}: {charge: Charge; onEdit: () => void}) 
         <View style={{flex: 1, minWidth: 0}}><Button secondary title="Change split" onPress={onEdit} /></View>
         {waiting.includes(viewer.id) && (
           <View style={{flex: 1, minWidth: 0}}>
-            <Button title="Accept split" onPress={() => run(a => api.acceptSplit(a, charge.id, proposal.id), waiting.length === 1 ? 'Split settled. Balances are updated and the card is ready again.' : 'You accepted this split.')} />
+            <Button title="Accept split" onPress={() => run(a => api.acceptSplit(a, charge.id, proposal.id), waiting.length === 1 ? 'Split settled. Balances are updated.' : 'You accepted this split.')} />
           </View>
         )}
       </Row>

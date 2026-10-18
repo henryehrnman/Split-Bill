@@ -51,7 +51,7 @@ export default function NewGroup() {
   }, [viewer.id, demoMode, query, invites, searchKey, searchAttempt]);
 
   const create = () =>
-    run(a => api.createGroup(a, {name, inviteIds: invites.map(u => u.id), budget: amount ?? 0, periodDays: days}), `${name.trim()} created. You deposited ${money(each[0] ?? 0)}; the card works once everyone responds.`).then(next => {
+    run(a => api.createGroup(a, {name, inviteIds: invites.map(u => u.id), budget: amount ?? 0, periodDays: days}), `${name.trim()} created. Your final share is collected once everyone responds and at least two members join.`).then(next => {
       if (!next) return;
       setGroupId(next.groups[next.groups.length - 1].id);
       router.replace('/');
@@ -61,7 +61,7 @@ export default function NewGroup() {
     <Page
       back
       title="New group"
-      subtitle="Set a budget for each period and invite people. Everyone deposits an equal share; anyone can pay with their own card on the group fund."
+      subtitle="Set a budget and invite people. Your final share is collected when the group forms."
       footer={<Button title="Create & send invites" disabled={!name.trim() || !invites.length || !amount || !validDays} onPress={create} />}>
       <Field text label="Group name" value={name} onChange={setName} placeholder="e.g. Roommates" />
 
@@ -76,7 +76,7 @@ export default function NewGroup() {
           <T style={s.small}>days</T>
         </Row>
       )}
-      {!!amount && validDays && <T style={s.caption}>{money(amount)} {periodLabel(days)}. At the start of each period, members are topped back up to their share (automatically, unless they turn auto-refill off).</T>}
+      {!!amount && validDays && <T style={s.caption}>{money(amount)} {periodLabel(days)}. The first period starts once everyone responds and at least two members join. Final equal shares are collected automatically.</T>}
 
       <T style={s.section}>Invite people</T>
       <TextInput
@@ -117,7 +117,7 @@ export default function NewGroup() {
               <Avatar user={u} size={30} />
               <View style={{flex: 1, minWidth: 0}}>
                 <T style={{fontSize: 14}}>{u.name}{id === viewer.id ? ' (you)' : ''}</T>
-                <T style={s.caption}>{id === viewer.id ? 'Deposits now' : 'Invited · deposits on accepting'}</T>
+                <T style={s.caption}>{id === viewer.id ? 'Your estimated share' : 'Invited · estimated share'}</T>
               </View>
               {!!amount && <T style={[s.strong, {flexShrink: 0}]}>{money(each[i])}</T>}
               {id !== viewer.id && (
@@ -129,6 +129,7 @@ export default function NewGroup() {
           );
         })}
       </View>
+      {!!amount && people.length >= 2 && <T style={[s.caption, {marginTop: 8}]}>Shares are estimates. If someone declines, your share can rise to {money(Math.ceil(amount / 2))}. That final share is collected automatically when the group forms. Auto-refill is on for future periods unless you turn it off.</T>}
     </Page>
   );
 }

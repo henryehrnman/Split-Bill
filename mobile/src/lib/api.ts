@@ -74,7 +74,6 @@ const fakeApi = {
   setAutoDeposit: (actor: UserId, groupId: string, on: boolean) => mutate(x => d.setAutoDeposit(x, actor, groupId, on)),
   setFailTopUps: (actor: UserId, groupId: string, on: boolean) => mutate(x => d.setFailTopUps(x, actor, groupId, on)),
   setDefaultSplit: (actor: UserId, groupId: string, split: DefaultSplit) => mutate(x => d.setDefaultSplit(x, actor, groupId, split)),
-  setSingleOpenCharge: (actor: UserId, groupId: string, on: boolean) => mutate(x => d.setSingleOpenCharge(x, actor, groupId, on)),
   proposeBudget: (actor: UserId, groupId: string, amount: number) => mutate((x, t) => d.proposeBudget(x, actor, groupId, amount, t)),
   respondBudget: (actor: UserId, proposalId: string, accept: boolean) => mutate(x => d.respondBudget(x, actor, proposalId, accept)),
   addToWallet: (actor: UserId, cardId: string, wallet: Wallet) => mutate(x => d.addToWallet(x, actor, cardId, wallet)),

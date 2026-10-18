@@ -5,7 +5,7 @@ Backend plan (draft for discussion; nothing here is built yet)
   0) at a glance
     i) Server: TypeScript API (Hono) that imports domain.ts and split.ts unchanged, hosted on Vercel / Railway / Fly.io.
     ii) Database, sign-in, live updates, receipt storage: Supabase (Postgres + Auth + Realtime + Storage). Live updates matter for the claim board so locks and suggested edits show up on everyone's phone right away. [Alternative: Neon + Clerk + Ably.]
-    iii) Cards: Stripe Issuing in test mode. Each card tap is sent to us in real time and we approve or decline within about 2 seconds; that is where the share-not-added limit (own balance only), suspension, one-pending-split (optional per group) and frozen-group rules are enforced. [Alternative: Lithic, quicker sandbox access.]
+    iii) Cards: Stripe Issuing in test mode. Each card tap is sent to us in real time and we approve or decline within about 2 seconds; that is where the nonnegative-member-balance requirement, available pooled funds, suspension and frozen-group rules are enforced. [Alternative: Lithic, quicker sandbox access.]
     iv) Pulling money from members' banks (deposits, period refills): Stripe Financial Connections + ACH. [Alternative: Plaid.] When a confirmed split takes someone below $0, their personal card on file is charged back to $0 (schema 3.iii): a Stripe PaymentIntent on a saved card, which succeeds or fails in seconds instead of days.
     v) Ledger: our own append-only table of balance changes in Postgres; balances are calculated from it, never edited directly.
     vi) Scheduled jobs (period rollover, 7-day deadline, retrying failed charges): Inngest or Trigger.dev. [Simpler: Vercel Cron.]
@@ -39,16 +39,15 @@ Backend plan (draft for discussion; nothing here is built yet)
     i) Users and invites
       GET  /me                                   current user, groups, pending invites
       GET  /users/search?q=                      exact-ish match on username, email or phone (schema 1.i); returns minimal profile only
-      POST /groups                               {name, inviteIds, budget, periodDays}; creator deposits their share
-      POST /groups/:id/invites/:inviteId/accept  deposit share via ACH, issue card
+      POST /groups                               {name, inviteIds, budget, periodDays}; create invitations without collecting money
+      POST /groups/:id/invites/:inviteId/accept  join and issue card; final invite resolution starts the period and collects every joined member's final equal share once
       POST /groups/:id/invites/:inviteId/decline
     ii) Group and money
       GET  /groups/:id                           group, members, balances, standing, open charges, open budget proposal
-      POST /groups/:id/deposits                  {amount}
+      POST /groups/:id/deposits                  {amount}; additional member-authorized payment, available only after all invites resolve and at least two members join
       POST /groups/:id/withdrawals               {amount}; rejected while a split is pending (schema 3.i)
       PATCH /groups/:id/members/me               {autoDeposit}
       PATCH /groups/:id/default-split            {method, percents?}
-      PATCH /groups/:id/settings                 {singleOpenCharge}; the one-pending-split lock (schema 2.v), on by default
       POST /groups/:id/budget-proposals          {amount}
       POST /budget-proposals/:id/respond         {accept}
     iii) Cards
@@ -73,18 +72,18 @@ Backend plan (draft for discussion; nothing here is built yet)
       POST /jobs/roll-periods  /jobs/enforce-deadlines  /jobs/send-stale-drafts   called by the scheduler
 
   3) how schema rules map to the backend
-    i) Approving a card tap (schema 2.iv, 2.v): Stripe sends issuing_authorization.request in real time and we must answer within about 2 seconds. The handler runs purchaseBlocker() and spendLimit() from domain.ts: decline if the group is frozen, a split is already pending and the group keeps the one-pending-split lock on, the member is suspended, the amount exceeds the group fund minus open charges, or the member hasn't added their share this period and the amount exceeds their own balance minus their shares of open charges. Approve otherwise and create the pending charge as the cardholder's draft (sent_at null); nobody else is notified until the cardholder sends the first proposal or the default split goes out.
+    i) Approving a card tap (schema 2.iv, 2.v): Stripe sends issuing_authorization.request in real time and we must answer within about 2 seconds. The handler runs purchaseBlocker() and spendLimit() from domain.ts: decline if the group is not active or is frozen, the member has a negative balance or is suspended, their card is unavailable, or the amount exceeds the group fund minus all unsettled charges. Zero-balance members may pay; period funding and proposed personal shares do not restrict purchases. Several purchases can remain open at once. Approve otherwise and create the pending charge as the cardholder's draft (sent_at null); nobody else is notified until the cardholder sends the first proposal or the default split goes out.
     ii) Authorization vs final amount: restaurants and gas stations often capture a different amount than they authorized (tips, pre-auth holds). The pending charge starts at the authorized amount; when the final transaction arrives we update the charge amount and, if it changed, reset acceptances and locks. Refunds create a credit split back by the agreed shares.
     iii) Deposits and refills (schema 1.i, 1.iii): ACH debits take 1-4 business days and can be returned (e.g. insufficient funds) after looking successful. For the MVP, credit the member's balance when the debit is initiated, and treat a later return like a failed charge (balance drops back; if negative, start debt recovery / suspension). Record both events in the ledger.
     iv) Settling a split (schema 3.i-3.iii): one database transaction: lock the group row, apply each share as a ledger entry, and if anyone goes negative charge their saved personal card the amount needed to bring them to $0. If that charge fails, mark the member suspended (they stay in the group; the group carries the debt).
-    v) Period rollover (schema 1.iii): a scheduled job finds groups whose period ended, starts refill debits for auto-refill members up to their share (leftover balance counts), and advances the period. Members whose balance reaches their share are marked funded for that period (memberships.funded_period); unfunded members can only spend their own balance. Idempotent per group + period so a rerun can't charge twice.
+    v) Period rollover (schema 1.iii): a scheduled job finds active groups whose period ended, starts refill debits for auto-refill members up to their share (leftover balance counts), and advances the period. The first period begins when the group becomes active; its initial equal contributions are collected once at activation, under the variable final-share terms shown before creation/joining. Failed initial charges are recorded per member without undoing successful payments. Members whose balance reaches their share are marked funded for that period (memberships.funded_period); this is funding history only and does not determine purchase eligibility. Idempotent per group + period so a rerun can't charge twice.
     vi) 7-day deadline and chargebacks (schema 4.i, 4.ii): the deadline job freezes groups with a pending split older than 7 days. Stripe Issuing dispute / chargeback webhooks freeze the group. Freezing also blocks authorizations immediately (3.i).
     vii) Claim board (schema 5.i): claims, locks and edits are rows; every change broadcasts over Realtime. When the last lock/edit resolves, the server confirms the split and settles in the same transaction, so two people locking at the same moment can't settle it twice.
     viii) First proposal and notifications (schema 2.i): a new charge is a draft until the cardholder sends a proposal, sends the default, or scans the receipt. The app calls send-default when the cardholder leaves the split screen or backgrounds the app; /jobs/send-stale-drafts sends it after 10 minutes as a fallback. Each sent proposal notifies only the members with a share (receipt scans notify everyone), via a notifications row + Expo push.
 
   4) data model (Postgres tables)
     users(id, name, handle unique, email unique, phone unique, created_at)
-    groups(id, name, created_by, budget_cents, period_days, period_start, default_split jsonb, single_open_charge bool default true, frozen_reason, frozen_at)
+    groups(id, name, created_by, budget_cents, period_days, period_start, activated_at, default_split jsonb, frozen_reason, frozen_at)
     memberships(group_id, user_id, status invited|joined, auto_refill, suspended, funded_period, joined_at)  -- balance is derived from ledger
     cards(id, group_id, user_id, issuer_card_id, last4, frozen, wallet_status)
     bank_accounts(id, user_id, provider, provider_account_id, last4, status)
