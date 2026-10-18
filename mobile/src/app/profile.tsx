@@ -5,7 +5,7 @@ import {Page, T, Avatar, Button, Field, Row, StandingPill, periodLabel, shortDat
 import {useStore} from '../lib/store';
 import {api} from '../lib/api';
 import {money, cents} from '../lib/money';
-import {DAY, currentProposal, groupById, groupsFor, isActive, memberOf, nextPeriodAt, pendingCharge, periodSpend, shares, spendSummary, standing} from '../lib/domain';
+import {DAY, currentProposal, groupById, groupsFor, isActive, memberOf, nextPeriodAt, openCharges, pendingCharge, periodSpend, shares, spendSummary, standing} from '../lib/domain';
 import type {Group, LedgerEntry} from '../lib/domain';
 
 const LEDGER_LABEL: Record<LedgerEntry['kind'], string> = {
@@ -144,7 +144,7 @@ function GroupBalance({group}: {group: Group}) {
             <View style={{flex: 1}}><Button secondary title="Withdraw" disabled={!value || !!pending} onPress={() => run(a => api.withdraw(a, group.id, value ?? 0), `Withdrew ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
             <View style={{flex: 1}}><Button title="Add funds" disabled={!value} onPress={() => run(a => api.deposit(a, group.id, value ?? 0), `Added ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
           </Row>
-          {pending && <T style={s.caption}>Withdrawals open once the {pending.merchant} split is settled.</T>}
+          {pending && <T style={s.caption}>Withdrawals open once {openCharges(db, group.id).length > 1 ? 'every open split is' : `the ${pending.merchant} split is`} settled.</T>}
           <Row style={{paddingTop: 10}}>
             <View style={{flex: 1}}>
               <T style={{fontSize: 14}}>Auto-refill each period</T>

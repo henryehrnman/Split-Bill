@@ -14,7 +14,10 @@ const bal = (g: d.Group) => g.members.map(m => m.balance);
   assert.equal(apt.name, 'Apartment 4B');
   assert.deepEqual(bal(apt), [8000, 8000, 4790]);
   assert.equal(d.standing(apt, 'u_jordan'), 'restricted');
-  assert.equal(d.spendLimit(db, apt.id, 'u_jordan'), 4790);
+  // Jordan's $51.40 default share of the open Juniper charge is held against his $47.90 balance.
+  assert.equal(d.spendLimit(db, apt.id, 'u_jordan'), 0);
+  assert.equal(d.availableFunds(db, apt), 8000 + 8000 + 4790 - 15420);
+  assert.equal(apt.singleOpenCharge, true);
   assert.equal(d.standing(apt, 'u_henry'), 'on-track');
   assert.equal(d.pendingCharge(db, apt.id)?.merchant, 'Juniper');
   assert.equal(d.periodSpend(db, apt, 'u_henry'), 2000);
@@ -185,9 +188,27 @@ assert.deepEqual(db.notifications.map(n => n.userId).sort(), ['u_jordan', 'u_may
 d.sendDefaultSplit(db, 'u_henry', lunch.id, t2 + d.DAY);
 assert.equal(db.notifications.length, 2);
 
+// With the lock off, several charges can be open; each is held against the fund and against a restricted member's balance.
+const t3 = t2 + d.DAY;
+throws(() => d.purchase(db, 'u_maya', g.id, {merchant: 'Gas', amount: 1500}, t3), /Lunch before the next purchase/);
+d.setSingleOpenCharge(db, 'u_maya', g.id, false);
+const free = d.fundBalance(g) - 3000;
+assert.equal(d.availableFunds(db, g), free);
+d.purchase(db, 'u_maya', g.id, {merchant: 'Gas', amount: 1500}, t3);
+assert.deepEqual(d.openCharges(db, g.id).map(c => c.merchant), ['Lunch', 'Gas']);
+assert.equal(d.availableFunds(db, g), free - 1500);
+throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'TV', amount: free - 1500 + 1}, t3), /only has/);
+throws(() => d.withdraw(db, 'u_henry', g.id, 100, t3), /once the Lunch split/);
+assert.equal(d.standing(g, 'u_jordan'), 'restricted');
+d.deposit(db, 'u_jordan', g.id, 2000, t3);
+assert.equal(d.spendLimit(db, g.id, 'u_jordan'), 500);
+throws(() => d.purchase(db, 'u_jordan', g.id, {merchant: 'Pizza', amount: 600}, t3), /own balance \(\$5\.00\)/);
+d.setSingleOpenCharge(db, 'u_henry', g.id, true);
+throws(() => d.purchase(db, 'u_jordan', g.id, {merchant: 'Pizza', amount: 100}, t3), /Lunch before the next purchase/);
+
 // Chargeback on a settled charge freezes the group.
 d.fileChargeback(db, 'u_henry', dinner.id, t);
 assert.equal(dinner.status, 'disputed');
 throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'Z', amount: 100}, t), /frozen/);
 
-console.log('PASS domain: invite search, invites accept/decline, withdraw lock, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, period refills, budget changes, item claim board with locks and edits, 7-day freeze, chargeback.');
+console.log('PASS domain: invite search, invites accept/decline, withdraw lock, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, optional single-open-charge lock with held funds, period refills, budget changes, item claim board with locks and edits, 7-day freeze, chargeback.');
