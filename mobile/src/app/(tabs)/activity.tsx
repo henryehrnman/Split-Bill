@@ -7,6 +7,7 @@ import {api} from '../../lib/api';
 import {money} from '../../lib/money';
 import {currentProposal, memberIds, spendSummary, userById} from '../../lib/domain';
 import type {Charge} from '../../lib/domain';
+import {ChargeNote} from '../../lib/ChargeNote';
 
 export default function Activity() {
   const {db, group, now, demoMode} = useStore();
@@ -83,6 +84,7 @@ function ChargeRow({charge, open, onToggle}: {charge: Charge; open: boolean; onT
                 <T style={[s.small, {flexShrink: 0, fontVariant: ['tabular-nums'], color: C.ink}]}>{(p.shares[id] ?? 0) ? money(p.shares[id]) : 'Not involved'}</T>
               </Row>
             ))}
+          <ChargeNote key={charge.id} charge={charge} />
           {charge.receipt && (
             <T style={[s.caption, {marginTop: 8}]}>
               Receipt: {charge.receipt.items.map(i => `${i.name} ${money(i.amount)}`).join(' · ')}

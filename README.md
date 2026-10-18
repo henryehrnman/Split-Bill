@@ -50,7 +50,7 @@ npm test
 6. **Settle and standing.** Each person's balance drops by their share. Balances have no minimum: anyone who has added their share this period can spend whatever is in the group fund (trust model). Someone who skips their top-up can only spend up to their own balance until they add their share. If a confirmed split takes someone below $0, their personal card is charged back to $0; if that fails they're suspended and the group carries the debt until repaid. Withdrawals are allowed only when no split is pending.
 7. **Budget changes.** Any member can propose raising or lowering the budget; everyone must accept. A raise is collected at the next period start; a cut keeps balances (surplus stays).
 8. **Disputes.** A split not agreed within 7 days freezes the group and escalates to a dispute center. A chargeback on a settled charge also freezes the group. The dispute center itself is out of scope.
-9. **Tracking.** Activity shows monthly and all-time group spend; Profile shows each person's balance, spend this period, charges, and funding history.
+9. **Tracking.** Activity shows monthly and all-time group spend; Profile shows each person's balance, spend this period, charges, and funding history. Open a sent charge in Activity to add or edit its shared note (up to 280 characters); leave it blank to clear it. Any joined member can update the note, with the latest author's name shown. Editing a note does not change amounts or approvals.
 
 Ideas for generative AI, and the ones we decided against, are listed in section 6 of [`schema.txt`](schema.txt).
 

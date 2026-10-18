@@ -52,6 +52,7 @@ export type Charge = {
   proposals: Proposal[];
   settledAt?: number;
   dispute?: {reason: string; at: number};
+  note?: {text: string; authorId: UserId; at: number};
 };
 export type BudgetProposal = {id: string; groupId: string; authorId: UserId; amount: number; createdAt: number; acceptedBy: UserId[]};
 export type LedgerEntry = {
@@ -84,6 +85,7 @@ export const DAY = 24 * 60 * 60 * 1000;
 export const SPLIT_DEADLINE = 7 * DAY;
 // If the cardholder never sends a first proposal, the default split goes out after this long.
 export const DRAFT_GRACE = 10 * 60 * 1000;
+export const MAX_CHARGE_NOTE_LENGTH = 280;
 
 const nextId = (db: Db, prefix: string) => `${prefix}_${(++db.seq).toString(36)}`;
 const fail = (message: string): never => {
@@ -423,6 +425,18 @@ export function purchase(db: Db, actor: UserId, groupId: string, input: {merchan
   };
   db.charges.unshift(charge);
   return charge;
+}
+
+// Shared context only: editing a note never changes a proposal, approval, or amount.
+export function setChargeNote(db: Db, actor: UserId, chargeId: string, text: string, now: number) {
+  const c = chargeById(db, chargeId);
+  joinedMember(groupById(db, c.groupId), actor);
+  if (isDraft(c) && actor !== c.cardholderId) fail('Waiting for the payer to send the first proposal.');
+  if (typeof text !== 'string') fail('Enter a text note.');
+  const cleaned = text.replace(/\p{Cc}/gu, '').trim();
+  if (cleaned.length > MAX_CHARGE_NOTE_LENGTH) fail(`Keep the note to ${MAX_CHARGE_NOTE_LENGTH} characters or fewer.`);
+  if (cleaned) c.note = {text: cleaned, authorId: actor, at: now};
+  else delete c.note;
 }
 
 function openCharge(db: Db, actor: UserId, chargeId: string) {

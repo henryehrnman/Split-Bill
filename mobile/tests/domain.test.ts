@@ -650,4 +650,41 @@ for (const legacy of [false, true]) {
   assert.equal(d.scanReceipt(db, 'u_maya', c.id, T0, {items: [], tax: 0, tip: 0}).draft, undefined);
 }
 
-console.log('PASS domain: invite search, reviewed invitation deposits, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock and pooled-fund cap, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with proposal and receipt holds, active-only period refills, current and next-period budget targets, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');
+// Charge notes are shared context, including on receipts whose shares were already reviewed.
+{
+  const db = seed(T0);
+  const c = db.charges.find(x => x.merchant === 'Juniper')!;
+  const g = d.groupById(db, c.groupId);
+  const withoutNote = () => JSON.parse(JSON.stringify({...db, charges: db.charges.map(({note: _note, ...charge}) => charge)}));
+  const before = withoutNote();
+  d.setChargeNote(db, 'u_henry', c.id, '  Dinner\u0000 with friends\n ', T0);
+  assert.deepEqual(c.note, {text: 'Dinner with friends', authorId: 'u_henry', at: T0});
+  assert.deepEqual(withoutNote(), before);
+  d.setChargeNote(db, 'u_jordan', c.id, 'x'.repeat(d.MAX_CHARGE_NOTE_LENGTH), T0 + 1);
+  assert.equal(c.note!.authorId, 'u_jordan', 'restricted members can still add context');
+  for (const text of [null, undefined, {}, 42, 'x'.repeat(d.MAX_CHARGE_NOTE_LENGTH + 1)]) {
+    const unchanged = JSON.parse(JSON.stringify(db));
+    // @ts-expect-error Check the runtime RPC boundary as well as typed callers.
+    throws(() => d.setChargeNote(db, 'u_henry', c.id, text, T0), /text note|characters/);
+    assert.deepEqual(db, unchanged);
+  }
+  throws(() => d.setChargeNote(db, 'u_connor', c.id, 'Outsider', T0), /not a member/);
+  const member = d.memberOf(g, 'u_henry');
+  member.status = 'invited';
+  throws(() => d.setChargeNote(db, 'u_henry', c.id, 'Invitee', T0), /Accept the invite/);
+  member.status = 'joined';
+
+  const receipt = d.scanReceipt(db, 'u_maya', c.id, T0);
+  d.toggleClaim(db, 'u_henry', c.id, receipt.items[0].id);
+  const key = d.receiptApprovalKey(receipt);
+  d.setLocked(db, 'u_henry', c.id, true, T0, key);
+  const reviewed = withoutNote();
+  d.setChargeNote(db, 'u_maya', c.id, 'Updated context', T0 + 2);
+  assert.equal(d.receiptApprovalKey(receipt), key);
+  assert.deepEqual(withoutNote(), reviewed, 'receipt claims, locks, funds, and notifications stay unchanged');
+  d.setChargeNote(db, 'u_henry', c.id, ' \n\t ', T0 + 3);
+  assert.equal(c.note, undefined);
+  assert.deepEqual(withoutNote(), reviewed);
+}
+
+console.log('PASS domain: invite search, reviewed invitation deposits, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock and pooled-fund cap, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with proposal and receipt holds, active-only period refills, current and next-period budget targets, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement, shared charge notes without financial changes.');
