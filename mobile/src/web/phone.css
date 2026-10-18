@@ -101,6 +101,36 @@
 }
 .phone-host .app { height: 100%; min-height: 0; }
 .phone-host .screen { min-width: 0; }
+/* Phones keep the Home layout that shipped before 75004cd: the screen may scroll, and with fewer than three pending
+   charges the hero shrinks and content stacks from the top instead of spreading over the whole height. */
+@media (max-width: 760px) {
+  .phone-host .home-screen { overflow-y: auto; }
+  .phone-host .home-screen.home-sparse { justify-content: flex-start; gap: 18px; }
+  .phone-host .home-screen.home-sparse .hero {
+    flex: none;
+    height: clamp(160px, 27dvh, 220px);
+    min-height: 160px;
+  }
+  .phone-host .home-screen.home-sparse .section-heading { margin: 8px 0 -8px; }
+}
+/* Desktop shows the phone the way the design preview did: a bounded, centered device, so the layout's spacing is
+   the phone's spacing rather than the content stretched over a tall monitor. The page behind it is the app
+   root's light grey. */
+@media (min-width: 761px) {
+  .phone-host { align-items: center; justify-content: center; padding: 24px; background: #e9ecf1; }
+  .phone-host .phone {
+    width: 430px;
+    height: min(900px, calc(100dvh - 64px));
+    min-height: 650px;
+    margin: 0;
+    padding-top: 0;
+    border: 7px solid #323e53;
+    border-radius: 35px;
+    box-shadow: 0 36px 100px #030b1a80;
+    overflow: hidden;
+    background: var(--bg);
+  }
+}
 .phone-host .bank-card { min-width: 0; width: 100%; flex-shrink: 0; }
 .phone-host .bank-number { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .phone-host .bank-bottom { gap: 12px; }
@@ -140,18 +170,18 @@
    Its top padding takes over the screen's, and each tab's screen keeps the gap it used to have below the header. */
 .phone-host .app > .root-header { flex-shrink: 0; margin: 0; min-height: 42px; padding: 26px 24px 0; }
 .phone-host .app > .root-header + .screen { padding-top: 25px; }
-.phone-host .app > .root-header + .home-screen { padding-top: 10px; }
+.phone-host .app > .root-header + .home-screen { padding-top: 22px; }
 @media (max-width: 760px) { .phone-host .app > .root-header { padding-top: 23px; } }
 @media (max-width: 360px) { .phone-host .app > .root-header { padding-left: 18px; padding-right: 18px; } }
 @container app (max-height: 780px) {
   .phone-host .app > .root-header { padding-top: 14px; }
-  .phone-host .app > .root-header + .home-screen { padding-top: 7px; }
+  .phone-host .app > .root-header + .home-screen { padding-top: 12px; }
 }
 @container app (max-height: 700px) {
   .phone-host .app > .root-header { padding-top: 10px; min-height: 36px; }
   .phone-host .app > .root-header .icon-btn { height: 36px; min-width: 36px; }
   .phone-host .app > .root-header .avatar { width: 34px; height: 34px; }
-  .phone-host .app > .root-header + .home-screen { padding-top: 4px; }
+  .phone-host .app > .root-header + .home-screen { padding-top: 6px; }
 }
 
 /* Pushed screens ease in instead of flashing. */
