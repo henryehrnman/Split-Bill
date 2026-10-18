@@ -45,7 +45,7 @@ export function Button({title, onPress, disabled = false, secondary = false, dan
   const {busy} = useStore();
   const off = disabled || busy;
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{disabled: off}} disabled={off} onPress={onPress} style={({pressed}) => [s.button, secondary && s.secondary, danger && {backgroundColor: C.danger}, off && {backgroundColor: '#e9ecf2'}, pressed && {opacity: 0.8}]}>
+    <Pressable accessibilityRole="button" accessibilityState={{disabled: off}} disabled={off} onPress={onPress} style={({pressed}) => [s.button, secondary && s.secondary, danger && {backgroundColor: C.danger}, off && {backgroundColor: '#e9ecf2', borderColor: '#e9ecf2'}, pressed && {opacity: 0.8}]}>
       <T style={{fontWeight: '700', textAlign: 'center', fontSize: 16, color: off ? '#717b8b' : secondary ? C.ink : 'white'}}>{title}</T>
     </Pressable>
   );
@@ -291,8 +291,8 @@ export const s = StyleSheet.create({
   title: {fontSize: 28, lineHeight: 35, fontWeight: '700', letterSpacing: -0.9, marginBottom: 6},
   sub: {color: C.muted, fontSize: 14, lineHeight: 21, marginBottom: 20},
   box: {borderWidth: 1, borderColor: C.line, borderRadius: 18, padding: 20, marginBottom: 16},
-  button: {backgroundColor: C.blue, borderRadius: 12, minHeight: 52, justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 18, marginVertical: 5},
-  secondary: {backgroundColor: C.bg},
+  button: {backgroundColor: C.blue, borderWidth: 1, borderColor: 'transparent', borderRadius: 12, minHeight: 52, justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 18, marginVertical: 5},
+  secondary: {backgroundColor: 'white', borderWidth: 1, borderColor: '#c5ccd6'},
   label: {fontSize: 12, lineHeight: 18, color: C.muted, fontWeight: '500', marginBottom: 8, marginTop: 8},
   row: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10},
   input: {borderWidth: 1, borderColor: '#d8dde6', padding: 12, borderRadius: 10, fontSize: 17, fontFamily: 'DM-Medium', color: C.ink, backgroundColor: 'white', minWidth: 0, minHeight: 48},

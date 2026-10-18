@@ -21,33 +21,6 @@ const LEDGER_LABEL: Record<LedgerEntry['kind'], string> = {
 };
 const FAILED: LedgerEntry['kind'][] = ['top-up-failed', 'debt-recovery-failed'];
 
-function FundButton({title, onPress, disabled, secondary = false}: {title: string; onPress: () => void; disabled: boolean; secondary?: boolean}) {
-  const {busy} = useStore();
-  const off = disabled || busy;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{disabled: off}}
-      disabled={off}
-      onPress={onPress}
-      style={({pressed}) => [{
-        width: '100%',
-        backgroundColor: off ? '#e9ecf2' : secondary ? 'white' : C.blue,
-        borderWidth: 1,
-        borderColor: off ? '#e9ecf2' : secondary ? '#c5ccd6' : C.blue,
-        borderRadius: 12,
-        minHeight: 52,
-        justifyContent: 'center',
-        paddingVertical: 14,
-        paddingHorizontal: 8,
-        marginVertical: 5,
-        opacity: pressed ? 0.8 : 1,
-      }]}>
-      <T style={{fontWeight: '700', textAlign: 'center', fontSize: 16, color: off ? '#717b8b' : secondary ? C.ink : 'white'}}>{title}</T>
-    </Pressable>
-  );
-}
-
 export default function Profile() {
   const {db, viewer, setViewerId, group, now, run, demoMode, busy} = useStore();
   const {enterDemo, exitDemo, signOut} = useSession();
@@ -183,8 +156,8 @@ function GroupBalance({group}: {group: Group}) {
         <>
           <Field label="Amount ($)" value={amount} onChange={setAmount} placeholder={me.balance < share ? (Math.max(0, share - me.balance) / 100).toFixed(2) : '0.00'} />
           <Row>
-            <View style={{flex: 1, minWidth: 0}}><FundButton secondary title="Withdraw" disabled={!value || !!pending || !!group.frozen} onPress={() => run(a => api.withdraw(a, group.id, value ?? 0), `Withdrew ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
-            <View style={{flex: 1, minWidth: 0}}><FundButton title="Add funds" disabled={!value} onPress={() => run(a => api.deposit(a, group.id, value ?? 0), `Added ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
+            <View style={{flex: 1, minWidth: 0}}><Button secondary title="Withdraw" disabled={!value || !!pending || !!group.frozen} onPress={() => run(a => api.withdraw(a, group.id, value ?? 0), `Withdrew ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
+            <View style={{flex: 1, minWidth: 0}}><Button title="Add funds" disabled={!value} onPress={() => run(a => api.deposit(a, group.id, value ?? 0), `Added ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
           </Row>
           {group.frozen ? <T style={s.caption}>Withdrawals are paused while this group is frozen: {group.frozen.reason}</T> : pending ? <T style={s.caption}>Withdrawals open once {openCharges(db, group.id).length > 1 ? 'every open split is' : `the ${pending.merchant} split is`} settled.</T> : null}
           <Row style={{paddingTop: 10}}>
