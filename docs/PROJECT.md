@@ -1,6 +1,14 @@
 # Split Bill — project plan and progress
 Updated: October 18, 2026, Pacific. Owners: Henry Ehrnman, Connor Zacharias. Stage: hackathon MVP.
 
+## chipin redesign and hosted demo — October 18, 2026
+The app is now called chipin. Connor's three-tab phone UI (Home, Groups, Spending), first built as `design-preview/`, is the web home route from `1ddc5fc` and `5cf63a8`. `mobile/src/web/` runs it on the same mode-aware API and domain rules as the native screens, adding receipt-list confirmation, exclusive item selection and group/profile edits to the RPC; see "Phone UI local review" in `mobile/README.md`. Native routes are unchanged.
+Deploy: the `rpc` Edge Function was deployed from main `5cf63a8` at about 9:07 a.m. Pacific, and the live end-to-end run passed 18/18 against it. Vercel was then rebuilt from `a63530b` (docs only on top of `5cf63a8`). `d4cd357` puts the chipin name and bird mark on the sign-in screen, and `f46a353` makes the bird the favicon and home-screen icons. The hosted app is at https://chipin-app.vercel.app, a second production domain on the same Vercel project (chipin.vercel.app is taken), and https://splitbill-hackathon.vercel.app still works.
+Roommates demo: `46962d1` gives Connor's demo account the four roommates (Connor, Henry, Saahil and Nathan, who is a new demo user). Connor has 4 groups (Apartment and Weekend crew with all four, Road trip with Connor, Henry and Saahil, and the Tahoe ski trip still waiting on Henry's invite), 8 settled splits with varied shares, and 4 pending charges (Din Tai Fung $38.55, Whole Foods $24.80, Spotify $5.99, Blue Bottle $12.50).
+Video presentation: `2672d40` packages the video's scroll presentation as a standalone static site in `demo/` with local assets (run it with `python3 -m http.server 4174 --directory demo`). `960fcc6` copies it into the web build, so it is served at https://chipin-app.vercel.app/demo/.
+Timeout fix: `5f958bd` stops showing a timeout or network banner when a background refresh (Realtime ping, the 15 s poll, returning to the app) fails while data is already on screen; those retry on their own. Requests also reuse the latest session from auth events instead of waiting on the auth lock during a token refresh.
+In progress as of 11:30 a.m.: payment feedback on Simulate payment, the confirmation card replaying its animation on refresh, the top bar moving on tab switches, and wallet/header fixes. The Home split polish (`75004cd` on `connor-jr-jr/home-split-polish`) is waiting to be cherry-picked onto main. A check on two physical phones is still outstanding.
+
 ## UI polish — October 18, 2026 (Saahil)
 Copy and layout only. No rule or server change.
 `26c4514` polishes sign-in, Split, Card, and New group: a sign-in pitch with Explore the demo, "Your share" under the total, "Change split", a Card callout with "Open the split" and "Add to Apple Wallet", and a "2 weeks" period chip. The same commit updates the demo script's photo steps.
