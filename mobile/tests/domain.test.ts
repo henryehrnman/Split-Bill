@@ -39,8 +39,10 @@ const g = d.createGroup(db, 'u_henry', {name: 'Trip', inviteIds: ['u_maya', 'u_j
 assert.deepEqual(bal(g), [7500, 0, 0, 0]);
 throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'X', amount: 100}, T0), /accept their invite/);
 throws(() => d.deposit(db, 'u_maya', g.id, 100, T0), /Accept the invite/);
+d.setDefaultSplit(db, 'u_henry', g.id, {method: 'percent', percents: {u_henry: 40, u_maya: 30, u_jordan: 20, u_connor: 10}});
 d.respondInvite(db, 'u_connor', g.id, false, T0);
 assert.deepEqual(d.shares(g), {u_henry: 10000, u_maya: 10000, u_jordan: 10000});
+assert.deepEqual(g.defaultSplit, {method: 'equal'});
 d.respondInvite(db, 'u_maya', g.id, true, T0);
 d.setFailTopUps(db, 'u_jordan', g.id, true);
 throws(() => d.respondInvite(db, 'u_jordan', g.id, true, T0), /declined/);
@@ -52,6 +54,13 @@ assert.equal(db.cards.filter(c => c.groupId === g.id).length, 3);
 const card = (u: string) => d.cardFor(db, g.id, u)!;
 throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'X', amount: 100}, T0), /wallet/);
 for (const u of ['u_henry', 'u_maya', 'u_jordan']) d.addToWallet(db, u, card(u).id, 'Apple Wallet');
+
+// Invalid persisted defaults must fail before creating IDs, charges, or balance changes.
+g.defaultSplit = {method: 'percent', percents: {u_henry: 50, u_maya: 25}};
+const beforeInvalidPurchase = JSON.parse(JSON.stringify(db));
+throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'Invalid default', amount: 1000}, T0), /Percentages must total 100/);
+assert.deepEqual(db, beforeInvalidPurchase);
+g.defaultSplit = {method: 'equal'};
 
 // One floating charge; withdrawals are locked while it's pending.
 const dinner = d.purchase(db, 'u_maya', g.id, {merchant: 'Dinner', amount: 9001}, T0);
@@ -151,13 +160,22 @@ assert.deepEqual(bal(g), [15000 - 2778, 15000 - 2667, 0]);
 
 // Deadline: an unagreed split after 7 days freezes the group; support resolution unfreezes.
 const late = d.purchase(db, 'u_maya', g.id, {merchant: 'Late', amount: 300}, t);
+const beforeDeadlineFunds = d.availableFunds(db, g);
 d.tick(db, t + d.SPLIT_DEADLINE + 1);
 assert.equal(late.status, 'disputed');
 assert(g.frozen);
 assert.equal(d.spendLimit(db, g.id, 'u_maya'), 0);
+assert.equal(d.reservedFunds(db, g.id), 300);
+assert.equal(d.availableFunds(db, g), beforeDeadlineFunds);
+const beforeFrozenWithdrawal = JSON.parse(JSON.stringify(db));
+throws(() => d.withdraw(db, 'u_henry', g.id, 100, t + d.SPLIT_DEADLINE + 1), /frozen/);
+assert.deepEqual(db, beforeFrozenWithdrawal);
 d.resolveDisputes(db, g.id, t + d.SPLIT_DEADLINE + 2);
 assert.equal(late.status, 'settled');
 assert.equal(g.frozen, null);
+assert.equal(d.reservedFunds(db, g.id), 0);
+assert.equal(d.availableFunds(db, g), d.fundBalance(g));
+assert.equal(db.ledger.filter(e => e.chargeId === late.id && e.kind === 'charge').reduce((sum, e) => sum - e.amount, 0), late.amount);
 
 // A first proposal that leaves someone out only notifies the people with a share.
 const t2 = t + d.SPLIT_DEADLINE + 3;
@@ -207,8 +225,87 @@ d.setSingleOpenCharge(db, 'u_henry', g.id, true);
 throws(() => d.purchase(db, 'u_jordan', g.id, {merchant: 'Pizza', amount: 100}, t3), /Lunch before the next purchase/);
 
 // Chargeback on a settled charge freezes the group.
+const beforeChargebackHold = d.reservedFunds(db, g.id);
 d.fileChargeback(db, 'u_henry', dinner.id, t);
 assert.equal(dinner.status, 'disputed');
+assert.equal(d.reservedFunds(db, g.id), beforeChargebackHold);
 throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'Z', amount: 100}, t), /frozen/);
+throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
 
-console.log('PASS domain: invite search, invites accept/decline, withdraw lock, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, optional single-open-charge lock with held funds, period refills, budget changes, item claim board with locks and edits, 7-day freeze, chargeback.');
+// A departing member with no percentage share leaves valid custom percentages intact.
+{
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Zero-share invite', inviteIds: ['u_maya', 'u_jordan'], budget: 30000, periodDays: 30}, T0);
+  d.setDefaultSplit(db, 'u_henry', g.id, {method: 'percent', percents: {u_henry: 70, u_maya: 30, u_jordan: 0}});
+  d.respondInvite(db, 'u_jordan', g.id, false, T0);
+  assert.deepEqual(g.defaultSplit, {method: 'percent', percents: {u_henry: 70, u_maya: 30}});
+  d.respondInvite(db, 'u_maya', g.id, true, T0);
+  d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
+  const c = d.purchase(db, 'u_henry', g.id, {merchant: 'Custom default', amount: 1001}, T0);
+  assert.deepEqual(d.currentProposal(c).shares, {u_henry: 701, u_maya: 300});
+}
+
+// Pending and disputed-unsettled charges both reserve funds, but only pending ones stay editable.
+{
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Mixed reservations', inviteIds: ['u_maya'], budget: 20000, periodDays: 30}, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0);
+  d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
+  d.setSingleOpenCharge(db, 'u_henry', g.id, false);
+  const older = d.purchase(db, 'u_henry', g.id, {merchant: 'Older', amount: 2000}, T0);
+  const newer = d.purchase(db, 'u_henry', g.id, {merchant: 'Newer', amount: 1000}, T0 + d.DAY);
+  d.tick(db, T0 + d.SPLIT_DEADLINE + 1);
+  assert.equal(older.status, 'disputed');
+  assert.equal(newer.status, 'pending');
+  assert.deepEqual(d.openCharges(db, g.id).map(c => c.id), [newer.id]);
+  assert.equal(d.reservedFunds(db, g.id), 3000);
+  assert.equal(d.availableFunds(db, g), 17000);
+  throws(() => d.withdraw(db, 'u_henry', g.id, 100, T0 + d.SPLIT_DEADLINE + 1), /frozen/);
+
+  // Even missing freeze metadata cannot make an unsettled dispute withdrawable.
+  const thawed: d.Db = JSON.parse(JSON.stringify(db));
+  d.groupById(thawed, g.id).frozen = null;
+  const before = JSON.parse(JSON.stringify(thawed));
+  throws(() => d.withdraw(thawed, 'u_henry', g.id, 100, T0 + d.SPLIT_DEADLINE + 1), /once the Older split/);
+  assert.deepEqual(thawed, before);
+
+  d.resolveDisputes(db, g.id, T0 + d.SPLIT_DEADLINE + 2);
+  assert.equal(older.status, 'settled');
+  assert.equal(newer.status, 'pending');
+  assert.equal(g.frozen, null);
+  assert.equal(d.reservedFunds(db, g.id), 1000);
+  assert.equal(d.availableFunds(db, g), 17000);
+  throws(() => d.withdraw(db, 'u_henry', g.id, 100, T0 + d.SPLIT_DEADLINE + 2), /once the Newer split/);
+  d.acceptSplit(db, 'u_maya', newer.id, T0 + d.SPLIT_DEADLINE + 3);
+  assert.equal(d.reservedFunds(db, g.id), 0);
+  assert.equal(d.availableFunds(db, g), 17000);
+  d.withdraw(db, 'u_henry', g.id, 100, T0 + d.SPLIT_DEADLINE + 4);
+  assert.equal(d.memberOf(g, 'u_henry').balance, 8400);
+}
+
+// A settledAt timestamp of zero is still settled: chargebacks never reserve or debit it twice.
+{
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Settled chargeback', inviteIds: ['u_maya'], budget: 20000, periodDays: 30}, 0);
+  d.respondInvite(db, 'u_maya', g.id, true, 0);
+  d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
+  const c = d.purchase(db, 'u_henry', g.id, {merchant: 'Settled', amount: 1000}, 0);
+  d.sendDefaultSplit(db, 'u_henry', c.id, 0);
+  d.acceptSplit(db, 'u_maya', c.id, 0);
+  assert.equal(c.settledAt, 0);
+  const balances = bal(g);
+  const ledger = JSON.parse(JSON.stringify(db.ledger));
+  d.fileChargeback(db, 'u_henry', c.id, 1);
+  assert.equal(d.reservedFunds(db, g.id), 0);
+  assert.equal(d.availableFunds(db, g), 19000);
+  throws(() => d.withdraw(db, 'u_henry', g.id, 100, 1), /frozen/);
+  d.resolveDisputes(db, g.id, 2);
+  assert.equal(g.frozen, null);
+  assert.equal(c.settledAt, 0);
+  assert.deepEqual(bal(g), balances);
+  assert.deepEqual(db.ledger, ledger);
+  d.withdraw(db, 'u_henry', g.id, 100, 3);
+  assert.equal(d.memberOf(g, 'u_henry').balance, 9400);
+}
+
+console.log('PASS domain: invite search, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, optional single-open-charge lock with held funds, period refills, budget changes, item claim board with locks and edits, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');
