@@ -74,6 +74,7 @@ export type Db = {
 };
 
 export class ApiError extends Error {}
+export class StaleStateError extends ApiError {}
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const SPLIT_DEADLINE = 7 * DAY;
@@ -443,6 +444,16 @@ function board(c: Charge) {
   return c.receipt ?? fail('Scan the receipt first.');
 }
 
+// Consent covers receipt contents and claims; other members locking or suggesting edits does not change them.
+export function receiptApprovalKey(receipt: Receipt): string {
+  return JSON.stringify({
+    scannedAt: receipt.scannedAt,
+    items: receipt.items.map(({id, name, amount, people}) => ({id, name, amount, people: [...people].sort()})),
+    tax: receipt.tax,
+    tip: receipt.tip,
+  });
+}
+
 export function scanReceipt(db: Db, actor: UserId, chargeId: string, now: number) {
   const {c} = openCharge(db, actor, chargeId);
   const scanned = ocr(c.merchant, c.amount, c.id);
@@ -477,11 +488,13 @@ export function toggleClaim(db: Db, actor: UserId, chargeId: string, itemId: str
   if (r.locked.includes(actor)) fail('Unlock your selection to change it.');
   const item = r.items.find(i => i.id === itemId) ?? fail('Item not found.');
   item.people = item.people.includes(actor) ? item.people.filter(p => p !== actor) : [...item.people, actor];
+  r.locked = [];
 }
 
-export function setLocked(db: Db, actor: UserId, chargeId: string, locked: boolean, now: number) {
+export function setLocked(db: Db, actor: UserId, chargeId: string, locked: boolean, now: number, expectedReceiptKey?: string) {
   const {c} = openCharge(db, actor, chargeId);
   const r = board(c);
+  if (locked && expectedReceiptKey !== receiptApprovalKey(r)) throw new StaleStateError('The receipt changed. Review your items before locking them.');
   r.locked = locked ? [...new Set([...r.locked, actor])] : r.locked.filter(id => id !== actor);
   confirmItemsIfReady(db, c, now);
 }
@@ -505,6 +518,7 @@ export function respondItemEdit(db: Db, actor: UserId, chargeId: string, editId:
   if (accept) {
     const item = r.items.find(i => i.id === edit.itemId);
     if (item) item.people = edit.action === 'add' ? [...new Set([...item.people, actor])] : item.people.filter(p => p !== actor);
+    r.locked = [];
   }
   confirmItemsIfReady(db, c, now);
 }
@@ -528,10 +542,11 @@ export function proposeSplit(db: Db, actor: UserId, chargeId: string, input: Spl
   announce(db, c, now);
 }
 
-export function acceptSplit(db: Db, actor: UserId, chargeId: string, now: number) {
+export function acceptSplit(db: Db, actor: UserId, chargeId: string, now: number, expectedProposalId: string) {
   const {c} = openCharge(db, actor, chargeId);
-  if (isDraft(c)) return sendDefaultSplit(db, actor, chargeId, now);
   const p = currentProposal(c);
+  if (expectedProposalId !== p.id) throw new StaleStateError('The split changed. Review the latest proposal before accepting.');
+  if (isDraft(c)) return sendDefaultSplit(db, actor, chargeId, now);
   if (!requiredApprovers(p).includes(actor)) fail('You have no share in this split, so your approval isn’t needed.');
   if (!p.acceptedBy.includes(actor)) p.acceptedBy.push(actor);
   if (!waitingOn(p).length) settle(db, c, now);

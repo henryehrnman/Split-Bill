@@ -44,12 +44,12 @@ const methods: Record<string, Method> = {
   scanReceipt: ({db, actor, t}, [chargeId]) => void d.scanReceipt(db, actor, chargeId, t),
   updateReceipt: ({db, actor}, [chargeId, input]) => d.updateReceipt(db, actor, chargeId, input),
   toggleClaim: ({db, actor}, [chargeId, itemId]) => d.toggleClaim(db, actor, chargeId, itemId),
-  setLocked: ({db, actor, t}, [chargeId, locked]) => d.setLocked(db, actor, chargeId, !!locked, t),
+  setLocked: ({db, actor, t}, [chargeId, locked, expectedReceiptKey]) => d.setLocked(db, actor, chargeId, !!locked, t, expectedReceiptKey),
   suggestItemEdit: ({db, actor, t}, [chargeId, itemId, targetId]) => d.suggestItemEdit(db, actor, chargeId, itemId, targetId, t),
   respondItemEdit: ({db, actor, t}, [chargeId, editId, accept]) => d.respondItemEdit(db, actor, chargeId, editId, !!accept, t),
   proposeSplit: ({db, actor, t}, [chargeId, input]) => d.proposeSplit(db, actor, chargeId, input, t),
   sendDefaultSplit: ({db, actor, t}, [chargeId]) => d.sendDefaultSplit(db, actor, chargeId, t),
-  acceptSplit: ({db, actor, t}, [chargeId]) => d.acceptSplit(db, actor, chargeId, t),
+  acceptSplit: ({db, actor, t}, [chargeId, expectedProposalId]) => d.acceptSplit(db, actor, chargeId, t, expectedProposalId),
   fileChargeback: ({db, actor, t}, [chargeId]) => d.fileChargeback(db, actor, chargeId, t),
   // Demo controls (DEMO_MODE only).
   reset: () => undefined, // handled in handle()
@@ -156,6 +156,7 @@ export async function handle(store: Store, authId: string | null, body: any, opt
       if (changed && !(await store.save({db, links}, expected))) continue; // lost the race: reload and replay
       return ok(READ_ONLY.has(method) && method === 'searchUsers' ? result : {db: actor ? viewFor(db, actor) : null, viewerId: actor});
     } catch (e) {
+      if (e instanceof d.StaleStateError) return fail(409, e.message, 'stale');
       if (e instanceof d.ApiError) return fail(400, e.message, 'rule');
       throw e;
     }
