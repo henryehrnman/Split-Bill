@@ -119,6 +119,51 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   assert.equal((await call(s, 'auth-cy', 'createGroup', [{name: 'x'.repeat(40_000), inviteIds: [], budget: 100, periodDays: 7}])).status, 413);
 }
 
+// Missing or nonboolean decisions must never decline an invite, authorize funding, or persist tick changes.
+{
+  const s = memory();
+  const annId = ((await call(s, 'auth-ann', 'createUser', [profile('Ann')])).body as any).viewerId;
+  const boId = ((await call(s, 'auth-bo', 'createUser', [profile('Bo')])).body as any).viewerId;
+  const cyId = ((await call(s, 'auth-cy', 'createUser', [profile('Cy')])).body as any).viewerId;
+  const created = (await call(s, 'auth-ann', 'createGroup', [{name: 'Explicit decisions', inviteIds: [boId, cyId], budget: 30000, periodDays: 7, initialContributionLimit: 15000}])).body as any;
+  const gid = created.db.groups[0].id;
+  const before = JSON.parse(JSON.stringify(s.state));
+  const saves = s.saves;
+  const later = {...opts, now: () => T0 + 40 * 86400000};
+  const decisions: {method: string; prefix: unknown[]; suffix?: unknown[]}[] = [
+    {method: 'respondInvite', prefix: [gid], suffix: [10000, 15000]},
+    {method: 'setAutoDeposit', prefix: [gid]},
+    {method: 'setFailTopUps', prefix: [gid]},
+    {method: 'respondBudget', prefix: ['budget-proposal']},
+    {method: 'setCardFrozen', prefix: [created.db.cards[0].id]},
+    {method: 'setLocked', prefix: ['receipt-charge'], suffix: ['receipt-revision']},
+    {method: 'respondItemEdit', prefix: ['receipt-charge', 'item-edit']},
+  ];
+  for (const {method, prefix, suffix = []} of decisions) {
+    // A truly omitted value and malformed JSON values are separate wire cases.
+    const invalidArgs = [prefix, ...[undefined, null, 'false', 'true', '', 0, 1, {}, []].map(value => [...prefix, value, ...suffix])];
+    for (const args of invalidArgs) {
+      const reply = await call(s, 'auth-bo', method, args, later);
+      assert.equal(reply.status, 400, `${method} must require an explicit boolean`);
+      assert.deepEqual(reply.body, {error: 'Choose either yes or no.', code: 'rule'});
+      assert.equal(s.saves, saves);
+      assert.deepEqual(s.state, before, 'invalid consent cannot persist membership, money movements, or unrelated time-based updates');
+    }
+  }
+
+  // Actual booleans preserve the legitimate accept/decline flow and its reviewed funding cap.
+  assert.equal((await call(s, 'auth-bo', 'respondInvite', [gid, true, 10000, 15000])).status, 200);
+  let group = s.state!.db.groups.find(value => value.id === gid)!;
+  assert.equal(group.members.find(member => member.userId === boId)!.status, 'joined');
+  assert.equal(group.activatedAt, null);
+  assert.deepEqual(s.state!.db.ledger.filter(entry => entry.groupId === gid), []);
+  assert.equal((await call(s, 'auth-cy', 'respondInvite', [gid, false])).status, 200);
+  group = s.state!.db.groups.find(value => value.id === gid)!;
+  assert.deepEqual(group.members.map(member => [member.userId, member.balance]), [[annId, 15000], [boId, 15000]]);
+  assert.equal(group.activatedAt, T0);
+  assert.equal(s.state!.db.ledger.filter(entry => entry.groupId === gid && entry.kind === 'deposit').length, 2);
+}
+
 // Optimistic version check: a lost race is replayed, a constant loser gets 503.
 {
   const s = memory();

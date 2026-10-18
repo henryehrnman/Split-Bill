@@ -190,12 +190,15 @@ export function defaultInput(g: Group): SplitInput {
   return {method: 'equal', participants: memberIds(g)};
 }
 
+// A chargeback changes review status, not the spend already debited at settlement.
+const hasSettled = (c: Charge) => c.status === 'settled' || (c.status === 'disputed' && c.settledAt !== undefined);
+
 export function spendSummary(db: Db, groupId: string, now: number, userId?: UserId) {
   const start = new Date(now);
   const monthStart = new Date(start.getFullYear(), start.getMonth(), 1).getTime();
   let month = 0, total = 0, count = 0;
   for (const c of db.charges) {
-    if (c.groupId !== groupId || c.status !== 'settled') continue;
+    if (c.groupId !== groupId || !hasSettled(c)) continue;
     const amount = userId ? currentProposal(c).shares[userId] ?? 0 : c.amount;
     if (userId && !amount) continue;
     total += amount;
@@ -207,7 +210,7 @@ export function spendSummary(db: Db, groupId: string, now: number, userId?: User
 
 export function periodSpend(db: Db, g: Group, userId: UserId) {
   return db.charges
-    .filter(c => c.groupId === g.id && c.status === 'settled' && (c.settledAt ?? 0) >= g.periodStart)
+    .filter(c => c.groupId === g.id && hasSettled(c) && (c.settledAt ?? 0) >= g.periodStart)
     .reduce((a, c) => a + (currentProposal(c).shares[userId] ?? 0), 0);
 }
 
@@ -640,12 +643,17 @@ export function fileChargeback(db: Db, actor: UserId, chargeId: string, now: num
   g.frozen = {reason: `chargeback on ${c.merchant} is under review.`, at: now};
 }
 
-// Demo-only stand-in for the dispute center: support applies the latest proposal and unfreezes.
+// Demo-only stand-in: support clears chargeback review or settles an unpaid dispute, then unfreezes.
 export function resolveDisputes(db: Db, groupId: string, now: number) {
   const g = groupById(db, groupId);
   if (!g.frozen) fail('This group isn’t frozen.');
   for (const c of db.charges) {
-    if (c.groupId !== groupId || c.status !== 'disputed' || c.settledAt !== undefined) continue;
+    if (c.groupId !== groupId || c.status !== 'disputed') continue;
+    if (c.settledAt !== undefined) {
+      c.status = 'settled';
+      c.dispute = {reason: 'Chargeback review resolved by support; original settlement retained.', at: now};
+      continue;
+    }
     const p = currentProposal(c);
     p.acceptedBy = requiredApprovers(p);
     settle(db, c, now);

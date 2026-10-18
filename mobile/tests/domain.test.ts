@@ -319,17 +319,84 @@ throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
   assert.equal(c.settledAt, 0);
   const balances = bal(g);
   const ledger = JSON.parse(JSON.stringify(db.ledger));
+  const proposal = JSON.parse(JSON.stringify(d.currentProposal(c)));
+  const assertSpend = () => {
+    assert.deepEqual(d.spendSummary(db, g.id, 0), {month: 1000, total: 1000, count: 1});
+    for (const userId of ['u_henry', 'u_maya']) {
+      assert.deepEqual(d.spendSummary(db, g.id, 0, userId), {month: 500, total: 500, count: 1});
+      assert.equal(d.periodSpend(db, g, userId), 500);
+    }
+    assert.equal(db.ledger.filter(e => e.groupId === g.id && e.kind === 'charge').reduce((sum, e) => sum - e.amount, 0), 1000);
+  };
+  assertSpend();
+  delete c.settledAt; // Old settled records still count by status even without the optional timestamp.
+  assertSpend();
+  c.settledAt = 0;
   d.fileChargeback(db, 'u_henry', c.id, 1);
+  assertSpend();
   assert.equal(d.reservedFunds(db, g.id), 0);
   assert.equal(d.availableFunds(db, g), 19000);
   throws(() => d.withdraw(db, 'u_henry', g.id, 100, 1), /frozen/);
   d.resolveDisputes(db, g.id, 2);
   assert.equal(g.frozen, null);
+  assert.equal(c.status, 'settled');
   assert.equal(c.settledAt, 0);
+  assert.equal(c.dispute!.at, 2);
+  assert.deepEqual(d.currentProposal(c), proposal);
   assert.deepEqual(bal(g), balances);
   assert.deepEqual(db.ledger, ledger);
+  assertSpend();
   d.withdraw(db, 'u_henry', g.id, 100, 3);
   assert.equal(d.memberOf(g, 'u_henry').balance, 9400);
+}
+
+// Support clears a completed chargeback and settles a deadline dispute without repeating old debits or recovery.
+{
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Mixed dispute resolution', inviteIds: ['u_maya'], budget: 20000, periodDays: 30}, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, 10000);
+  d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
+  const completed = d.purchase(db, 'u_henry', g.id, {merchant: 'Already paid', amount: 15000}, T0);
+  d.proposeSplit(db, 'u_henry', completed.id, {method: 'amount', amounts: {u_henry: 15000, u_maya: 0}}, T0);
+  assert.equal(completed.status, 'settled');
+  const proposal = JSON.parse(JSON.stringify(d.currentProposal(completed)));
+  const oldLedger = db.ledger.filter(e => e.chargeId === completed.id).map(e => ({...e}));
+  const oldRecovery = db.ledger.filter(e => e.groupId === g.id && e.kind === 'debt-recovery').map(e => ({...e}));
+  assert.deepEqual(oldRecovery.map(e => e.amount), [5000]);
+  const late = d.purchase(db, 'u_henry', g.id, {merchant: 'Still unagreed', amount: 6000}, T0 + 1);
+  d.sendDefaultSplit(db, 'u_henry', late.id, T0 + 1);
+  d.fileChargeback(db, 'u_maya', completed.id, T0 + 2);
+  const resolvedAt = T0 + d.SPLIT_DEADLINE + 2;
+  d.enforceDeadlines(db, resolvedAt);
+  assert.equal(late.status, 'disputed');
+  assert.equal(late.settledAt, undefined);
+  assert.equal(d.reservedFunds(db, g.id), 6000);
+  assert.deepEqual(d.spendSummary(db, g.id, resolvedAt), {month: 15000, total: 15000, count: 1});
+  assert.equal(d.periodSpend(db, g, 'u_henry'), 15000);
+  assert.equal(d.periodSpend(db, g, 'u_maya'), 0);
+
+  d.resolveDisputes(db, g.id, resolvedAt);
+  assert.equal(completed.status, 'settled');
+  assert.equal(completed.settledAt, T0);
+  assert.deepEqual(d.currentProposal(completed), proposal);
+  assert.deepEqual(db.ledger.filter(e => e.chargeId === completed.id), oldLedger);
+  const recoveries = db.ledger.filter(e => e.groupId === g.id && e.kind === 'debt-recovery');
+  assert.deepEqual(recoveries.filter(e => oldRecovery.some(old => old.id === e.id)), oldRecovery);
+  assert.deepEqual(recoveries.map(e => e.amount), [3000, 5000]);
+  assert.equal(late.status, 'settled');
+  assert.equal(late.settledAt, resolvedAt);
+  assert.deepEqual(d.waitingOn(d.currentProposal(late)), []);
+  assert.equal(db.ledger.filter(e => e.chargeId === late.id && e.kind === 'charge').length, 2);
+  assert.deepEqual(bal(g), [0, 7000]);
+  assert.equal(d.reservedFunds(db, g.id), 0);
+  assert.equal(g.frozen, null);
+  assert.deepEqual(d.spendSummary(db, g.id, resolvedAt), {month: 21000, total: 21000, count: 2});
+  assert.equal(d.periodSpend(db, g, 'u_henry'), 18000);
+  assert.equal(d.periodSpend(db, g, 'u_maya'), 3000);
+  assert.equal(db.ledger.filter(e => e.groupId === g.id && e.kind === 'charge').reduce((sum, e) => sum - e.amount, 0), 21000);
+  const resolved = JSON.parse(JSON.stringify(db));
+  throws(() => d.resolveDisputes(db, g.id, resolvedAt + 1), /isn’t frozen/);
+  assert.deepEqual(db, resolved, 'repeating resolution cannot debit or recover debt twice');
 }
 
 // Acceptance belongs to the reviewed proposal, even when another member replaces it before the tap arrives.
@@ -482,6 +549,35 @@ throws(() => d.withdraw(db, 'u_henry', g.id, 100, t), /frozen/);
   assert.equal(d.standing(g, 'u_maya'), 'on-track');
   assert.equal(d.spendLimit(db, g.id, 'u_maya'), 5000);
   d.purchase(db, 'u_maya', g.id, {merchant: 'Repaid', amount: 1}, now);
+}
+
+// The budget sets refill targets; surplus pooled funds remain spendable, including after a budget cut.
+for (const reduceBudget of [false, true]) {
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Surplus spending', inviteIds: ['u_maya'], budget: 30000, periodDays: 1}, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, 15000);
+  for (const id of ['u_henry', 'u_maya']) d.addToWallet(db, id, d.cardFor(db, g.id, id)!.id, 'Apple Wallet');
+  d.deposit(db, 'u_henry', g.id, 20000, T0);
+  let now = T0;
+  if (reduceBudget) {
+    d.proposeBudget(db, 'u_henry', g.id, 10000, T0);
+    d.respondBudget(db, 'u_maya', d.openBudgetProposal(db, g.id)!.id, true);
+    now += d.DAY;
+    d.rollPeriods(db, now);
+    assert.equal(g.periodBudget, 10000);
+    assert.deepEqual(bal(g), [35000, 15000], 'a lower refill target preserves surplus balances');
+  }
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 50000);
+  d.purchase(db, 'u_maya', g.id, {merchant: 'Larger than the budget', amount: 40000}, now);
+  assert.equal(d.reservedFunds(db, g.id), 40000);
+  assert.equal(d.spendLimit(db, g.id, 'u_henry'), 10000);
+  const before = JSON.parse(JSON.stringify(db));
+  throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'Beyond the remainder', amount: 10001}, now), /only has \$100\.00/);
+  assert.deepEqual(db, before);
+  d.purchase(db, 'u_henry', g.id, {merchant: 'Remaining funds', amount: 10000}, now);
+  assert.equal(d.openCharges(db, g.id).length, 2);
+  assert.equal(d.reservedFunds(db, g.id), 50000);
+  assert.equal(d.availableFunds(db, g), 0);
 }
 
 // Joining still requires the current reviewed estimate, even though collection waits for activation.
