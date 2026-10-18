@@ -18,6 +18,7 @@ Implements `launch.txt` 8.ii for the server track: one `app_state` row, one `rpc
 - Errors: 503 `scan_off` when neither key is set, 502 `scan_failed` when the model call fails, 400 `bad_photo` for anything that isn't a photo, 400 `rule` if the caller couldn't scan that charge anyway.
 - Without a photo, the sample scanner still runs (demo merchants get exact receipts, others get one line).
 - Free Gemini keys come from [Google AI Studio](https://aistudio.google.com). The free tier has quotas, and Google's unpaid terms restrict sensitive data, so demo photos should be synthetic or redacted receipts. Gemini's documented image formats are JPEG, PNG, and WebP.
+- Verified October 18, 2026 on the deployed function: `GEMINI_API_KEY` is set, the default model `gemini-3.5-flash-lite` read a synthetic receipt, and the items, tax, and tip matched the charge and became the claim board. A hosted browser upload of a synthetic receipt matched the charge the same way.
 
 ## Realtime
 Differs from launch.txt 8.ii.e: subscribe to `postgres_changes` on **`app_state_ping`**, not `app_state`, then call rpc `fetch`. This keeps other groups' data off the realtime channel.
