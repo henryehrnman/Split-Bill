@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="story.css">
   <script defer src="story.js"></script>
 </head>
-<body data-scene="intro" data-tone="navy" data-mode="scripted" data-copy-side="left">
+<body data-scene="problem" data-tone="navy" data-mode="scripted" data-copy-side="left">
   <a class="skip-link" href="#story-track">Skip to story chapters</a>
   <div id="story-progress" aria-hidden="true"></div>
 
@@ -76,6 +76,23 @@
       </aside>
 
       <aside id="deck-prop" aria-hidden="true" data-panel="">
+        <div class="deck-panel deck-problem">
+          <div class="iou-bill" data-reveal-at=".04"><span class="iou-merchant">Din Tai Fung · Friday</span><strong>$154.20</strong><span class="iou-paid">paid by Henry, on his own card</span></div>
+          <div class="iou-thread">
+            <div class="iou-msg iou-out" data-reveal-at=".14"><b>Henry</b> requested <strong>$38.55</strong> from Connor, Saahil and Nathan<small>Friday, 10:42 PM</small></div>
+            <div class="iou-msg iou-in" data-reveal-at=".22"><b>Connor</b> paid $38.55<small>Saturday</small></div>
+            <div class="iou-msg iou-in iou-late" data-reveal-at=".3"><b>Saahil</b> “I’ll get you next week, I have to move money first”<small>Tuesday</small></div>
+            <div class="iou-msg iou-in iou-ghost" data-reveal-at=".38"><b>Nathan</b> seen<small>9 days ago</small></div>
+          </div>
+          <div class="iou-apps" data-reveal-at=".52">
+            <div class="iou-apps-head"><span>Venmo · Zelle · Cash App · Splitwise</span><em>move money after the fact</em></div>
+            <ul>
+              <li><i>✗</i>Nobody pays the bill together</li>
+              <li><i>✗</i>No shared budget the group agreed to</li>
+              <li><i>✗</i>The split is one person’s math, not a decision</li>
+            </ul>
+          </div>
+        </div>
         <div class="deck-panel deck-market">
           <div class="deck-rings">
             <div class="deck-ring ring-tam" data-reveal-at=".08"><span class="ring-label"><b>TAM</b> US mobile P2P flow, 2025</span><strong>$2.0T</strong></div>

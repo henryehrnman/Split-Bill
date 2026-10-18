@@ -1,6 +1,6 @@
 # chipin video demo
 
-The scroll-driven site used for the chipin video, now also the pitch deck: the 12 product scenes, then four pitch chapters (market, competition, business model, projections) before the close. The pitch figures and their sources are in `docs/PITCH.md`. This is a self-contained copy of `story-preview` at `e5634cb`; its phone prototype originally came from `16a119f`. All runtime files and image assets live inside this directory, so it can be copied or cherry-picked on its own.
+The scroll-driven site used for the chipin video, now also the pitch deck: a problem chapter, the 12 product scenes, then four pitch chapters (market, competition, business model, projections) before the close. The pitch figures and their sources are in `docs/PITCH.md`. This is a self-contained copy of `story-preview` at `e5634cb`; its phone prototype originally came from `16a119f`. All runtime files and image assets live inside this directory, so it can be copied or cherry-picked on its own.
 
 Run from the repository root:
 
@@ -10,11 +10,11 @@ python3 -m http.server 4174 --bind 127.0.0.1 --directory demo
 
 Open **http://localhost:4174**. If that port is already in use, choose another port. You can also serve the repository root and open `/demo/`; all runtime paths are relative. Use an HTTP server rather than opening `index.html` as a file so parent/phone messaging has a shared origin.
 
-For pitch-deck stills, use the right arrow to step cue by cue, or the chapter dots to choose a scene. The `window.chipinStoryTimeline.seekTime(seconds)` console helper can stop at an exact narration cue, such as `60` for group statistics or `112` for the closing Home. The full scene and cue list is below.
+For pitch-deck stills, use the right arrow to step cue by cue, or the chapter dots to choose a scene. The `window.chipinStoryTimeline.seekTime(seconds)` console helper can stop at an exact narration cue, such as `70` for group statistics or `122` for the closing Home. The full scene and cue list is below.
 
 ## Controls
 
-- **Space** starts/pause-resumes the 115-second timeline from your current position. The clock follows elapsed time rather than frame counts; the product story runs to 1:05, the pitch chapters run 1:05 to 1:52, and the closing scene starts at 1:52 and holds through 1:55. At the end, Space starts again from zero. Playback labels, timestamps, replay, chapter count, and demo/explore controls are intentionally absent from the presentation.
+- **Space** starts/pause-resumes the 125-second timeline from your current position. The clock follows elapsed time rather than frame counts; the problem chapter runs 0:00 to 0:10, the product story (the recorded video narration, offset by 10 seconds) runs 0:10 to 1:15, the pitch chapters run 1:15 to 2:02, and the closing scene starts at 2:02 and holds through 2:05. At the end, Space starts again from zero. Playback labels, timestamps, replay, chapter count, and demo/explore controls are intentionally absent from the presentation.
 - Playback controls the visuals only; no narration audio file is included. Start your narration alongside the story. `00:08 36` and `00:1533` are interpreted as **8.36 seconds** and **15.33 seconds**.
 - Scroll in either direction to play or rewind the story. Phone state is rebuilt from a canonical snapshot, so rewinding cannot duplicate purchases or contributions.
 - The page scrollbar is hidden; wheel, trackpad, touch, and keyboard scrolling remain available.
@@ -28,6 +28,7 @@ The supplied narration is preserved in the accessible chapter transcript in `sto
 
 | Scene | Visual |
 | --- | --- |
+| The problem | The phone is off-stage. Henry fronts $154.20 at Din Tai Fung; his Venmo-style requests come back paid, late and ignored; then the list of what payment apps do not do. |
 | Meet chipin | The phone arrives beside the wordmark. |
 | One shared fund | Apartment, ski trip, and shared groups. |
 | Agree on a budget | $500 every month, four people, $125 each. |
@@ -49,35 +50,37 @@ The supplied narration is preserved in the accessible chapter transcript in `sto
 
 | Time | Visual cue |
 | --- | --- |
-| 0:00 | Meet chipin |
-| 0:02 | Shared groups |
-| 0:06 | Cards fan out beside the group view |
-| 0:08.36 | Set the $500 monthly budget |
-| 0:14 | Group invitation |
-| 0:15.33 | Review the contribution before agreeing |
-| 0:17 | Four $125 contributions fund the group |
-| 0:19 | Every member has a card |
-| 0:22 | Ready to pay |
-| 0:27 | Purchase confirmed; available funds decrease |
-| 0:29 | Buyer proposes the split |
-| 0:31 | Equal shares |
-| 0:35 | Custom amounts |
-| 0:40 | Meet Henry |
-| 0:45 | Henry's dinner payment confirmed |
-| 0:50 | Receipt photo |
-| 0:52 | Gemini scan (item review at 0:54) |
-| 0:55 | Claim items (selection at 0:56.5; grouped results at 0:58) |
-| 1:00 | Charges, balances, and next period |
-| 1:05 | The market: $2 trillion moves between friends |
-| 1:11 | Our wedge: 25M people, $60B of shared spend |
-| 1:16 | The competition: everyone else settles up after |
-| 1:22 | Only chipin does all of it |
-| 1:28 | How we make money: deposits earn yield |
-| 1:34 | Spending earns interchange |
-| 1:40 | Projections: three-year model |
-| 1:46 | $12.7M revenue in year three |
-| 1:52 | Closing scene |
-| 1:55 | Playback stops |
+| 0:00 | The problem: someone always fronts the bill |
+| 0:05 | Payment apps only settle up after |
+| 0:10 | Meet chipin |
+| 0:12 | Shared groups |
+| 0:16 | Cards fan out beside the group view |
+| 0:18.36 | Set the $500 monthly budget |
+| 0:24 | Group invitation |
+| 0:25.33 | Review the contribution before agreeing |
+| 0:27 | Four $125 contributions fund the group |
+| 0:29 | Every member has a card |
+| 0:32 | Ready to pay |
+| 0:37 | Purchase confirmed; available funds decrease |
+| 0:39 | Buyer proposes the split |
+| 0:41 | Equal shares |
+| 0:45 | Custom amounts |
+| 0:50 | Meet Henry |
+| 0:55 | Henry's dinner payment confirmed |
+| 1:00 | Receipt photo |
+| 1:02 | Gemini scan (item review at 1:04) |
+| 1:05 | Claim items (selection at 1:06.5; grouped results at 1:08) |
+| 1:10 | Charges, balances, and next period |
+| 1:15 | The market: $2 trillion moves between friends |
+| 1:21 | Our wedge: 25M people, $60B of shared spend |
+| 1:26 | The competition: everyone else settles up after |
+| 1:32 | Only chipin does all of it |
+| 1:38 | How we make money: deposits earn yield |
+| 1:44 | Spending earns interchange |
+| 1:50 | Projections: three-year model |
+| 1:56 | $12.7M revenue in year three |
+| 2:02 | Closing scene |
+| 2:05 | Playback stops |
 
 The piecewise time map preserves manual scrolling and aligns phone actions to narration independently of chapter height. `window.chipinStoryTimeline` exposes `play()`, `pause()`, `seekTime(seconds)`, `cues`, and `getState()` for rehearsing and checking cue positions.
 

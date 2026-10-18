@@ -2,6 +2,7 @@
 (() => {
   'use strict';
   const scenes = [
+    {id:'problem',label:'The problem',title:'Someone always<br><span class="accent">fronts the bill.</span>',body:'Dinner, groceries, the Airbnb. One person pays, then spends a week chasing three friends for their share.',script:'Every group has the same problem. Someone fronts the bill, and then spends the next week chasing everyone else for their share.',word:'IOU',length:200,side:'left',deck:'problem',camera:{side:'right',y:0,scale:1,rotate:0},phases:[{at:0,body:'Dinner, groceries, the Airbnb. One person pays, then spends a week chasing three friends for their share.'},{at:.5,body:'Venmo, Zelle and Cash App move money after the fact. None of them pays the bill together, holds a shared budget, or lets the group decide the split.'}]},
     {id:'intro',label:'Meet chipin',title:'Meet <span class="accent">chipin.</span>',body:'A little less settling up. A lot more living.',script:'Narrator: Meet chipin.',word:'together',length:125,side:'left',camera:{side:'right',y:.035,scale:.94,rotate:8}},
     {id:'groups',label:'One shared fund',title:'Your people.<br>One <span class="accent">shared fund.</span>',body:'The whole apartment. The ski trip. Whatever brings you together.',script:'One shared fund for the whole apartment, ski trip, or whatever other group you’re a part of, and a card for every member.',word:'together',length:150,side:'left',camera:{side:'right',y:0,scale:1,rotate:-4}},
     {id:'budget',label:'Agree on a budget',title:'Make a plan.<br><span class="accent">Together.</span>',body:'$500 every month. Four people. A shared budget everyone agrees to.',script:'Here’s how it works. The group agrees on a shared budget, say $500 every month.',word:'$500',length:155,side:'right',camera:{side:'left',y:.015,scale:1.06,rotate:3}},
@@ -22,7 +23,12 @@
   ];
   // Seconds are narration time, not a percentage of the page. Extra motion
   // stops let the phone arrive, hold, then perform an action on the spoken cue.
+  // The product narration (the recorded video) starts after a lead-in problem chapter; its cue times below are
+  // written in video time and shifted by `lead` so the recording still lines up.
+  const lead=10;
   const cues = [
+    {time:0-lead,scene:'problem',progress:0,label:'Someone always fronts the bill'},
+    {time:5-lead,scene:'problem',progress:.5,label:'Payment apps only settle up after'},
     {time:0,scene:'intro',progress:0,label:'Meet chipin'},
     {time:2,scene:'groups',progress:0,label:'One shared fund'},
     {time:6,scene:'groups',progress:.6,label:'A card for every member'},
@@ -52,8 +58,9 @@
     {time:106,scene:'projections',progress:.5,label:'$12.7M revenue in year three'},
     {time:112,scene:'outro',progress:0,label:'Just chipin'}
   ];
-  const duration=115;
+  const duration=115+lead;
   const motionStops=[
+    [1.4-lead,'problem',.3],[8.6-lead,'problem',.92],
     [1.6,'intro',.75],[3,'groups',.3],[7.9,'groups',.88],
     [9.4,'budget',.34],[12,'budget',.5],[18.6,'invite',.88],
     [20,'cards',.34],[21.7,'cards',.88],[23,'pay',.34],[28.7,'pay',.88],
@@ -67,13 +74,15 @@
     [101.5,'projections',.34],[111,'projections',.92],
     [113,'outro',.34],[duration,'outro',1]
   ];
-  const timeline=[...cues,...motionStops.map(([time,scene,progress])=>({time,scene,progress}))]
+  cues.forEach(cue=>{cue.time+=lead;});
+  const timeline=[...cues,...motionStops.map(([time,scene,progress])=>({time:time+lead,scene,progress}))]
     .map(stop=>({...stop,position:scenes.findIndex(scene=>scene.id===stop.scene)+stop.progress}))
     .sort((a,b)=>a.time-b.time);
-  scenes[1].phases=[{at:0,body:scenes[1].body},{at:.6,body:'One shared fund, with a card for every member.'}];
-  scenes[3].phases=[{at:0,body:'Invite Henry, Saahil, and Nathan to the apartment fund.'},{at:1/3,body:'Everyone reviews the $500 monthly budget and their $125 contribution before agreeing.'},{at:2/3,body:'$125 each. Four approved contributions. $500 ready to spend.'}];
-  scenes[6].phases=[{at:0,body:'The purchase is already paid. The buyer proposes how to split it.'},{at:.24,body:'An even split by default: $16 for each of the four members.'},{at:.5,body:scenes[6].phases[1].body}];
-  scenes[7].phases[0].body='There’s an easier way to work out dinner. Meet Henry.';
+  const byId=id=>scenes.find(scene=>scene.id===id),groupsScene=byId('groups'),inviteScene=byId('invite'),splitScene=byId('split');
+  groupsScene.phases=[{at:0,body:groupsScene.body},{at:.6,body:'One shared fund, with a card for every member.'}];
+  inviteScene.phases=[{at:0,body:'Invite Henry, Saahil, and Nathan to the apartment fund.'},{at:1/3,body:'Everyone reviews the $500 monthly budget and their $125 contribution before agreeing.'},{at:2/3,body:'$125 each. Four approved contributions. $500 ready to spend.'}];
+  splitScene.phases=[{at:0,body:'The purchase is already paid. The buyer proposes how to split it.'},{at:.24,body:'An even split by default: $16 for each of the four members.'},{at:.5,body:splitScene.phases[1].body}];
+  byId('henry').phases[0].body='There’s an easier way to work out dinner. Meet Henry.';
   const $ = id => document.getElementById(id);
   const stage=$('story-stage'),rig=$('phone-rig'),phone=$('story-phone'),track=$('story-track');
   const copy=$('scene-copy'),title=$('scene-title'),body=$('scene-body'),kicker=$('scene-kicker');

@@ -176,7 +176,7 @@ body[data-tone="blue"] .scene-kicker:before{background:#dce7ff}
 #deck-prop{position:absolute;z-index:6;left:72%;top:50%;width:min(560px,46vw);margin-left:min(-280px,-23vw);transform:translate3d(0,0,0);opacity:0;pointer-events:none;will-change:transform,opacity;--deck-enter:0;--deck-reveal:0;--deck-second:0}
 #deck-prop>.deck-panel{display:none;position:relative;top:0;transform:translateY(-50%)}
 #deck-prop[data-panel="market"] .deck-market,#deck-prop[data-panel="model"] .deck-model{display:grid}
-#deck-prop[data-panel="competition"] .deck-competition,#deck-prop[data-panel="projections"] .deck-projections{display:block}
+#deck-prop[data-panel="competition"] .deck-competition,#deck-prop[data-panel="projections"] .deck-projections,#deck-prop[data-panel="problem"] .deck-problem{display:block}
 #deck-prop [data-reveal-at]{opacity:0;transform:translateY(14px);transition:opacity .55s cubic-bezier(.2,.8,.2,1),transform .55s cubic-bezier(.2,.8,.2,1)}
 #deck-prop [data-reveal-at].shown{opacity:1;transform:none}
 .deck-stats{display:grid;grid-template-columns:1fr 1fr;gap:14px 22px}
@@ -279,4 +279,30 @@ body[data-tone="blue"] #deck-prop{opacity:0!important}
 @media(max-height:520px){#deck-prop{scale:.62}}
 @media(prefers-reduced-motion:reduce){
   #deck-prop [data-reveal-at],.deck-ring,.chart-bar .bar-stack,.chart-bar strong{transition:none}
+}
+
+/* Problem: one friend fronts dinner, then the requests go out and come back late, or not at all. */
+.deck-problem{max-width:440px;margin-left:auto}
+.iou-bill{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 16px;padding:16px 18px;border:1px solid #b3c7ef30;border-radius:15px;background:#18243d;box-shadow:0 24px 44px #03081b55}
+.iou-merchant{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#aab9d5;font-weight:600}
+.iou-bill strong{grid-row:1/3;font-size:clamp(24px,2.2vw,32px);font-weight:700;letter-spacing:-.045em;color:#eef3ff;font-variant-numeric:tabular-nums}
+.iou-paid{font-size:11px;color:#a6b0c2}
+.iou-thread{display:flex;flex-direction:column;gap:9px;margin:16px 0 0;padding:0 4px}
+.iou-msg{max-width:82%;padding:10px 13px;border-radius:14px;font-size:11.5px;line-height:1.45;color:#dfe6f5;background:#1f2c48;border:1px solid #b3c7ef22}
+.iou-msg b{color:#eef3ff;font-weight:600}.iou-msg strong{color:#c3d3ff;font-weight:700}
+.iou-msg small{display:block;margin-top:4px;font-size:9.5px;color:#8d99b3}
+.iou-out{align-self:flex-end;background:#2459e8;border-color:#5f86ff;color:#f1f5ff}.iou-out b,.iou-out strong{color:#fff}.iou-out small{color:#c3d3ff}
+.iou-in{align-self:flex-start;border-bottom-left-radius:5px}
+.iou-late{border-color:#c9b36a55}.iou-late small{color:#c9b36a}
+.iou-ghost{opacity:.7!important}.iou-ghost b{color:#a6b0c2}.iou-ghost small{color:#e07a7a}
+.iou-apps{margin-top:16px;padding:14px 16px;border-radius:15px;border:1px dashed #b3c7ef3a;background:#0c1322a8}
+.iou-apps-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:11px;font-weight:600;color:#eef3ff}
+.iou-apps-head em{font-style:normal;font-weight:500;color:#a6b0c2}
+.iou-apps ul{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px;font-size:11px;color:#dfe6f5}
+.iou-apps li{display:flex;align-items:center;gap:8px}.iou-apps i{font-style:normal;color:#e07a7a;font-weight:700}
+@media(max-width:760px){
+  .deck-problem{max-width:none}
+  .iou-thread{gap:6px;margin-top:10px}.iou-msg{font-size:10.5px;padding:8px 11px}.iou-msg small{display:none}
+  .iou-apps{margin-top:10px;padding:10px 12px}.iou-apps ul{gap:4px;font-size:10px}
+  .iou-bill{padding:12px 14px}
 }
