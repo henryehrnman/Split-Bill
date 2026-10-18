@@ -26,7 +26,7 @@ Then a boring check runs. If the items, tax, and tip do not add up to the card c
 
 When the numbers match, the items become a claim board. Each person claims what they had. Someone can suggest that another person shared an item, and only that person can accept the suggestion. Everyone locks their own selection. Tax and tip follow the items. The split settles to the cent, on both phones, without a manual refresh.
 
-We verified this on the deployed function with a synthetic receipt. Demo photos should stay synthetic or redacted. A free Gemini key has quotas, and the unpaid terms are the wrong place for someone else's dinner receipt.
+We verified this on the deployed function with a synthetic receipt. A later live check on that server passed 18 of 18 steps: signup, invite, a purchase, the photo scan, claims, locks, and settlement. Demo photos should stay synthetic or redacted. A free Gemini key has quotas, and the unpaid terms are the wrong place for someone else's dinner receipt.
 
 Claude remains a fallback when only that key is set. With neither key, a photo scan returns `scan_off` and the sample receipt is still there for the demo.
 
@@ -35,6 +35,10 @@ Claude remains a fallback when only that key is set. With neither key, a photo s
 A stale screen is a bad place to agree. Accepting an invite sends the deposit amount that was on screen. Accepting a split sends the proposal that was on screen. If the group changed either one, the server rejects the call and the app asks the person to look again. Locking a receipt works the same way: a claim change or an accepted edit unlocks everyone.
 
 Search hides other people's contact details. Opening a group you were invited to does not reveal an email or phone the search results had already masked.
+
+## Three people and their agents, one night
+
+Three of us built this with our own coding agents, on one shared board. Before an edit, an agent claimed the exact files. After the push, it handed the commit to one person to integrate. If two agents wanted the same file, the claim was refused and we waited. That is how a consent bug, a privacy leak, and the switch from a paid vision model to free Gemini all landed overnight without anyone overwriting the others.
 
 ## What we would tell another team
 
