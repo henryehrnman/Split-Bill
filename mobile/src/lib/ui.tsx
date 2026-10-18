@@ -1,5 +1,5 @@
 import React from 'react';
-import {View, Text, Pressable, ScrollView, StyleSheet, TextInput, StyleProp, TextStyle, TextProps, ViewStyle} from 'react-native';
+import {View, Text, Pressable, ScrollView, StyleSheet, TextInput, ActivityIndicator, StyleProp, TextStyle, TextProps, ViewStyle} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {router} from 'expo-router';
 import Feather from '@expo/vector-icons/Feather';
@@ -94,10 +94,11 @@ function NoticeBanner() {
 }
 
 function ViewerSwitch() {
-  const {db, viewer, setViewerId} = useStore();
+  const {db, viewer, setViewerId, demoMode, busy} = useStore();
+  if (!demoMode) return null;
   const next = db.users[(db.users.findIndex(u => u.id === viewer.id) + 1) % db.users.length];
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`Viewing as ${viewer.name}. Switch to ${next.name}`} onPress={() => setViewerId(next.id)} style={s.demo}>
+    <Pressable disabled={busy} accessibilityRole="button" accessibilityLabel={`Viewing as ${viewer.name}. Switch to ${next.name}`} onPress={() => setViewerId(next.id)} style={s.demo}>
       <Icon name="repeat" size={11} color={C.warn} />
       <T style={{fontSize: 11, color: C.warn, fontWeight: '500'}}>Demo · {viewer.name}</T>
     </Pressable>
@@ -105,7 +106,7 @@ function ViewerSwitch() {
 }
 
 export function Page({title, subtitle, children, footer, back = false}: {title: string; subtitle?: string; children: React.ReactNode; footer?: React.ReactNode; back?: boolean}) {
-  const {viewer} = useStore();
+  const {viewer, busy, refreshing, demoMode, live, refresh} = useStore();
   return (
     <SafeAreaView edges={['top']} style={{flex: 1, backgroundColor: 'white'}}>
       <View style={s.top}>
@@ -134,6 +135,8 @@ export function Page({title, subtitle, children, footer, back = false}: {title: 
         <T style={s.title}>{title}</T>
         {subtitle && <T style={s.sub}>{subtitle}</T>}
         <NoticeBanner />
+        {(busy || refreshing) && <View accessibilityLiveRegion="polite" style={[s.row, {justifyContent: 'flex-start', marginBottom: 12}]}><ActivityIndicator size="small" color={C.blue} /><T style={s.small}>{busy ? 'Saving…' : 'Updating…'}</T></View>}
+        {!demoMode && !live && <Pressable accessibilityRole="button" onPress={refresh} style={{paddingVertical: 10}}><T style={s.caption}>Live updates reconnecting · Tap to refresh</T></Pressable>}
         {children}
       </ScrollView>
       {footer && <View style={s.footer}>{footer}</View>}

@@ -3,6 +3,9 @@ import * as d from './domain';
 import type {Db, DefaultSplit, Wallet} from './domain';
 import type {SplitInput, UserId} from './split';
 import {seed} from './seed';
+import {accessToken, backendIdentity} from './auth';
+import {apiUrl, publishableKey} from './config';
+import {createRpcClient, RpcError} from './http';
 
 // Fake backend: same call shape a real HTTP client will have later, with every rule
 // enforced in domain.ts and data persisted on this device.
@@ -59,7 +62,7 @@ function mutate(fn: (x: Db, t: number) => void): Promise<Db> {
   });
 }
 
-export const api = {
+const fakeApi = {
   fetch: () => mutate(() => {}),
   searchUsers: async (actor: UserId, query: string, exclude: UserId[]) => d.searchUsers(await load(), query, [actor, ...exclude]),
   createGroup: (actor: UserId, input: {name: string; inviteIds: UserId[]; budget: number; periodDays: number}) => mutate((x, t) => void d.createGroup(x, actor, input, t)),
@@ -99,3 +102,50 @@ export const api = {
       return db;
     }),
 };
+
+const rpc = createRpcClient({url: apiUrl, publishableKey, getToken: accessToken});
+let remoteQueue: Promise<unknown> = Promise.resolve();
+let remoteViewer: {identity: ReturnType<typeof backendIdentity>; id: UserId} | null = null;
+export const remoteViewerId = () => remoteViewer?.identity === backendIdentity() ? remoteViewer.id : null;
+
+function remoteState(method: string, args: unknown[] = []): Promise<Db> {
+  const identity = backendIdentity();
+  const check = () => {
+    if (identity.demoMode || !identity.userId || backendIdentity() !== identity) throw new RpcError('Your session changed. Please sign in again.', 401, 'session_changed');
+  };
+  const result = remoteQueue.then(async () => {
+    check();
+    const state = await rpc.state(method, args);
+    check();
+    remoteViewer = {identity, id: state.viewerId};
+    return state.db;
+  });
+  remoteQueue = result.catch(() => {});
+  return result;
+}
+
+export const createProfile = (profile: {name: string; handle: string; email: string; phone: string}) => remoteState('createUser', [profile]);
+
+// Preserve screen call signatures, but never send the caller-supplied actor over HTTP.
+// Demo state remains local; switching mode never copies it into a real account.
+const demoOnly = new Set(['reset', 'skipAhead', 'resolveDisputes', 'setFailTopUps']);
+export const api: typeof fakeApi = new Proxy(fakeApi, {
+  get(target, property: keyof typeof fakeApi) {
+    const local = target[property];
+    if (typeof local !== 'function') return local;
+    return (...args: unknown[]) => {
+      if (backendIdentity().demoMode) return (local as (...values: unknown[]) => unknown)(...args);
+      if (demoOnly.has(property)) return Promise.reject(new RpcError('This control is available only in demo mode.', 403, 'demo_only'));
+      if (property !== 'fetch' && args[0] !== remoteViewerId()) return Promise.reject(new RpcError('Your account changed. Refresh and try again.', 401, 'session_changed'));
+      if (property === 'searchUsers') {
+        const identity = backendIdentity();
+        return rpc.request<d.User[]>('searchUsers', args.slice(1)).then(users => {
+          if (identity !== backendIdentity()) throw new RpcError('Your session changed.', 401, 'session_changed');
+          if (!Array.isArray(users) || users.some(u => !u || typeof u.id !== 'string' || typeof u.name !== 'string' || typeof u.initials !== 'string' || !Number.isFinite(u.tone))) throw new RpcError('The server returned an invalid search result.');
+          return users;
+        });
+      }
+      return remoteState(property, property === 'fetch' ? [] : args.slice(1));
+    };
+  },
+});

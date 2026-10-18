@@ -2,7 +2,7 @@
 
 A group-spending app built on trust. Members of a group (roommates, partners, friends, coworkers) each deposit an equal share into a group fund. Every member gets their own virtual card on that fund, adds it to Apple Pay or Google Pay, and can pay for group purchases. After each purchase the group agrees on how to split it, and each person's balance is adjusted.
 
-**Stage:** hackathon MVP (submission 10:00am October 18, 2026). Today everything runs in the app against a **fake backend**: no real accounts, cards, deposits, or payments exist yet. The plan for the hackathon is to put the same rules on a real server with real sign-in, so a group can use one shared group live from their own iPhones, with money still simulated ([`launch.txt`](launch.txt) section 8).
+**Stage:** hackathon MVP (submission 10:00am October 18, 2026). The app supports a local demo and authenticated shared accounts backed by the Supabase RPC server. Configure the server and public client settings to use shared accounts; deployment and a live two-phone check are still required. Deposits, cards, and payments remain simulated. The outline is in [`launch.txt`](launch.txt) section 8; client setup is in [`mobile/README.md`](mobile/README.md#shared-accounts-and-live-updates).
 
 The product rules come from [`schema.txt`](schema.txt) (product schema by Connor and Saahil). This README describes what is built against it; [`backend.txt`](backend.txt) and [`launch.txt`](launch.txt) describe what comes next.
 
@@ -56,7 +56,7 @@ Ideas for generative AI, and the ones we decided against, are listed in section 
 
 ## Current state
 
-Built in the app (simulated by the fake backend):
+Built in the local demo and shared server-backed app (all money simulated):
 
 - Group creation with a budget and period, invite search by username/email/phone, accept or decline invites with the group details shown.
 - Per-member cards, Apple/Google Wallet setup (simulated), card freeze.
@@ -86,10 +86,10 @@ All business rules live in plain TypeScript so they can move to a real server un
 | `mobile/src/lib/money.ts` | Integer-cent helpers: formatting, parsing, exact allocation |
 | `mobile/src/lib/split.ts` | Split math for any number of members (equal, percent, amount, items + tax/tip) |
 | `mobile/src/lib/domain.ts` | Backend rules: groups, invites, budget periods, deposits, cards, purchases, claim board, proposals, settlement, debt recovery, disputes |
-| `mobile/src/lib/api.ts` | **Fake backend**: async API with simulated latency, persists to device storage. Replace with HTTP calls later |
+| `mobile/src/lib/api.ts` | Async API facade: local persisted demo or authenticated HTTP RPC, selected by session mode |
 | `mobile/src/lib/fakeOcr.ts` | Stand-in for receipt OCR |
 | `mobile/src/lib/seed.ts` | Demo users and history, built through the same rules |
-| `mobile/src/lib/store.tsx` | Client session: current demo user, selected group, API calls, notices |
+| `mobile/src/lib/store.tsx` | Scoped account/demo state, selected group, API calls, Realtime refresh, notices |
 | `mobile/src/lib/ui.tsx` | Shared UI components and styles |
 
 Swapping in a real backend means implementing the same `api` methods over HTTP, with `domain.ts` running server-side and the viewer coming from authentication instead of the demo switcher. Tonight's version ([`launch.txt`](launch.txt) 8.ii): one Supabase table holding the same data object the fake backend keeps today, one Supabase Edge Function that checks the caller's sign-in, runs the same `domain.ts` function and returns only the caller's groups, Supabase Realtime for live updates, and an HTTP `api.ts` switched on by `EXPO_PUBLIC_API_URL` (the fake backend stays for offline demos). The full design with normalized tables is in [`backend.txt`](backend.txt).
@@ -98,8 +98,8 @@ Swapping in a real backend means implementing the same `api` methods over HTTP, 
 
 For the hackathon (by 10:00am October 18; details in [`launch.txt`](launch.txt) section 8):
 
-1. **Server (Henry):** Supabase table and Edge Function running `domain.ts`, sign-in to user mapping, responses filtered to the caller's groups, deploy.
-2. **App (Connor):** sign-in and sign-up screen, HTTP `api.ts`, Realtime updates, demo-mode toggle for the user switcher, loading and error states.
+1. **Server (Henry):** implemented Supabase table and RPC Edge Function running `domain.ts`, sign-in to user mapping and filtered responses. Deploy using [`supabase/README.md`](supabase/README.md).
+2. **App (Connor):** implemented sign-in/sign-up and profile completion, authenticated HTTP `api.ts`, version-ping Realtime updates, remote invite search, demo-mode toggle and account isolation, loading/error/retry states. Configure the public client settings and verify against the deployed server on two phones.
 3. **Receipts, hosting, demo (Saahil):** hosted web URL (Vercel or EAS Hosting), real receipt scanning with a vision model on the server, a demo group with real accounts, demo script and backup video. Real scans first need `domain.ts`'s `scanReceipt` to accept scanned items instead of always calling `fakeOcr.ts`.
 4. Stretch goal: Stripe Issuing test mode, with the "Simulate tap" button firing Stripe's real card-approval webhook.
 

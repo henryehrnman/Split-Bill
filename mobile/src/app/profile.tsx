@@ -3,6 +3,8 @@ import {View, Switch, Pressable} from 'react-native';
 import {router} from 'expo-router';
 import {Page, T, Avatar, Button, Field, Row, StandingPill, periodLabel, shortDate, s, C} from '../lib/ui';
 import {useStore} from '../lib/store';
+import {useSession} from '../lib/session';
+import {apiUrl} from '../lib/config';
 import {api} from '../lib/api';
 import {money, cents} from '../lib/money';
 import {DAY, currentProposal, groupById, groupsFor, isActive, memberOf, nextPeriodAt, openCharges, pendingCharge, periodSpend, shares, spendSummary, standing} from '../lib/domain';
@@ -20,7 +22,8 @@ const LEDGER_LABEL: Record<LedgerEntry['kind'], string> = {
 const FAILED: LedgerEntry['kind'][] = ['top-up-failed', 'debt-recovery-failed'];
 
 export default function Profile() {
-  const {db, viewer, setViewerId, group, now, run} = useStore();
+  const {db, viewer, setViewerId, group, now, run, demoMode, busy} = useStore();
+  const {enterDemo, exitDemo, signOut} = useSession();
   const [confirm, setConfirm] = useState(false);
   const groups = groupsFor(db, viewer.id);
   const myCharges = db.charges.filter(c => groups.some(g => g.id === c.groupId) && (currentProposal(c).shares[viewer.id] ?? 0) > 0);
@@ -32,20 +35,26 @@ export default function Profile() {
         <Avatar user={viewer} size={64} />
         <View>
           <T style={{fontSize: 21, fontWeight: '700'}}>{viewer.name}</T>
-          <T style={s.small}>Demo account · Checking •• 1024 (sample)</T>
+          <T style={s.small}>{demoMode ? 'Demo account · Checking •• 1024 (sample)' : viewer.email}</T>
         </View>
       </View>
 
+      {demoMode ? <>
+      {!!apiUrl && <Button secondary title="Exit demo mode" onPress={exitDemo} />}
       <T style={s.section}>Switch demo user</T>
       <T style={[s.small, {marginBottom: 10}]}>Act as another member to propose or accept splits from their side.</T>
       <View style={{flexDirection: 'row', gap: 14}}>
         {db.users.map(u => (
-          <Pressable key={u.id} accessibilityRole="button" accessibilityState={{selected: u.id === viewer.id}} accessibilityLabel={`Act as ${u.name}`} onPress={() => setViewerId(u.id)} style={{alignItems: 'center', gap: 4, opacity: u.id === viewer.id ? 1 : 0.55}}>
+          <Pressable disabled={busy} key={u.id} accessibilityRole="button" accessibilityState={{selected: u.id === viewer.id}} accessibilityLabel={`Act as ${u.name}`} onPress={() => setViewerId(u.id)} style={{alignItems: 'center', gap: 4, opacity: u.id === viewer.id ? 1 : 0.55}}>
             <Avatar user={u} size={44} />
             <T style={{fontSize: 12, fontWeight: u.id === viewer.id ? '700' : '400'}}>{u.name}</T>
           </Pressable>
         ))}
       </View>
+      </> : <>
+        <Button secondary title="Sign out" onPress={() => void signOut()} />
+        <Button secondary title="Try demo mode" onPress={enterDemo} />
+      </>}
 
       {groups.map(g => (
         <GroupBalance key={g.id} group={g} />
@@ -74,6 +83,7 @@ export default function Profile() {
         </Row>
       ))}
 
+      {demoMode && <>
       <T style={s.section}>Demo controls</T>
       <T style={[s.small, {marginBottom: 6}]}>Shortcuts for walking through edge cases. They don’t exist in the real product.</T>
       {group && memberOf(group, viewer.id).status === 'joined' && (
@@ -94,9 +104,10 @@ export default function Profile() {
         </>
       )}
 
+      </>}
       <T style={s.section}>About this prototype</T>
       <T style={s.small}>
-        Accounts, deposits, cards, wallets and payments are simulated by a fake backend that runs inside the app and saves to this device. Receipt scanning returns sample receipts for the demo merchants. Nothing is synced between devices and no real money moves.
+        {demoMode ? 'Demo accounts and group activity are saved on this device. Nothing in demo mode is synced between devices.' : 'Your account and group activity are shared with your group across devices.'} Deposits, cards, wallets and payments are simulated. No real money moves.
       </T>
       <T style={[s.caption, {marginTop: 24}]}>Split Bill · iOS, Android & web prototype</T>
     </Page>
@@ -104,7 +115,7 @@ export default function Profile() {
 }
 
 function GroupBalance({group}: {group: Group}) {
-  const {db, viewer, now, run} = useStore();
+  const {db, viewer, now, run, demoMode, busy} = useStore();
   const [amount, setAmount] = useState('');
   const me = memberOf(group, viewer.id);
   const share = shares(group)[viewer.id];
@@ -150,15 +161,15 @@ function GroupBalance({group}: {group: Group}) {
               <T style={{fontSize: 14}}>Auto-refill each period</T>
               <T style={s.caption}>Charge my bank back up to {money(share)} when a new period starts</T>
             </View>
-            <Switch accessibilityLabel={`Auto-refill for ${group.name}`} value={me.autoDeposit} trackColor={{false: '#dfe3ea', true: C.blue}} onValueChange={v => { run(a => api.setAutoDeposit(a, group.id, v)); }} />
+            <Switch disabled={busy} accessibilityLabel={`Auto-refill for ${group.name}`} value={me.autoDeposit} trackColor={{false: '#dfe3ea', true: C.blue}} onValueChange={v => { run(a => api.setAutoDeposit(a, group.id, v)); }} />
           </Row>
-          <Row style={{paddingTop: 10}}>
+          {demoMode && <Row style={{paddingTop: 10}}>
             <View style={{flex: 1}}>
               <T style={{fontSize: 14}}>Simulate bank declines</T>
               <T style={s.caption}>Demo: deposits, refills and debt recovery from you fail</T>
             </View>
-            <Switch accessibilityLabel={`Simulate failed top-ups for ${group.name}`} value={me.failTopUps} trackColor={{false: '#dfe3ea', true: C.danger}} onValueChange={v => { run(a => api.setFailTopUps(a, group.id, v)); }} />
-          </Row>
+            <Switch disabled={busy} accessibilityLabel={`Simulate failed top-ups for ${group.name}`} value={me.failTopUps} trackColor={{false: '#dfe3ea', true: C.danger}} onValueChange={v => { run(a => api.setFailTopUps(a, group.id, v)); }} />
+          </Row>}
         </>
       )}
       {!isActive(group) && me.status === 'joined' && <T style={[s.caption, {marginTop: 8}]}>Waiting for everyone invited to accept or decline.</T>}

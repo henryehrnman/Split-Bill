@@ -7,6 +7,7 @@
     "@expo/metro-runtime": "~58.0.14",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@supabase/supabase-js": "^2.118.0",
     "@types/react": "~19.3.0",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~58.0.4",
@@ -31,7 +32,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types tests/split.test.ts && node --experimental-strip-types tests/domain.test.ts"
+    "test": "node --experimental-strip-types tests/split.test.ts && node --experimental-strip-types tests/domain.test.ts && node --experimental-strip-types tests/http.test.ts",
+    "test:network": "node ../scripts/copy-shared.mjs && node --experimental-strip-types tests/network.test.ts"
   },
   "private": true
 }
