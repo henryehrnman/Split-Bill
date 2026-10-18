@@ -1,0 +1,97 @@
+/* Fixed virtual viewport; the parent sizes and positions the phone frame. */
+html, body { width: 390px; height: 780px; min-height: 0; overflow: hidden; background: #f5f6f8; }
+body { display: block; margin: 0; padding: 0; }
+.preview-intro, .preview-mobile { display: none !important; }
+.phone { width: 390px; max-width: none; height: 780px; min-height: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+.app { height: 100%; }
+.story-mode .app { pointer-events: none; }
+.story-mode .screen { scroll-behavior: auto; }
+.story-mode .screen.enter { animation: none; }
+.story-mode .bottom-nav { padding-bottom: 15px; }
+.story-mode .footer-action { padding-bottom: 18px; }
+.story-card-group { color: #8397b7; display: block; margin-top: 5px; font-size: 8px; }
+.story-welcome { border-radius: 20px; padding: 22px 20px; background: white; }
+.story-welcome h2 { font-size: 17px; margin: 15px 0 6px; }
+.story-welcome p { font-size: 11px; color: var(--muted); max-width: 245px; }
+.story-welcome-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; color: var(--blue); background: var(--soft-blue); }
+.story-mode[data-story-scene="intro"] .home-screen { gap: 18px; justify-content: flex-start; }
+.story-mode[data-story-scene="intro"] .home-screen .hero { flex: 1; max-height: 235px; }
+.story-mode[data-story-scene="intro"] .home-screen .section-heading { margin: 4px 0 0; }
+.story-mode[data-story-scene="outro"] .home-screen { justify-content: flex-start; gap: 10px; }
+.story-mode[data-story-scene="outro"] .home-screen .section-heading { margin: 8px 0 -2px; }
+.story-mode[data-story-scene="budget"] .story-consent .story-check { display: none; }
+.story-consent .person-row { padding: 12px 0; }
+.story-consent .person-row > strong { font-size: 13px; }
+.story-consent .person-info small { font-size: 9px; }
+.story-invite-intro { text-align: center; margin: 4px 0 22px; }
+.story-invite-intro > .group-icon { margin: 0 auto 12px; }
+.story-invite-intro h1 { font-size: 29px; margin-bottom: 6px; }
+.story-invite-intro p { font-size: 11px; color: var(--muted); }
+.story-invited-members .person-row { padding: 10px 0; }
+.story-invited-members h2 { margin-bottom: 5px; }
+.story-invite-summary { padding: 19px; text-align: center; background: var(--soft-blue); border-radius: 18px; }
+.story-invite-summary > span, .story-invite-summary > small { display: block; font-size: 10px; color: var(--muted); }
+.story-invite-summary > strong { display: block; color: var(--blue); font-size: 30px; letter-spacing: -1px; margin: 5px 0; }
+.story-check { color: var(--success); display: flex; }
+.story-check svg { width: 16px; height: 16px; }
+.story-celebration { text-align: center; margin: 16px 0 25px; }
+.story-celebration h1 { font-size: 29px; }
+.story-celebration p { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.story-fund-total { padding: 22px; text-align: center; background: var(--navy); border-radius: 20px; color: white; }
+.story-fund-total > span, .story-fund-total > small { display: block; font-size: 10px; color: #bdc8da; }
+.story-fund-total > strong { display: block; margin: 6px 0; font-size: 39px; letter-spacing: -1.5px; font-variant-numeric: tabular-nums; }
+.story-mode[data-story-scene="cards"] .group-identity { margin-top: 8px; margin-bottom: 28px; }
+.story-card-holders { margin-top: 30px; text-align: center; }
+.story-card-holders > div { display: flex; justify-content: space-around; margin-top: 15px; }
+.story-card-holders > div > span { display: grid; gap: 7px; justify-items: center; }
+.story-card-holders small { font-size: 10px; }
+.story-payment-balance { display: block; margin: 6px 0 18px; font-size: 30px; color: var(--ink); font-weight: 600; letter-spacing: -1px; }
+.story-mode[data-story-scene="pay"] .wallet-bottom,
+.story-mode[data-story-scene="henry"] .wallet-bottom { padding-top: 55px; }
+.story-mode[data-story-scene="receipt"] .split-summary,
+.story-mode[data-story-scene="receipt"] .split-summary-details,
+.story-mode[data-story-scene="receipt"] .segmented,
+.story-mode[data-story-scene="receipt"] .split-screen > .card-section:not(.item-editor) { display: none; }
+.story-mode[data-story-scene="receipt"] .item-editor { margin-top: 8px; }
+.story-mode[data-story-scene="receipt"] .item-editor h2 { margin-bottom: 0; }
+.story-receipt-sheet { position: relative; width: 100%; margin-top: 18px; overflow: hidden; border: 1px solid #eae7df; border-radius: 8px; background: #fffdf8; }
+.story-receipt-sheet img { display: block; width: 100%; height: 390px; object-fit: contain; }
+.story-scan-caption { display: flex; gap: 11px; align-items: center; padding: 19px 0 3px; }
+.story-scan-caption > svg { color: var(--success); width: 22px; }
+.story-scan-caption strong { display: block; font-size: 11px; }
+.story-scan-caption small { display: block; font-size: 9px; margin-top: 4px; }
+.story-scan-beam { position: absolute; inset: 0 0 auto; height: 65px; background: linear-gradient(transparent, #5487ff22); border-bottom: 2px solid #5487ff; animation: story-scan 2.5s ease-in-out infinite alternate; }
+.story-scan-orbit { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #dce7ff; border-top-color: var(--blue); animation: story-spin 1s linear infinite; flex-shrink: 0; }
+.story-extraction-note { color: var(--success); font-size: 10px; margin: 10px 0 18px; }
+.story-mode[data-story-scene="receipt"][data-story-phase="2"] .receipt-photo,
+.story-mode[data-story-scene="receipt"][data-story-phase="2"] .receipt-entry-actions,
+.story-mode[data-story-scene="receipt"][data-story-phase="2"] .receipt-sample,
+.story-mode[data-story-scene="receipt"][data-story-phase="2"] .item-draft-fields > .icon-btn { display: none; }
+.story-mode[data-story-scene="receipt"][data-story-phase="2"] .item-draft-fields { grid-template-columns: minmax(0, 1fr) auto; }
+.story-mode[data-story-scene="receipt"][data-story-phase="2"] .item-draft { margin: 0; padding: 8px 0; }
+.story-mode[data-story-scene="receipt"] .item-card-actions { margin-top: 16px; }
+.story-mode[data-story-scene="claims"] .split-summary { height: 79px; }
+.story-mode[data-story-scene="claims"] .split-summary-details { margin-bottom: 8px; }
+.story-mode[data-story-scene="claims"] .split-meta { margin: 3px 0 13px; }
+.story-mode[data-story-scene="claims"] .status-banner { margin: 0 0 13px; padding: 10px 12px; font-size: 10px; }
+.story-mode[data-story-scene="claims"] .item-owner-group { padding: 4px 0 8px; }
+.story-mode[data-story-scene="claims"] .item-owner-group .person-row { padding: 6px 0; }
+.story-mode[data-story-scene="claims"] .item-owner-group .avatar { width: 30px; height: 30px; font-size: 10px; }
+.story-mode[data-story-scene="claims"] .owned-item { font-size: 10px; padding: 3px 0 3px 41px; }
+.story-mode[data-story-scene="claims"] .item-cost-line { font-size: 9px; padding-left: 41px; }
+.story-mode[data-story-scene="claims"] .item-owner-group .item-cost-line:nth-last-child(-n+2) { display: none; }
+.story-mode[data-story-scene="claims"] .grouped-items { padding: 16px; }
+.story-mode[data-story-scene="claims"] .grouped-items .proposal-heading { margin-bottom: 6px; }
+.story-mode[data-story-scene="claims"] .receipt-title { font-size: 10px; }
+.story-mode[data-story-scene="claims"] .selection-item { padding: 11px 0; }
+.story-mode[data-story-scene="claims"] .selection-copy strong { font-size: 11px; }
+.story-mode[data-story-scene="claims"] .selection-totals { padding-top: 10px; margin-top: 10px; }
+.story-mode[data-story-scene="claims"] .selection-totals .item-cost-line { padding-left: 0; }
+.story-mode[data-story-scene="claims"] .item-selection .item-card-actions { margin-top: 12px; padding-top: 12px; }
+.story-mode[data-story-scene="claims"][data-story-phase="1"] .split-screen > .card-section:not(.item-selection) { display: none; }
+@keyframes story-scan { from { transform: translateY(-65px); } to { transform: translateY(390px); } }
+@keyframes story-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .story-scan-beam { animation: none; top: 40%; }
+  .story-scan-orbit { animation: none; }
+}
