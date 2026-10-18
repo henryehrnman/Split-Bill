@@ -6,7 +6,7 @@ import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents} from '../../lib/money';
 import {SAMPLE_PURCHASES} from '../../lib/fakeOcr';
-import {cardFor, isActive, purchaseBlocker, spendLimit, standing} from '../../lib/domain';
+import {cardFor, isActive, pendingCharge, purchaseBlocker, spendLimit, standing} from '../../lib/domain';
 import type {Wallet} from '../../lib/domain';
 
 export default function Card() {
@@ -32,6 +32,12 @@ export default function Card() {
   const limit = spendLimit(db, group.id, viewer.id);
   const blocker = purchaseBlocker(db, group.id, viewer.id);
   const st = standing(group, viewer.id);
+  const pending = pendingCharge(db, group.id);
+  const blockerAction =
+    !blocker ? null
+    : pending && group.singleOpenCharge && blocker.includes(pending.merchant) ? {label: 'Open the split', onPress: () => router.push('/split')}
+    : !card.wallet && blocker.startsWith('Add your card') ? {label: 'Add to Apple Wallet', onPress: () => { run(a => api.addToWallet(a, card.id, 'Apple Wallet'), 'Added to Apple Wallet (simulated).'); }}
+    : null;
   const buy = (m: string, a: number) =>
     run(x => api.purchase(x, group.id, {merchant: m, amount: a}), `${money(a)} at ${m} approved. Choose who was part of it, or leave and the default split is sent to everyone.`).then(ok => {
       if (ok) router.push('/split');
@@ -48,7 +54,20 @@ export default function Card() {
         </View>
         <T style={s.caption}>Demo virtual card</T>
       </Row>
-      {blocker && <T style={{color: C.warn, fontSize: 13, lineHeight: 19, marginBottom: 6}}>{blocker}</T>}
+      {blocker && (
+        <View style={[s.box, {backgroundColor: C.softWarn, borderColor: C.softWarn, flexDirection: 'row', gap: 10}]}>
+          <Icon name="alert-circle" size={18} color={C.warn} />
+          <View style={{flex: 1}}>
+            <T style={{color: C.ink, fontSize: 14, lineHeight: 20}}>{blocker}</T>
+            {blockerAction && (
+              <Pressable accessibilityRole="button" onPress={blockerAction.onPress} style={{flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8}}>
+                <T style={{color: C.blue, fontWeight: '700', fontSize: 14}}>{blockerAction.label}</T>
+                <Icon name="arrow-right" size={14} color={C.blue} />
+              </Pressable>
+            )}
+          </View>
+        </View>
+      )}
       {isActive(group) && !group.frozen && st === 'on-track' && (
         <T style={s.small}>
           You can spend up to everything in the group fund. Your share is settled after each purchase; if it takes you below $0, the difference is charged to your personal card.

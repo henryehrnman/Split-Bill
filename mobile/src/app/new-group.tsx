@@ -7,7 +7,7 @@ import {api} from '../lib/api';
 import {allocate, cents, money} from '../lib/money';
 import type {User} from '../lib/domain';
 
-const PERIODS: [string, string][] = [['7', 'Weekly'], ['14', 'Every 2 weeks'], ['30', 'Monthly'], ['custom', 'Custom']];
+const PERIODS: [string, string][] = [['7', 'Weekly'], ['14', '2 weeks'], ['30', 'Monthly'], ['custom', 'Custom']];
 
 export default function NewGroup() {
   const {viewer, run, setGroupId, demoMode} = useStore();

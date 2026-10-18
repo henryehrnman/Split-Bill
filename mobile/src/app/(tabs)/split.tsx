@@ -45,6 +45,8 @@ export default function Split() {
 
 type Mode = 'items' | 'proposal';
 
+const listNames = (names: string[]) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
+
 const defaultLabel = (g: Group) => (g.defaultSplit.method === 'equal' ? 'an even split between everyone' : 'the group’s default percentages');
 
 // While the cardholder drafts the first proposal, leaving the screen, backgrounding the app, or handing the
@@ -100,6 +102,7 @@ function ChargeSplitPane({group, charge, picker, sendFirst}: {group: Group; char
   const payer = userById(db, charge.cardholderId).name;
   const draft = isDraft(charge);
   const mine = viewer.id === charge.cardholderId;
+  const myShare = !draft && !charge.receipt ? p.shares[viewer.id] ?? 0 : 0;
 
   const footer = draft || fixing ? null : mode === 'items' ? <ItemsFooter charge={charge} /> : editing || charge.receipt ? null : <ProposalFooter charge={charge} onEdit={() => setEditing(true)} />;
 
@@ -109,7 +112,13 @@ function ChargeSplitPane({group, charge, picker, sendFirst}: {group: Group; char
       {picker}
       <View style={{alignItems: 'center', paddingBottom: 18}}>
         <T style={s.money}>{money(charge.amount)}</T>
-        <T style={[s.small, {marginTop: 4, color: daysLeft <= 2 ? C.danger : C.muted}]}>
+        {myShare > 0 && (
+          <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.softBlue, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginTop: 6}}>
+            <T style={{fontSize: 13, color: C.blue}}>Your share</T>
+            <T style={{fontSize: 13, color: C.blue, fontWeight: '700', fontVariant: ['tabular-nums']}}>{money(myShare)}</T>
+          </View>
+        )}
+        <T style={[s.small, {marginTop: 8, color: daysLeft <= 2 ? C.danger : C.muted}]}>
           {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left to agree · {group.singleOpenCharge ? 'the card stays locked until this is settled' : 'held from the group fund until settled'}
         </T>
       </View>
@@ -183,7 +192,13 @@ function ScanPrompt({charge, onSend}: {charge: Charge; onSend: FirstSend<Db>}) {
           <View style={{flex: 1}}><Button secondary title="Choose photo" onPress={() => scanPhoto(false)} /></View>
         </Row>
       )}
-      <Button secondary title={demoMode ? 'Scan receipt (demo)' : 'Use sample receipt'} onPress={() => onSend(() => run(a => api.scanReceipt(a, charge.id), done))} />
+      {demoMode ? (
+        <View style={{alignSelf: 'stretch'}}><Button title="Scan receipt (demo)" onPress={() => onSend(() => run(a => api.scanReceipt(a, charge.id), done))} /></View>
+      ) : (
+        <Pressable accessibilityRole="button" onPress={() => onSend(() => run(a => api.scanReceipt(a, charge.id), done))} style={{paddingVertical: 12, paddingHorizontal: 16}}>
+          <T style={{color: C.blue, fontWeight: '500', fontSize: 14}}>Use sample receipt</T>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -201,7 +216,7 @@ function ItemsFooter({charge}: {charge: Charge}) {
   const parts = [
     st.unclaimed.length ? `${st.unclaimed.length} unclaimed` : '',
     r.edits.length ? `${r.edits.length} ${r.edits.length === 1 ? 'edit' : 'edits'} pending` : '',
-    others.length ? `waiting on ${others.join(', ')} to lock` : '',
+    others.length ? `waiting on ${listNames(others)} to lock` : '',
   ].filter(Boolean);
   return (
     <>
@@ -363,10 +378,10 @@ function ProposalFooter({charge, onEdit}: {charge: Charge; onEdit: () => void}) 
   return (
     <>
       <T style={[s.small, {textAlign: 'center', marginBottom: 6}]}>
-        {waiting.length ? `Waiting on ${waiting.map(id => (id === viewer.id ? 'you' : userById(db, id).name)).join(', ')}` : 'Everyone has accepted'}
+        {waiting.length ? `Waiting on ${listNames(waiting.map(id => (id === viewer.id ? 'you' : userById(db, id).name)))}` : 'Everyone has accepted'}
       </T>
       <Row>
-        <View style={{flex: 1}}><Button secondary title="Propose changes" onPress={onEdit} /></View>
+        <View style={{flex: 1}}><Button secondary title="Change split" onPress={onEdit} /></View>
         {waiting.includes(viewer.id) && (
           <View style={{flex: 1}}>
             <Button title="Accept split" onPress={() => run(a => api.acceptSplit(a, charge.id, proposal.id), waiting.length === 1 ? 'Split settled. Balances are updated and the card is ready again.' : 'You accepted this split.')} />
@@ -398,7 +413,10 @@ function ProposalView({group, charge}: {group: Group; charge: Charge}) {
             <Avatar user={userById(db, id)} size={36} />
             <View style={{flex: 1}}>
               <T style={{fontWeight: '500'}}>{userById(db, id).name}{id === viewer.id ? ' (you)' : ''}</T>
-              <T style={[s.caption, accepted && {color: C.success}]}>{!involved ? 'Not involved' : accepted ? 'Accepted' : 'Needs to accept'}</T>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
+                {involved && <Icon name={accepted ? 'check' : 'clock'} size={12} color={accepted ? C.success : C.warn} />}
+                <T style={[s.caption, {color: !involved ? C.muted : accepted ? C.success : C.warn}]}>{!involved ? 'Not involved' : accepted ? 'Accepted' : 'Needs to accept'}</T>
+              </View>
             </View>
             <T style={s.strong}>{money(p.shares[id] ?? 0)}</T>
           </View>

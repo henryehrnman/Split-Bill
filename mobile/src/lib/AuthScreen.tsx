@@ -2,6 +2,7 @@ import React, {useRef, useState} from 'react';
 import {ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
 import type {TextInputProps} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import Feather from '@expo/vector-icons/Feather';
 
 export type ProfileInput = {name: string; handle: string; phone: string};
 
@@ -17,22 +18,56 @@ type Props = {
 };
 
 // Auth renders before the store, so these design tokens have no store dependency.
-const C = {ink: '#171a20', muted: '#626a78', line: '#e8ebf0', surface: '#f5f6f8', blue: '#2459e8', danger: '#b52d37', success: '#17794c'};
+const C = {ink: '#171a20', muted: '#626a78', line: '#e8ebf0', surface: '#f5f6f8', blue: '#2459e8', softBlue: '#edf2ff', dark: '#171e2d', danger: '#b52d37', softDanger: '#fdf0f1', success: '#17794c', softSuccess: '#eef7f1'};
+const STEPS: [React.ComponentProps<typeof Feather>['name'], string, string][] = [
+  ['users', 'Pool a budget', 'Everyone adds an equal share to one group fund.'],
+  ['credit-card', 'Pay with your own card', 'Each member gets a card on the fund for Apple or Google Wallet.'],
+  ['check-circle', 'Agree on every split', 'Split by item, percent or amount. Every cent is accounted for.'],
+];
+
+function Brand() {
+  return (
+    <View style={s.brandRow} accessibilityRole="header" accessibilityLabel="splitbill">
+      <View style={s.mark}>
+        <View style={s.markLine} />
+        <View style={[s.markLine, {transform: [{rotate: '-24deg'}]}]} />
+      </View>
+      <Text style={s.brand}>splitbill</Text>
+    </View>
+  );
+}
+
+function Steps() {
+  return (
+    <View style={s.steps}>
+      {STEPS.map(([icon, title, body]) => (
+        <View key={title} style={s.step}>
+          <View style={s.stepIcon}><Feather name={icon} size={18} color={C.blue} /></View>
+          <View style={s.flex}>
+            <Text style={s.stepTitle}>{title}</Text>
+            <Text style={s.stepBody}>{body}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
 type InputInstance = React.ComponentRef<typeof TextInput>;
 
 function Field({label, inputRef, ...props}: TextInputProps & {label: string; inputRef?: React.Ref<InputInstance>}) {
   return (
     <View style={s.field}>
       <Text style={s.label}>{label}</Text>
-      <TextInput ref={inputRef} accessibilityLabel={label} placeholderTextColor={C.muted} selectionColor={C.blue} {...props} style={s.input} />
+      <TextInput ref={inputRef} accessibilityLabel={label} placeholderTextColor="#9aa1ad" selectionColor={C.blue} {...props} style={s.input} />
     </View>
   );
 }
 
-function Action({title, onPress, disabled = false, secondary = false, loading = false}: {title: string; onPress: () => void; disabled?: boolean; secondary?: boolean; loading?: boolean}) {
+function Action({title, onPress, disabled = false, secondary = false, loading = false, icon}: {title: string; onPress: () => void; disabled?: boolean; secondary?: boolean; loading?: boolean; icon?: React.ComponentProps<typeof Feather>['name']}) {
   return (
     <Pressable accessibilityRole="button" accessibilityState={{disabled, busy: loading}} disabled={disabled} onPress={onPress} style={({pressed}) => [s.button, secondary && s.secondary, disabled && s.disabled, pressed && s.pressed]}>
       {loading && <ActivityIndicator color={secondary ? C.ink : 'white'} />}
+      {!loading && icon && <Feather name={icon} size={18} color={secondary ? C.ink : 'white'} />}
       <Text style={[s.buttonText, secondary && s.secondaryText]}>{title}</Text>
     </Pressable>
   );
@@ -137,9 +172,10 @@ export default function AuthScreen({onSignIn, onSignUp, onDemo, configurationErr
     <SafeAreaView style={s.safe}>
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-          <Text accessibilityRole="header" style={s.brand}>Split Bill</Text>
-          <Text accessibilityRole="header" style={s.title}>{profileOnly ? 'Complete your profile' : mode === 'signup' ? 'Create your account' : 'Welcome back'}</Text>
-          <Text style={s.subtitle}>{profileOnly ? 'Choose how friends will find you.' : 'Keep shared bills and your people together.'}</Text>
+          <Brand />
+          <Text accessibilityRole="header" style={s.title}>{profileOnly ? 'Complete your profile' : mode === 'signup' ? 'Create your account' : 'Spend together, settle as you go.'}</Text>
+          <Text style={s.subtitle}>{profileOnly ? 'Choose how friends will find you. They invite you by handle, email or phone.' : mode === 'signup' ? 'Friends invite you by your handle, email or phone.' : 'A shared fund and a card for everyone in your group, so nobody fronts the bill.'}</Text>
+          {!profileOnly && mode === 'signin' && <Steps />}
 
           {!profileOnly && (
             <View style={s.tabs}>
@@ -151,26 +187,32 @@ export default function AuthScreen({onSignIn, onSignUp, onDemo, configurationErr
             </View>
           )}
 
-          {!!configurationError && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={s.error}>{configurationError}</Text>}
-          {!!sessionError && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={s.error}>{sessionError}</Text>}
-          {profileOnly && !onCompleteProfile && <Text accessibilityRole="alert" style={s.error}>Profile setup is unavailable. You can still explore the demo.</Text>}
-          {!!error && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={s.error}>{error}</Text>}
-          {!!success && <Text accessibilityLiveRegion="polite" style={s.success}>{success}</Text>}
+          {[configurationError, sessionError, profileOnly && !onCompleteProfile ? 'Profile setup is unavailable. You can still explore the demo.' : '', error].filter(Boolean).map(text => (
+            <View key={text as string} accessibilityRole="alert" accessibilityLiveRegion="polite" style={[s.banner, {backgroundColor: C.softDanger}]}>
+              <Feather name="alert-circle" size={16} color={C.danger} />
+              <Text style={[s.bannerText, {color: C.danger}]}>{text}</Text>
+            </View>
+          ))}
+          {!!success && (
+            <View accessibilityLiveRegion="polite" style={[s.banner, {backgroundColor: C.softSuccess}]}>
+              <Feather name="check-circle" size={16} color={C.success} />
+              <Text style={[s.bannerText, {color: C.success}]}>{success}</Text>
+            </View>
+          )}
 
           {!profileOnly && (
             <>
-              <Field label="Email" value={email} onChangeText={setEmail} editable={!busy} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" importantForAutofill="yes" maxLength={254} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => passwordRef.current?.focus()} />
-              <Field key={mode} inputRef={passwordRef} label="Password" value={password} onChangeText={setPassword} editable={!busy} autoCapitalize="none" autoCorrect={false} secureTextEntry autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} importantForAutofill="yes" returnKeyType={needsProfile ? 'next' : 'go'} submitBehavior={needsProfile ? 'submit' : 'blurAndSubmit'} onSubmitEditing={() => needsProfile ? nameRef.current?.focus() : void submit()} />
-              {mode === 'signup' && <Text style={s.hint}>At least 6 characters.</Text>}
+              <Field label="Email" placeholder="you@example.com" value={email} onChangeText={setEmail} editable={!busy} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" importantForAutofill="yes" maxLength={254} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => passwordRef.current?.focus()} />
+              <Field key={mode} inputRef={passwordRef} label="Password" placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'} value={password} onChangeText={setPassword} editable={!busy} autoCapitalize="none" autoCorrect={false} secureTextEntry autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} importantForAutofill="yes" returnKeyType={needsProfile ? 'next' : 'go'} submitBehavior={needsProfile ? 'submit' : 'blurAndSubmit'} onSubmitEditing={() => needsProfile ? nameRef.current?.focus() : void submit()} />
             </>
           )}
 
           {needsProfile && (
             <>
-              <Field inputRef={nameRef} label="Name" value={name} onChangeText={setName} editable={!busy} autoComplete="name" autoCapitalize="words" maxLength={60} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => handleRef.current?.focus()} />
-              <Field inputRef={handleRef} label="Handle" value={handle} onChangeText={value => setHandle(value.toLowerCase())} editable={!busy} autoCapitalize="none" autoCorrect={false} autoComplete="off" maxLength={30} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => phoneRef.current?.focus()} />
-              <Text style={s.hint}>3–30 letters, numbers, dots, or underscores.</Text>
-              <Field inputRef={phoneRef} label="Phone (optional)" value={phone} onChangeText={setPhone} editable={!busy} keyboardType="phone-pad" autoComplete="tel" maxLength={30} returnKeyType="done" onSubmitEditing={() => void submit()} />
+              <Field inputRef={nameRef} label="Name" placeholder="Maya Lopez" value={name} onChangeText={setName} editable={!busy} autoComplete="name" autoCapitalize="words" maxLength={60} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => handleRef.current?.focus()} />
+              <Field inputRef={handleRef} label="Handle" placeholder="maya.l" value={handle} onChangeText={value => setHandle(value.toLowerCase())} editable={!busy} autoCapitalize="none" autoCorrect={false} autoComplete="off" maxLength={30} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => phoneRef.current?.focus()} />
+              <Text style={s.hint}>How friends find you. 3–30 letters, numbers, dots or underscores.</Text>
+              <Field inputRef={phoneRef} label="Phone (optional)" placeholder="(555) 123-4567" value={phone} onChangeText={setPhone} editable={!busy} keyboardType="phone-pad" autoComplete="tel" maxLength={30} returnKeyType="done" onSubmitEditing={() => void submit()} />
             </>
           )}
 
@@ -179,10 +221,13 @@ export default function AuthScreen({onSignIn, onSignUp, onDemo, configurationErr
             {profileOnly && onSignOut && <Action title={busy === 'signout' ? 'Signing out…' : 'Sign out'} onPress={() => void signOut()} disabled={!!busy} secondary loading={busy === 'signout'} />}
           </View>
 
-          <View style={s.demo}>
-            <Action title="Explore the demo" onPress={onDemo} disabled={!!busy} secondary />
-            <Text style={s.note}>Payments are simulated. No real money moves.</Text>
+          <View style={s.orRow}>
+            <View style={s.orLine} />
+            <Text style={s.orText}>or</Text>
+            <View style={s.orLine} />
           </View>
+          <Action title="Explore the demo" icon="play-circle" onPress={onDemo} disabled={!!busy} secondary />
+          <Text style={s.note}>No account needed. Try it as any of five sample people.{'\n'}Payments are simulated; no real money moves.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -193,9 +238,22 @@ const s = StyleSheet.create({
   safe: {flex: 1, backgroundColor: 'white'},
   flex: {flex: 1},
   page: {padding: 24, paddingBottom: 32, width: '100%', maxWidth: 480, alignSelf: 'center'},
-  brand: {fontFamily: 'DM-Bold', fontSize: 20, lineHeight: 28, color: C.ink, marginBottom: 32},
-  title: {fontFamily: 'DM-Bold', fontSize: 28, lineHeight: 35, color: C.ink, marginBottom: 8},
+  brandRow: {flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 36},
+  mark: {width: 24, height: 25, flexDirection: 'row', gap: 3, alignItems: 'center'},
+  markLine: {width: 7, height: 21, borderRadius: 2, backgroundColor: C.blue, transform: [{rotate: '24deg'}]},
+  brand: {fontFamily: 'DM-Bold', fontSize: 23, lineHeight: 28, letterSpacing: -1, color: C.ink},
+  title: {fontFamily: 'DM-Bold', fontSize: 30, lineHeight: 36, letterSpacing: -0.9, color: C.ink, marginBottom: 10},
   subtitle: {fontFamily: 'DM-Regular', fontSize: 15, lineHeight: 22, color: C.muted, marginBottom: 24},
+  steps: {gap: 14, marginBottom: 28},
+  step: {flexDirection: 'row', gap: 12, alignItems: 'flex-start'},
+  stepIcon: {width: 36, height: 36, borderRadius: 10, backgroundColor: C.softBlue, alignItems: 'center', justifyContent: 'center'},
+  stepTitle: {fontFamily: 'DM-Medium', fontSize: 15, lineHeight: 21, color: C.ink},
+  stepBody: {fontFamily: 'DM-Regular', fontSize: 13, lineHeight: 19, color: C.muted},
+  banner: {flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderRadius: 12, padding: 14, marginBottom: 16},
+  bannerText: {flex: 1, fontFamily: 'DM-Regular', fontSize: 14, lineHeight: 20},
+  orRow: {flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 28, marginBottom: 16},
+  orLine: {flex: 1, height: 1, backgroundColor: C.line},
+  orText: {fontFamily: 'DM-Regular', fontSize: 12, color: C.muted},
   tabs: {flexDirection: 'row', backgroundColor: C.surface, borderRadius: 12, padding: 4, marginBottom: 24},
   tab: {flex: 1, minHeight: 48, justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 10},
   selectedTab: {backgroundColor: 'white'},
@@ -203,7 +261,7 @@ const s = StyleSheet.create({
   selectedTabText: {fontFamily: 'DM-Medium', color: C.ink},
   field: {marginBottom: 16},
   label: {fontFamily: 'DM-Medium', fontSize: 12, lineHeight: 18, color: C.ink, marginBottom: 8},
-  input: {fontFamily: 'DM-Regular', fontSize: 16, color: C.ink, minHeight: 52, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: C.line, borderRadius: 10, backgroundColor: 'white'},
+  input: {fontFamily: 'DM-Regular', fontSize: 16, color: C.ink, minHeight: 52, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: '#d8dde6', borderRadius: 10, backgroundColor: 'white'},
   hint: {fontFamily: 'DM-Regular', fontSize: 12, lineHeight: 18, color: C.muted, marginTop: -8, marginBottom: 16},
   error: {fontFamily: 'DM-Regular', fontSize: 15, lineHeight: 22, color: C.danger, marginBottom: 16},
   success: {fontFamily: 'DM-Regular', fontSize: 15, lineHeight: 22, color: C.success, marginBottom: 16},
@@ -214,6 +272,5 @@ const s = StyleSheet.create({
   secondaryText: {color: C.ink},
   disabled: {opacity: 0.5},
   pressed: {opacity: 0.8},
-  demo: {borderTopWidth: 1, borderTopColor: C.line, marginTop: 32, paddingTop: 24, gap: 12},
-  note: {fontFamily: 'DM-Regular', fontSize: 12, lineHeight: 18, textAlign: 'center', color: C.muted},
+  note: {fontFamily: 'DM-Regular', fontSize: 12, lineHeight: 18, textAlign: 'center', color: C.muted, marginTop: 12},
 });

@@ -20,11 +20,11 @@ For the hackathon presentation on October 18, 2026: a 90-second pitch, then a 3-
 
 | Time | Phone | Do | Say |
 |---|---|---|---|
-| 0:00 | A | Home → **Create a group**. Name "Roommates", budget 300, **Every 2 weeks**, search Phone B's handle and pick the profile, **Create & send invites**. | "I set the budget and invite by exact handle, email or phone." |
+| 0:00 | A | Home → **Create a group**. Name "Roommates", budget 300, **2 weeks**, search Phone B's handle and pick the profile, **Create & send invites**. | "I set the budget and invite by exact handle, email or phone." |
 | 0:30 | B | Home shows the invitation with the group details. Tap **Join · deposit $150.00**. | "Each person sees the terms before joining and deposits their equal share." |
 | 0:50 | A | **Card** tab → pick **Apple Wallet** (simulated setup). | "Every member has their own card on the shared fund." |
 | 1:05 | A | Under "Make a purchase (demo)", tap **Juniper · $154.20** (stands in for tapping the card at a restaurant). | "Dinner just came out of the group fund." |
-| 1:15 | A | **Split** tab → **By item** (a new charge opens on Percent / amount) → **Use sample receipt** (or **Take photo** once live photo reads are confirmed). The claim board appears and is sent to the group. | "The receipt becomes items. Tax and tip follow what each person had." |
+| 1:15 | A | **Split** tab → **By item** (a new charge opens on Percent / amount) → **Take photo** of the printed Juniper receipt, or **Use sample receipt**. The photo must total $154.20 with the sample item names (Burrata, Margherita pizza, Rigatoni, Branzino, Tiramisu, Sparkling water); any other receipt changes the claims below. The claim board appears and is sent to the group. | "The receipt becomes items. Tax and tip follow what each person had." |
 | 1:30 | B | Home shows the pending split under the fund. Open **Split** and tap B's name on Rigatoni, Branzino, Tiramisu and Burrata. Don't lock yet. | "Phone B updated live. Everyone claims their own items." |
 | 1:55 | A | Tap A's name on Margherita pizza, Sparkling water and Burrata (now shared). Tap B's name on Margherita pizza to suggest B shared it; B taps **Accept**. | "You can suggest an edit to someone else's items, but only they can approve it." |
 | 2:20 | both | Once every item is claimed and no edit is pending, each phone taps **Lock in my items**. | "Everyone locks in their own selection." |
@@ -41,7 +41,8 @@ Lock in last. Any claim change, and any accepted edit, unlocks everyone, so a lo
 
 - **The server is slow or down:** sign out and tap **Explore the demo** on the sign-in screen (or **Try demo mode** on Profile). It runs entirely in the browser with seeded users. Tap the "Demo · Name" badge to switch between people instead of passing phones. In the seed data, Maya's Juniper charge is already pending.
 - **Phone B doesn't update:** tap the "Live updates … · Tap to refresh" line under the page title.
-- **The photo read doesn't add up or fails:** the receipt becomes a single line, and the sample receipt is no longer offered for that charge. Either tap **Fix receipt** and type the items, or switch to **Percent / amount** and use the shorter path.
+- **The photo scan fails** (an error message, nothing on the board): nothing was saved. Take the photo again or tap **Use sample receipt**.
+- **The photo read doesn't add up:** the receipt becomes a single line, and the sample receipt is no longer offered for that charge. Either tap **Fix receipt** and type the items, or switch to **Percent / amount** → **Equally** → **Send proposal**, then **Accept split** on Phone B. (**Send default** only exists before the first split is sent.)
 - **Nothing works:** play the backup video.
 
 ## Backup video
