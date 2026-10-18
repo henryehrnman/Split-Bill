@@ -12,7 +12,7 @@ export default function Home() {
   const {viewer, group} = useStore();
   const invited = group ? memberOf(group, viewer.id).status === 'invited' : false;
   return (
-    <Page title={`Hey, ${viewer.name}`} subtitle="A little less settling up." footer={group && !invited ? <HomeFooter group={group} /> : undefined}>
+    <Page title={`Hey, ${viewer.name}`} subtitle="A little less settling up." footer={group ? invited ? <InviteFooter group={group} /> : <HomeFooter group={group} /> : undefined}>
       <GroupPicker allowNew />
       {!group ? (
         <EmptyState icon="users" title="No groups yet" body="Create a group, set a budget for each period, and invite people. Everyone deposits an equal share and gets their own card on the group fund." action={<Button title="Create a group" onPress={() => router.push('/new-group')} />} />
@@ -59,7 +59,7 @@ function MemberRows({group}: {group: Group}) {
 }
 
 function Invite({group}: {group: Group}) {
-  const {db, viewer, run} = useStore();
+  const {db, viewer} = useStore();
   const share = shares(group)[viewer.id];
   return (
     <>
@@ -77,10 +77,19 @@ function Invite({group}: {group: Group}) {
       </View>
       <T style={s.section}>Members</T>
       <MemberRows group={group} />
-      <Row style={{marginTop: 18}}>
-        <View style={{flex: 1}}><Button secondary title="Decline" onPress={() => run(a => api.respondInvite(a, group.id, false), `You declined ${group.name}.`)} /></View>
-        <View style={{flex: 1.4}}><Button title={`Join · deposit ${money(share)}`} onPress={() => run(a => api.respondInvite(a, group.id, true, share), `You joined ${group.name}. Add your card to a wallet to start paying.`)} /></View>
-      </Row>
+    </>
+  );
+}
+
+function InviteFooter({group}: {group: Group}) {
+  const {viewer, run, busy} = useStore();
+  const share = shares(group)[viewer.id];
+  return (
+    <>
+      <Button title={`Join · deposit ${money(share)}`} onPress={() => run(a => api.respondInvite(a, group.id, true, share), `You joined ${group.name}. Add your card to a wallet to start paying.`)} />
+      <Pressable accessibilityRole="button" disabled={!!busy} onPress={() => run(a => api.respondInvite(a, group.id, false), `You declined ${group.name}.`)} style={{alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16, marginTop: 2}}>
+        <T style={{color: C.muted, fontWeight: '500', fontSize: 14}}>Decline invitation</T>
+      </Pressable>
     </>
   );
 }
@@ -113,7 +122,8 @@ function pendingLine(db: Db, c: Charge, viewerId: string) {
   }
   const waiting = waitingOn(currentProposal(c));
   if (waiting.includes(viewerId)) return 'needs your OK';
-  return `waiting on ${waiting.map(id => userById(db, id).name).join(', ')}`;
+  const names = waiting.map(id => userById(db, id).name);
+  return `waiting on ${names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`}`;
 }
 
 function ActiveGroup({group}: {group: Group}) {
@@ -215,6 +225,7 @@ function Notifications({group}: {group: Group}) {
 
 function GroupSettings({group}: {group: Group}) {
   const {db, run} = useStore();
+  const [open, setOpen] = useState(false);
   const [method, setMethod] = useState(group.defaultSplit.method);
   const [percents, setPercents] = useState<Record<string, string>>(() =>
     Object.fromEntries(group.members.map(m => [m.userId, group.defaultSplit.method === 'percent' ? String(group.defaultSplit.percents[m.userId] ?? 0) : (100 / group.members.length).toFixed(2)])),
@@ -223,8 +234,25 @@ function GroupSettings({group}: {group: Group}) {
   const total = Object.values(percents).reduce((a, b) => a + (Number(b) || 0), 0);
   const changed = method !== group.defaultSplit.method || method === 'percent';
 
+  const summary = [
+    group.defaultSplit.method === 'equal' ? 'Equal split' : 'Custom percentages',
+    group.singleOpenCharge ? 'one purchase at a time' : 'several open splits',
+    `${money(group.periodBudget ?? group.budget)} budget`,
+  ].join(' · ');
+
   return (
     <>
+      <Pressable accessibilityRole="button" accessibilityState={{expanded: open}} onPress={() => setOpen(!open)} style={[s.listRow, {marginTop: 22, borderTopWidth: 1, borderTopColor: C.line}]}>
+        <View style={{width: 36, height: 36, borderRadius: 10, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center'}}>
+          <Icon name="sliders" size={17} />
+        </View>
+        <View style={{flex: 1}}>
+          <T style={{fontWeight: '700'}}>Group settings</T>
+          <T style={s.caption}>{summary}</T>
+        </View>
+        <Icon name={open ? 'chevron-up' : 'chevron-down'} size={18} color={C.muted} />
+      </Pressable>
+      {open && <>
       <T style={s.section}>Default split</T>
       <T style={[s.small, {marginBottom: 12}]}>New charges start with this split. Anyone can propose changes before it’s accepted.</T>
       <Segmented options={[['equal', 'Equally'], ['percent', 'Percentages']]} value={method} onChange={setMethod} />
@@ -273,11 +301,12 @@ function GroupSettings({group}: {group: Group}) {
       <T style={s.section}>Budget</T>
       <T style={[s.small, {marginBottom: 4}]}>Changing it needs everyone’s OK. A higher budget raises each person’s share from the next period; a lower one keeps any surplus.</T>
       <Row style={{alignItems: 'flex-end'}}>
-        <Field label={`New budget ${periodLabel(group.periodDays)} ($)`} value={budget} onChange={setBudget} />
+        <Field label="New budget ($)" value={budget} onChange={setBudget} />
         <View style={{flex: 1}}>
           <Button secondary title="Propose" disabled={cents(budget) === null} onPress={() => run(a => api.proposeBudget(a, group.id, cents(budget) ?? 0), 'Proposal sent to the group.')} />
         </View>
       </Row>
+      </>}
     </>
   );
 }
