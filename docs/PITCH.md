@@ -47,7 +47,7 @@ Why yield matters even though interchange is the bigger line: it is pure margin 
 | Team (4 → 10 → 22 FTE) | $0.70M | $1.90M | $4.50M |
 | **Net** | **−$0.92M** | **−$2.04M** | **−$1.03M** |
 
-Read: contribution-margin positive from Year 1, operating breakeven inside Year 4 on these assumptions, roughly $4M of cumulative burn. A Pro tier or 20% higher spend per member brings Year 3 to breakeven.
+Read: contribution-margin positive from Year 1, operating breakeven inside Year 4 on these assumptions, roughly $4M of cumulative burn. 20% higher spend per member brings Year 3 to breakeven; a Pro tier alone gets it to roughly −$0.07M.
 
 ### Sensitivity (Year 3)
 
@@ -95,7 +95,7 @@ Interchange and spend-per-member drive the outcome; the rate environment is a se
 | Recurring budget per period, auto top-up | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ | ◐ recurring expenses | ✗ | ✗ | ✗ | ◐ | ✅ allowance | ◐ running split | ✗ |
 | Guardrails: negative-balance recovery, freeze on dispute/chargeback | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ◐ limits | ◐ | ✅ | ✗ | ✗ |
 | Apple / Google Wallet tap to pay | ✅ (simulated today) | ✅ | ✗ | ✗ | ✗ | ◐ | ✗ | ✗ | ✗ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Available in the US | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **✗** | **✗ closed** | ✅ | ✗ UK/EU | ✅ (fall 2026) |
+| Available in the US | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **✗** | **✗ closed** | ✅ | ◐ Revolut yes; Monzo left the US in 2026 | ✅ (fall 2026) |
 | Free for members | ✅ | ◐ 4 expenses/day free; Pro $3.99/mo; 1.75% instant | ◐ 3% credit, 1.75% instant | ✅ | ✅ | ✅ | ◐ Premium | ✅ | ✅ | ✅ | — | ✗ $5.99+/mo | ✅ | ✅ |
 
 † Braid raised ~$10M (Index, Accel), passed $10M/month in volume, and shut down in September 2023 after losing its sponsor bank for six months and a forced re-platform. Lesson we built around: own the rules engine and state; keep every partner swappable.
@@ -106,7 +106,7 @@ Interchange and spend-per-member drive the outcome; the rate environment is a se
 2. **Agreement is a protocol, not a reminder.** The payer sends the first proposal, only involved members are notified, each must accept the version they actually saw, and a split that stalls 7 days freezes the group. Nobody else has an approval step.
 3. **Receipt scans are verified against the card charge** before anyone can claim an item. Splitwise, Settle Up and Apple read receipts; none reconcile them to a payment.
 4. **Standing groups, not one-off dinners.** A budget per period with automatic top-ups is built for roommates, couples and teams. The competitors nearest to us in the US (Venmo Groups, Cash App Pools) are built for a trip or a gift.
-5. **US gap.** The two live shared-card products are EU/UK; the US has pay-later ledgers and pots.
+5. **US gap.** The only live shared-card product, Cino, is EU/UK (Braid, the US one, shut down in 2023); the US has pay-later ledgers and pots.
 
 Honest weaknesses to be ready for: no bank partner yet; members pre-fund; post-purchase agreement can stall (mitigated by the default split and the 7-day freeze); Splitwise and Venmo are already on everyone's phone.
 
@@ -119,7 +119,7 @@ Honest weaknesses to be ready for: no bank partner yet; members pre-fund; post-p
 | Layer | Size | What it is |
 |---|---|---|
 | US mobile P2P transaction value | **$1.7T (2024)**; eMarketer projects ~$2.2T by 2026 | Venmo, Zelle, Cash App etc. Zelle alone moved $1.2T in 2025 (+20%); Venmo ~$325B (+12%); PayPal's Venmo revenue $1.7B. |
-| US P2P users | **169.6M (68% of smartphone users)**, ~$7,200 sent per user per year and rising faster than user growth as people repay each other for rent, furniture and trips | eMarketer |
+| US P2P users | **169.6M (68% of smartphone users)**, with value per user rising faster than user growth as people repay each other for rent, furniture and trips. (eMarketer's ~$7,200 per user comes from its narrower ~$1.2T series, so it is not shown next to $1.7T.) | eMarketer |
 | Bill-splitting app revenue (global) | **$1.26B (2025) → $3.9B (2035)**, 11.8% CAGR; North America 44.6%; group travel the fastest-growing use | Emergen Research |
 | US debit + prepaid interchange pool | **$34.1B / yr** (2023); prepaid cards alone $5.2B at 1.54% of value | Federal Reserve |
 | Proof the problem is big | Splitwise: 50M registered, 10M MAU, $90B+ split since 2011, profitable. Cash App: 60% of US adults take part in group money pooling. | |
@@ -179,4 +179,5 @@ Competitors
 - Braid shutdown: https://techcrunch.com/2023/10/09/consumer-payments-startup-braid-shuts-down-cites-struggles-with-leveraging-third-party-software/ ; https://www.fintechfutures.com/paytech/us-payments-start-up-braid-winds-down-operations
 - Greenlight plans and wallet: https://greenlight.com/plans ; Step: https://walletgrower.com/blog/greenlight-vs-gohenry-vs-step-2026
 - Monzo Split, Revolut Group Bills, Apple Cash receipt split (iOS 27): https://monzo.com/features/monzo-split ; https://dimesum.com/blog/bank-split-features-compared
+- Monzo leaving the US (accounts closed by June 2026): https://www.emarketer.com/content/monzo-abandons-us-second-time ; Revolut US (1M+ customers, bank charter application): https://www.emarketer.com/content/revolut-us-market-charter-application
 - Earlier team research: `competitors.txt` (Oct 17, 2026)
