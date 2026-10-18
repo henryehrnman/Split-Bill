@@ -60,8 +60,47 @@ export function claudeReader(opts: {apiKey: string; model: string; fetch?: typeo
     });
     if (!res.ok) throw new Error(`Receipt model returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
     const body = await res.json() as {content?: {type: string; text?: string}[]};
-    const text = body.content?.find(b => b.type === 'text')?.text ?? '';
-    const out = JSON.parse(text) as {items: {name: string; amount_cents: number}[]; tax_cents: number; tip_cents: number};
-    return {items: out.items.map(i => ({name: i.name, amount: i.amount_cents})), tax: out.tax_cents, tip: out.tip_cents};
+    return parseRead(body.content?.find(b => b.type === 'text')?.text ?? '');
   };
+}
+
+// Gemini's generateContent takes an OpenAPI-style schema (uppercase types, no additionalProperties).
+const geminiSchema = {
+  type: 'OBJECT',
+  properties: {
+    items: {
+      type: 'ARRAY',
+      items: {type: 'OBJECT', properties: {name: {type: 'STRING'}, amount_cents: {type: 'INTEGER'}}, required: ['name', 'amount_cents']},
+    },
+    tax_cents: {type: 'INTEGER'},
+    tip_cents: {type: 'INTEGER'},
+  },
+  required: ['items', 'tax_cents', 'tip_cents'],
+};
+
+// Same job through the Gemini API, which has a free tier. Free-tier requests may be used by Google, so demo with test receipts.
+export function geminiReader(opts: {apiKey: string; model: string; fetch?: typeof fetch; timeoutMs?: number}): ReadReceipt {
+  const send = opts.fetch ?? globalThis.fetch;
+  return async (photo, charge) => {
+    const res = await send(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(opts.model)}:generateContent`, {
+      method: 'POST',
+      headers: {'content-type': 'application/json', 'x-goog-api-key': opts.apiKey},
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 45_000),
+      body: JSON.stringify({
+        contents: [{parts: [
+          {inline_data: {mime_type: photo.mediaType, data: photo.data}},
+          {text: prompt(charge.merchant, charge.amount)},
+        ]}],
+        generation_config: {response_mime_type: 'application/json', response_schema: geminiSchema},
+      }),
+    });
+    if (!res.ok) throw new Error(`Receipt model returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const body = await res.json() as {candidates?: {content?: {parts?: {text?: string}[]}}[]};
+    return parseRead((body.candidates?.[0]?.content?.parts ?? []).map(p => p.text ?? '').join(''));
+  };
+}
+
+function parseRead(text: string): Read {
+  const out = JSON.parse(text) as {items: {name: string; amount_cents: number}[]; tax_cents: number; tip_cents: number};
+  return {items: out.items.map(i => ({name: i.name, amount: i.amount_cents})), tax: out.tax_cents, tip: out.tip_cents};
 }
