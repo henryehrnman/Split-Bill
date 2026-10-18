@@ -64,11 +64,28 @@ All amounts are integer cents. Splits are allocated so they always add up to the
 
 ## SideShift: Best Startup Idea
 
+SideShift runs creator (UGC) marketing campaigns for brands, and the track asks for the strongest startup concept that knows how it would reach people. Lead with distribution, not features. Their judges come to the table at any time during the round.
+
+**60-second pitch**
+"We're four roommates, and one of us always fronts the bill: groceries, utilities, the Airbnb. Then they spend a week chasing everyone on Venmo. chipin fixes that before it happens. Everyone puts their share into a group fund and gets their own card on it. Anyone can pay, and the group agrees the split afterwards: Gemini reads the receipt, everyone taps what they had, and it settles to the cent.
+The reason it spreads: you can't use chipin alone. A group doesn't activate until at least two people join, so every person who signs up brings in the people they share costs with, and every purchase pings everyone who owes a share. Our first market is college roommates. We'd launch at UW during move-in week, when every apartment is splitting furniture, groceries and utilities, and use campus creators to show the moment everyone knows: who's paying for this?
+Card products like this exist in Europe, but not here, and the main US split app still lists its virtual cards as not live. We earn interchange on every group purchase, so we make money when groups spend together, not by charging friends to pay each other back."
+Then show it: open Connor's demo account (Profile > Demo account > Connor) to show the four of us, our groups and pending charges, and tap through one split.
+
 **How does it spread?**
 It's multiplayer by design: creating a group invites 1-3 more people, and every purchase notifies everyone with a share. Each new user arrives through a friend who already uses it. Natural communities: roommates, couples, trips, sports teams, creator meetups and their crews.
 
 **Why now, and why us?**
 The closest card products (Cino, Splita) are Europe and UK only, and the main US split app (Split, splitapp.co) lists virtual cards as "not live yet". Its reviews complain about scan accuracy, fees and slow payouts, which our flow removes: scans are checked against the charge and there's no repayment step.
+
+**How would you get your first 100 groups?**
+One campus first. Move-in week at UW: dorm floors, apartment buildings and clubs, with student creators posting the "who's paying" moment. Each group that signs up is 2-4 people, so 100 groups is a few hundred users. This is a plan; we have no users yet, and we say so.
+
+**Why would creators post about it?**
+Splitting money between friends is already a relatable, shareable moment (the Airbnb, the grocery run, the group dinner), and a trip or a creator's crew is a group by nature. We'd pay campus creators per post, which is the kind of campaign SideShift runs.
+
+**Do you have traction?**
+Not yet; it's a weekend build. What's real: a live app at https://chipin-app.vercel.app, real accounts and live updates across phones, Gemini reading receipts, and four people plus AI agents shipping it overnight.
 
 ## DubHacks NEXT
 
