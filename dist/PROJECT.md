@@ -1,5 +1,8 @@
 # Split Bill — project plan and progress
-Updated: October 17, 2026, Pacific. Owners: Henry Ehrnman, Connor Zacharias. Stage: hackathon MVP.
+Updated: October 18, 2026, Pacific. Owners: Henry Ehrnman, Connor Zacharias. Stage: hackathon MVP.
+
+## Deployed server — October 17–18, 2026
+PR3 reliability and consent guards are merged, and receipt photos are merged. `npm ci` in `mobile/` works after the lockfile fix at `7126984`. The shared server is deployed: Supabase project `uiwbsedibgvwaklmwjna` is running main, migration `0001` is applied, and the `rpc` Edge Function is active. Email confirmation is off and `DEMO_MODE` is off. A live check passed from sign-in through the function: an unauthenticated call returns 401, and a signed-in call with no profile returns 403 `no_profile`. Two authenticated clients then completed an invite, an equal split, a sample-receipt claim board, and a live update on that server. On October 18, 2026 the hosted itemized claim board was checked in two browsers at https://splitbill-hackathon.vercel.app (sample receipt, separate claims, an accepted edit, both locks, and a live settle). A check on two physical phones is still outstanding. Receipt photo scans return 503 `scan_off` until `ANTHROPIC_API_KEY` is set. README current state was updated at `797cae3`. The hosted web app is live at https://splitbill-hackathon.vercel.app (main `bd99060`).
 
 ## Receipt photos — October 17, 2026 (Saahil)
 With shared accounts, the cardholder can take or choose a photo of the receipt on the Split tab. The app shrinks it to a 1568px JPEG and sends it with `scanReceipt`. The server first checks the caller could scan that charge, then asks a Claude vision model (`claude-sonnet-5-5` by default) once for items, tax and tip, outside the write retry loop. The read only becomes the claim board if it adds up exactly to the charge; otherwise the receipt is one editable line. A client can't submit its own read. The local demo and "Use sample receipt" keep the sample scanner. Capture and upload run inside Connor's first-send controller and wait for the app to return to the foreground, so opening the camera, cancelling, or a failed upload doesn't send the default split.
@@ -78,7 +81,7 @@ Shares sum exactly to total. Invalid input blocks payment. Changes revoke approv
 Measure time from bill entry to ready state, allocation errors, completion rate and participant comprehension. Test equal dinner, unequal food/shared appetizer, tax/tip change, absent friend and declined funding. Success targets are hypotheses: group can explain every charge; no unapproved amount; complete sample checkout within 60 seconds. No user tests conducted yet.
 
 ## Demo script
-Open prototype. Explain one merchant payment and individual shares. Set a total and switch to percentage or custom shares. Approve three contributions. Change tip to show approvals resetting. Reapprove, simulate a decline, then retry successfully. Show receipt. State that real issuing is a separate partner-backed integration milestone.
+The hackathon script is [`DEMO.md`](DEMO.md): a 90-second pitch and a 3-minute demo on two phones at https://splitbill-hackathon.vercel.app. The single-screen prototype steps that used to be here no longer apply.
 
 ## Progress and operating instructions
 2026-10-15: Verified no prior Split Bill schedule or Site; existing daily and weekly reports paused. Created project folder and private Site. Enabled Build Split Bill hourly (highest supported scheduling frequency). First unattended run not yet verified. Created first prototype and this research/architecture/backlog. JS syntax and targeted arithmetic/state checks executed during initial build; browser visual QA unavailable in this environment.
