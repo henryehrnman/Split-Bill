@@ -95,8 +95,9 @@ export function geminiReader(opts: {apiKey: string; model: string; fetch?: typeo
       }),
     });
     if (!res.ok) throw new Error(`Receipt model returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    const body = await res.json() as {candidates?: {content?: {parts?: {text?: string}[]}}[]};
-    return parseRead((body.candidates?.[0]?.content?.parts ?? []).map(p => p.text ?? '').join(''));
+    const body = await res.json() as {candidates?: {content?: {parts?: {text?: string; thought?: boolean}[]}}[]};
+    // Thinking models can return their reasoning as extra parts; only the answer parts are the JSON.
+    return parseRead((body.candidates?.[0]?.content?.parts ?? []).filter(p => !p.thought).map(p => p.text ?? '').join(''));
   };
 }
 

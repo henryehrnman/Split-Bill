@@ -10,7 +10,8 @@ const charge = {merchant: 'Juniper', amount: 1234};
   const fetch = (async (url: string, init: any) => {
     sent = {url, init};
     const json = JSON.stringify({items: [{name: 'Pasta', amount_cents: 1000}], tax_cents: 234, tip_cents: 0});
-    return new Response(JSON.stringify({candidates: [{content: {parts: [{text: json.slice(0, 10)}, {text: json.slice(10)}]}}]}));
+    const parts = [{text: 'Reading the totals first...', thought: true}, {text: json.slice(0, 10)}, {text: json.slice(10)}];
+    return new Response(JSON.stringify({candidates: [{content: {parts}}]}));
   }) as typeof globalThis.fetch;
   const read = await geminiReader({apiKey: 'k', model: 'gemini-test', fetch})(photo, charge);
   assert.deepEqual(read, {items: [{name: 'Pasta', amount: 1000}], tax: 234, tip: 0});
