@@ -29,7 +29,7 @@ type Method = (c: Ctx, a: any[]) => unknown;
 // Same names and argument order as mobile/src/lib/api.ts, minus the leading actor (it comes from the JWT).
 const methods: Record<string, Method> = {
   fetch: () => undefined,
-  searchUsers: ({db, actor}, [query, exclude]) => d.searchUsers(db, String(query ?? ''), [actor, ...(Array.isArray(exclude) ? exclude : [])]).map(publicUser),
+  searchUsers: ({db, actor}, [query, exclude]) => d.searchUsers(db, String(query ?? ''), [actor, ...(Array.isArray(exclude) ? exclude : [])]).map(u => searchResult(u, String(query ?? ''))),
   createGroup: ({db, actor, t}, [input]) => void d.createGroup(db, actor, input, t),
   respondInvite: ({db, actor, t}, [groupId, accept]) => d.respondInvite(db, actor, groupId, !!accept, t),
   deposit: ({db, actor, t}, [groupId, amount]) => d.deposit(db, actor, groupId, amount, t),
@@ -64,6 +64,18 @@ const methods: Record<string, Method> = {
 };
 
 const publicUser = (u: User) => ({id: u.id, name: u.name, initials: u.initials, tone: u.tone, handle: u.handle, email: u.email, phone: u.phone});
+
+// Search reaches people outside your groups, so their contact details stay hidden unless you typed them exactly.
+function searchResult(u: User, query: string) {
+  const q = query.trim().toLowerCase();
+  const digits = q.replace(/\D/g, '');
+  const [local, domain = ''] = u.email.split('@');
+  const email = q === u.email.toLowerCase() ? u.email : `${local.slice(0, 1)}***@${domain}`;
+  const phone = digits.length >= 7 && digits === u.phone.replace(/\D/g, '') ? u.phone : '';
+  return {...publicUser(u), email, phone};
+}
+
+const MAX_ARGS = 32_000; // everyone shares one row, so one oversized request would slow every call
 
 /** The Db as one caller may see it: their groups, the people in them, their own cards, ledger and notifications. */
 export function viewFor(db: Db, userId: string): Db {
@@ -120,6 +132,7 @@ export async function handle(store: Store, authId: string | null, body: any, opt
   if (!isCreate && !Object.hasOwn(methods, method)) return fail(400, 'Unknown method.', 'bad_method');
   if (DEMO_ONLY.has(method) && !opts.demo) return fail(403, 'Demo controls are off.', 'demo_off');
   if (!authId && !opts.demo) return fail(401, 'Sign in first.', 'unauthenticated');
+  if (method !== 'scanReceipt' && JSON.stringify(args).length > MAX_ARGS) return fail(413, 'That request is too large.', 'too_large');
 
   // Who is calling: the JWT decides. Never the body, except the demo escape hatch.
   const actorIn = (db: Db, links: Links) => {
