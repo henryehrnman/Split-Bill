@@ -74,6 +74,11 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   assert.equal(bad.status, 400);
   assert.equal(s.state!.version, before);
 
+  // Every api.ts action (except demo controls and sign-up) is exposed by name.
+  const gid = annDb.groups[0].id;
+  assert.equal((await call(s, 'auth-ann', 'setSingleOpenCharge', [gid, false])).status, 200);
+  assert.equal(s.state!.db.groups.find((x: any) => x.id === gid).singleOpenCharge, false);
+
   // Search never returns the caller.
   const found = await call(s, 'auth-cy', 'searchUsers', ['Tester', []]);
   assert.ok(!(found.body as any[]).some(u => u.handle === 'cy1'));

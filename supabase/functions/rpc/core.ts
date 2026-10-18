@@ -34,6 +34,7 @@ const methods: Record<string, Method> = {
   withdraw: ({db, actor, t}, [groupId, amount]) => d.withdraw(db, actor, groupId, amount, t),
   setAutoDeposit: ({db, actor}, [groupId, on]) => d.setAutoDeposit(db, actor, groupId, !!on),
   setFailTopUps: ({db, actor}, [groupId, on]) => d.setFailTopUps(db, actor, groupId, !!on),
+  setSingleOpenCharge: ({db, actor}, [groupId, on]) => d.setSingleOpenCharge(db, actor, groupId, !!on),
   setDefaultSplit: ({db, actor}, [groupId, split]) => d.setDefaultSplit(db, actor, groupId, split),
   proposeBudget: ({db, actor, t}, [groupId, amount]) => d.proposeBudget(db, actor, groupId, amount, t),
   respondBudget: ({db, actor}, [proposalId, accept]) => d.respondBudget(db, actor, proposalId, !!accept),
