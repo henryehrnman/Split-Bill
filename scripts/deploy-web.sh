@@ -11,8 +11,17 @@ export EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY="${EXPO_PUBLIC_SUPABASE_PUBLISHABLE_
 out="$(mktemp -d)"
 trap 'rm -rf "$out"' EXIT
 (cd "$root/mobile" && npx expo export -p web --output-dir "$out" --clear)
+
+# The Vercel CLI never uploads node_modules folders, so fonts and icons exported under assets/node_modules would fall through to index.html.
+if [ -d "$out/assets/node_modules" ]; then
+  mv "$out/assets/node_modules" "$out/assets/vendor"
+  { grep -rlF --include='*.js' --include='*.html' --include='*.json' '/assets/node_modules/' "$out" || true; } | while IFS= read -r f; do
+    perl -pi -e 's#/assets/node_modules/#/assets/vendor/#g' "$f"
+  done
+fi
+if find "$out" -name node_modules -print -quit | grep -q .; then echo "A node_modules folder is still in the export; Vercel would skip it." >&2; exit 1; fi
 cat > "$out/vercel.json" <<'JSON'
-{"rewrites": [{"source": "/(.*)", "destination": "/index.html"}]}
+{"rewrites": [{"source": "/((?!assets/|_expo/).*)", "destination": "/index.html"}]}
 JSON
 
 # The project link lives in the ignored root .vercel/ so every deploy targets the same Vercel project.
