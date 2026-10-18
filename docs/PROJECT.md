@@ -81,7 +81,7 @@ Shares sum exactly to total. Invalid input blocks payment. Changes revoke approv
 Measure time from bill entry to ready state, allocation errors, completion rate and participant comprehension. Test equal dinner, unequal food/shared appetizer, tax/tip change, absent friend and declined funding. Success targets are hypotheses: group can explain every charge; no unapproved amount; complete sample checkout within 60 seconds. No user tests conducted yet.
 
 ## Demo script
-Open prototype. Explain one merchant payment and individual shares. Set a total and switch to percentage or custom shares. Approve three contributions. Change tip to show approvals resetting. Reapprove, simulate a decline, then retry successfully. Show receipt. State that real issuing is a separate partner-backed integration milestone.
+The hackathon script is [`DEMO.md`](DEMO.md): a 90-second pitch and a 3-minute demo on two phones at https://splitbill-hackathon.vercel.app. The single-screen prototype steps that used to be here no longer apply.
 
 ## Progress and operating instructions
 2026-10-15: Verified no prior Split Bill schedule or Site; existing daily and weekly reports paused. Created project folder and private Site. Enabled Build Split Bill hourly (highest supported scheduling frequency). First unattended run not yet verified. Created first prototype and this research/architecture/backlog. JS syntax and targeted arithmetic/state checks executed during initial build; browser visual QA unavailable in this environment.

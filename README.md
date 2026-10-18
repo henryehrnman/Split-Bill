@@ -108,7 +108,7 @@ For the hackathon (by 10:00am October 18; details in [`launch.txt`](launch.txt) 
 
 1. **Server (Henry):** implemented Supabase table and RPC Edge Function running `domain.ts`, sign-in to user mapping and filtered responses. Deploy using [`supabase/README.md`](supabase/README.md).
 2. **App (Connor):** implemented sign-in/sign-up and profile completion, authenticated HTTP `api.ts`, version-ping Realtime updates, remote invite search, demo-mode toggle and account isolation, loading/error/retry states. Configure the public client settings and verify against the deployed server on two phones.
-3. **Receipts, hosting, demo (Saahil):** receipt photos are implemented (Claude vision model on the server); they need `ANTHROPIC_API_KEY` set on the deployed function and a test on real receipts. The hosted web app is live at [https://splitbill-hackathon.vercel.app](https://splitbill-hackathon.vercel.app). Still to do: a demo group with real accounts, a demo script, and a backup video.
+3. **Receipts, hosting, demo (Saahil):** receipt photos are implemented (Claude vision model on the server); they need `ANTHROPIC_API_KEY` set on the deployed function and a test on real receipts. The hosted web app is live at [https://splitbill-hackathon.vercel.app](https://splitbill-hackathon.vercel.app). The demo script is [`docs/DEMO.md`](docs/DEMO.md). Still to do: a demo group with real accounts, and a backup video.
 4. Stretch goal: Stripe Issuing test mode, with the "Simulate tap" button firing Stripe's real card-approval webhook.
 
 Left out until after the hackathon: real money and cards, Apple Pay, native push notifications, bank linking, saved-card debt recovery (stays simulated), scheduled jobs (`tick()` runs them on every request), normalized tables.
