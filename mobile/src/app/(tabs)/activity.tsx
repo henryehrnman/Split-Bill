@@ -9,7 +9,7 @@ import {currentProposal, memberIds, spendSummary, userById} from '../../lib/doma
 import type {Charge} from '../../lib/domain';
 
 export default function Activity() {
-  const {db, group, now} = useStore();
+  const {db, group, now, demoMode} = useStore();
   const [open, setOpen] = useState<string | null>(null);
   if (!group) {
     return (
@@ -29,7 +29,7 @@ export default function Activity() {
         <Stat label={`${monthName} spend`} value={money(summary.month)} />
         <Stat label="All-time spend" value={money(summary.total)} />
       </Row>
-      <T style={s.caption}>{summary.count} settled {summary.count === 1 ? 'charge' : 'charges'} · simulated payments, saved on this device</T>
+      <T style={s.caption}>{summary.count} settled {summary.count === 1 ? 'charge' : 'charges'} · simulated payments, {demoMode ? 'saved on this device' : 'shared with your group'}</T>
 
       <T style={s.section}>Charges</T>
       {!charges.length && <T style={s.small}>No purchases yet. Use the card to make the first one.</T>}
@@ -95,7 +95,7 @@ function ChargeRow({charge, open, onToggle}: {charge: Charge; open: boolean; onT
             {charge.settledAt ? ` · settled ${shortDate(charge.settledAt)}` : ''}
           </T>
           {charge.dispute && <T style={{color: C.danger, fontSize: 12, marginTop: 6}}>{charge.dispute.reason}</T>}
-          {charge.status === 'pending' && <Button secondary title="Open split" onPress={() => router.push('/split')} />}
+          {charge.status === 'pending' && <Button secondary title="Open split" onPress={() => router.push({pathname: '/split', params: {charge: charge.id}})} />}
           {charge.status === 'settled' && mine > 0 && !confirm && (
             <Pressable accessibilityRole="button" onPress={() => setConfirm(true)} style={{paddingVertical: 10}}>
               <T style={{fontSize: 12, color: C.muted}}>Report a chargeback (demo)</T>
@@ -104,7 +104,7 @@ function ChargeRow({charge, open, onToggle}: {charge: Charge; open: boolean; onT
           {confirm && (
             <View style={{marginTop: 8}}>
               <T style={s.small}>A chargeback freezes the whole group and escalates it to the dispute center as potential fraud.</T>
-              <Button danger title="File chargeback" onPress={() => run(a => api.fileChargeback(a, charge.id), 'Chargeback filed. The group is frozen pending review.').then(() => setConfirm(false))} />
+              <Button danger title="File chargeback" onPress={() => run(a => api.fileChargeback(a, charge.id), 'Chargeback filed. The group is frozen pending review.').then(ok => { if (ok) setConfirm(false); })} />
               <Button secondary title="Cancel" onPress={() => setConfirm(false)} />
             </View>
           )}
