@@ -1,18 +1,22 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {AppState, View, Pressable, TextInput} from 'react-native';
-import {router, useFocusEffect} from 'expo-router';
+import {AppState, View, Pressable, ScrollView, TextInput} from 'react-native';
+import {router, useFocusEffect, useLocalSearchParams} from 'expo-router';
 import {Page, T, Button, Avatar, Icon, Pill, Segmented, Chip, Field, GroupPicker, EmptyState, Row, ago, s, C} from '../../lib/ui';
 import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents, toInput, allocate} from '../../lib/money';
 import {computeSplit} from '../../lib/split';
 import type {SplitInput} from '../../lib/split';
-import {SPLIT_DEADLINE, DAY, currentProposal, isDraft, itemBoardStatus, memberIds, pendingCharge, requiredApprovers, userById, waitingOn} from '../../lib/domain';
+import {SPLIT_DEADLINE, DAY, currentProposal, isDraft, itemBoardStatus, memberIds, openCharges, requiredApprovers, userById, waitingOn} from '../../lib/domain';
 import type {Charge, Group, Receipt} from '../../lib/domain';
 
 export default function Split() {
-  const {db, group} = useStore();
-  const pending = group ? pendingCharge(db, group.id) : null;
+  const {db, group, viewer} = useStore();
+  const {charge: linked} = useLocalSearchParams<{charge?: string}>();
+  const [picked, setPicked] = useState<string | null>(null);
+  const open = group ? openCharges(db, group.id) : [];
+  const myDraft = open.find(c => isDraft(c) && c.cardholderId === viewer.id);
+  const pending = myDraft ?? open.find(c => c.id === (picked ?? linked)) ?? open[0];
   if (!group || !pending) {
     return (
       <Page title="Split" subtitle="Agree on who owes what after each purchase.">
@@ -26,7 +30,15 @@ export default function Split() {
       </Page>
     );
   }
-  return <ChargeSplit key={pending.id} group={group} charge={pending} />;
+  const picker =
+    open.length > 1 && !myDraft ? (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8, paddingBottom: 18}}>
+        {open.map(c => (
+          <Chip key={c.id} label={`${c.merchant} · ${money(c.amount)}`} selected={c.id === pending.id} onPress={() => setPicked(c.id)} />
+        ))}
+      </ScrollView>
+    ) : null;
+  return <ChargeSplit key={pending.id} group={group} charge={pending} picker={picker} />;
 }
 
 type Mode = 'items' | 'proposal';
@@ -69,7 +81,7 @@ function useSendDefaultOnLeave(group: Group, charge: Charge) {
   };
 }
 
-function ChargeSplit({group, charge}: {group: Group; charge: Charge}) {
+function ChargeSplit({group, charge, picker}: {group: Group; charge: Charge; picker: React.ReactNode}) {
   const {db, now, viewer} = useStore();
   const [mode, setMode] = useState<Mode>(isDraft(charge) || charge.receipt?.itemized === false ? 'proposal' : 'items');
   const [editing, setEditing] = useState(false);
@@ -85,10 +97,11 @@ function ChargeSplit({group, charge}: {group: Group; charge: Charge}) {
   return (
     <Page title={charge.merchant} subtitle={`Paid by ${payer} with the ${group.name} card · ${ago(now, charge.createdAt)}`} footer={footer ?? undefined}>
       <GroupPicker />
+      {picker}
       <View style={{alignItems: 'center', paddingBottom: 18}}>
         <T style={s.money}>{money(charge.amount)}</T>
         <T style={[s.small, {marginTop: 4, color: daysLeft <= 2 ? C.danger : C.muted}]}>
-          {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left to agree · the card stays locked until this is settled
+          {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left to agree · {group.singleOpenCharge ? 'the card stays locked until this is settled' : 'held from the group fund until settled'}
         </T>
       </View>
       {draft && !mine ? (

@@ -1,11 +1,11 @@
 import React, {useState} from 'react';
-import {View, Pressable, TextInput} from 'react-native';
+import {View, Pressable, Switch, TextInput} from 'react-native';
 import {router} from 'expo-router';
 import {Page, T, Button, Avatar, Icon, Pill, Segmented, Field, GroupPicker, EmptyState, Row, StandingPill, ago, periodLabel, s, C} from '../../lib/ui';
 import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents, toInput} from '../../lib/money';
-import {DAY, availableFunds, currentProposal, isActive, isDraft, itemBoardStatus, memberOf, nextPeriodAt, notificationsFor, openBudgetProposal, pendingCharge, shares, standing, userById, waitingOn} from '../../lib/domain';
+import {DAY, availableFunds, currentProposal, isActive, isDraft, itemBoardStatus, memberOf, nextPeriodAt, notificationsFor, openBudgetProposal, openCharges, shares, standing, userById, waitingOn} from '../../lib/domain';
 import type {Charge, Db, Group} from '../../lib/domain';
 
 export default function Home() {
@@ -29,8 +29,8 @@ export default function Home() {
 
 function HomeFooter({group}: {group: Group}) {
   const {db} = useStore();
-  const pending = pendingCharge(db, group.id);
-  return <Button title={pending ? 'Review pending split' : 'Open your group card'} onPress={() => router.push(pending ? '/split' : '/card')} />;
+  const pending = openCharges(db, group.id).length;
+  return <Button title={pending ? `Review pending ${pending === 1 ? 'split' : 'splits'}` : 'Open your group card'} onPress={() => router.push(pending ? '/split' : '/card')} />;
 }
 
 function MemberRows({group}: {group: Group}) {
@@ -117,10 +117,14 @@ function pendingLine(db: Db, c: Charge, viewerId: string) {
 
 function ActiveGroup({group}: {group: Group}) {
   const {db, viewer, now, run} = useStore();
-  const pending = pendingCharge(db, group.id);
+  const open = openCharges(db, group.id);
   const proposal = openBudgetProposal(db, group.id);
   const daysLeft = Math.max(0, Math.ceil((nextPeriodAt(group) - now) / DAY));
-  const status = group.frozen ? (['Frozen', 'danger'] as const) : pending ? (['Split pending', 'warn'] as const) : (['Card ready', 'success'] as const);
+  const status = group.frozen
+    ? (['Frozen', 'danger'] as const)
+    : open.length
+      ? ([open.length === 1 ? 'Split pending' : `${open.length} splits pending`, 'warn'] as const)
+      : (['Card ready', 'success'] as const);
 
   return (
     <>
@@ -135,8 +139,8 @@ function ActiveGroup({group}: {group: Group}) {
         <T style={[s.small, {marginTop: 4}]}>{money(group.budget)} {periodLabel(group.periodDays)} · resets in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}</T>
         <T style={[s.money, {marginTop: 14}]}>{money(Math.max(0, availableFunds(db, group)))}</T>
         <T style={s.small}>Available in the group fund</T>
-        {pending && (
-          <Pressable accessibilityRole="button" onPress={() => router.push('/split')} style={{marginTop: 16, backgroundColor: C.softWarn, borderRadius: 12, padding: 14}}>
+        {open.map(pending => (
+          <Pressable key={pending.id} accessibilityRole="button" onPress={() => router.push({pathname: '/split', params: {charge: pending.id}})} style={{marginTop: 16, backgroundColor: C.softWarn, borderRadius: 12, padding: 14}}>
             <Row>
               <View style={{flex: 1}}>
                 <T style={s.caption}>PENDING SPLIT</T>
@@ -146,7 +150,7 @@ function ActiveGroup({group}: {group: Group}) {
               <Icon name="chevron-right" color={C.muted} size={18} />
             </Row>
           </Pressable>
-        )}
+        ))}
         {group.frozen && <T style={{color: C.danger, fontSize: 13, marginTop: 12}}>Frozen: {group.frozen.reason} Escalated to the dispute center.</T>}
       </View>
 
@@ -190,9 +194,9 @@ function Notifications({group}: {group: Group}) {
     <>
       <T style={s.section}>Notifications</T>
       {items.map(n => {
-        const open = pendingCharge(db, group.id)?.id === n.chargeId;
+        const open = openCharges(db, group.id).some(c => c.id === n.chargeId);
         return (
-          <Pressable key={n.id} accessibilityRole="button" disabled={!open} onPress={() => router.push('/split')} style={s.listRow}>
+          <Pressable key={n.id} accessibilityRole="button" disabled={!open} onPress={() => router.push({pathname: '/split', params: {charge: n.chargeId}})} style={s.listRow}>
             <Icon name="bell" size={16} color={open ? C.blue : C.muted} />
             <View style={{flex: 1}}>
               <T style={{fontSize: 14, color: open ? C.ink : C.muted}}>{n.text}</T>
@@ -242,6 +246,26 @@ function GroupSettings({group}: {group: Group}) {
           }
         />
       )}
+
+      <T style={s.section}>Purchases</T>
+      <Row>
+        <View style={{flex: 1}}>
+          <T style={{fontSize: 14}}>One purchase at a time</T>
+          <T style={s.caption}>
+            {group.singleOpenCharge
+              ? 'Each split has to be agreed before the card can be used again.'
+              : 'Several splits can be open at once. Open charges are held from the fund, and from the balance of anyone who hasn’t added their share.'}
+          </T>
+        </View>
+        <Switch
+          accessibilityLabel={`One purchase at a time for ${group.name}`}
+          value={group.singleOpenCharge}
+          trackColor={{false: '#dfe3ea', true: C.blue}}
+          onValueChange={v => {
+            run(a => api.setSingleOpenCharge(a, group.id, v), v ? 'The card now waits for each split to be agreed.' : 'Several splits can now be open at once.');
+          }}
+        />
+      </Row>
 
       <T style={s.section}>Budget</T>
       <T style={[s.small, {marginBottom: 4}]}>Changing it needs everyone’s OK. A higher budget raises each person’s share from the next period; a lower one keeps any surplus.</T>

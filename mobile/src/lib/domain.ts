@@ -26,6 +26,8 @@ export type Group = {
   periodStart: number;
   members: Member[];
   defaultSplit: DefaultSplit;
+  // When on, a split must be agreed before the next purchase; when off, several charges can be open at once.
+  singleOpenCharge: boolean;
   frozen: null | {reason: string; at: number};
 };
 export type Card = {id: string; groupId: string; userId: UserId; last4: string; wallet: Wallet | null; frozen: boolean};
@@ -59,7 +61,7 @@ export type LedgerEntry = {
 };
 export type Notification = {id: string; userId: UserId; groupId: string; chargeId: string; text: string; at: number};
 export type Db = {
-  version: 5;
+  version: 6;
   seq: number;
   clockOffset: number;
   users: User[];
@@ -93,8 +95,11 @@ export const memberIds = (g: Group) => g.members.map(m => m.userId);
 export const joinedIds = (g: Group) => g.members.filter(m => m.status === 'joined').map(m => m.userId);
 export const isActive = (g: Group) => g.members.length >= 2 && g.members.every(m => m.status === 'joined');
 export const fundBalance = (g: Group) => g.members.reduce((a, m) => a + m.balance, 0);
-export const pendingCharge = (db: Db, groupId: string) => db.charges.find(c => c.groupId === groupId && c.status === 'pending') ?? null;
-export const availableFunds = (db: Db, g: Group) => fundBalance(g) - (pendingCharge(db, g.id)?.amount ?? 0);
+// Oldest first; db.charges is newest first.
+export const openCharges = (db: Db, groupId: string) => db.charges.filter(c => c.groupId === groupId && c.status === 'pending').reverse();
+export const pendingCharge = (db: Db, groupId: string) => openCharges(db, groupId)[0] ?? null;
+export const reservedFunds = (db: Db, groupId: string) => openCharges(db, groupId).reduce((a, c) => a + c.amount, 0);
+export const availableFunds = (db: Db, g: Group) => fundBalance(g) - reservedFunds(db, g.id);
 export const currentProposal = (c: Charge) => c.proposals[c.proposals.length - 1];
 export const cardFor = (db: Db, groupId: string, userId: UserId) => db.cards.find(c => c.groupId === groupId && c.userId === userId) ?? null;
 export const openBudgetProposal = (db: Db, groupId: string) => db.budgetProposals.find(p => p.groupId === groupId) ?? null;
@@ -142,13 +147,18 @@ export function waitingOn(p: Proposal) {
   return requiredApprovers(p).filter(id => !p.acceptedBy.includes(id));
 }
 
+// A member's balance minus their shares of charges still being agreed.
+function unreservedBalance(db: Db, g: Group, userId: UserId) {
+  return memberOf(g, userId).balance - openCharges(db, g.id).reduce((a, c) => a + (currentProposal(c).shares[userId] ?? 0), 0);
+}
+
 export function spendLimit(db: Db, groupId: string, userId: UserId) {
   const g = groupById(db, groupId);
   if (!isActive(g) || g.frozen) return 0;
   const s = standing(g, userId);
   if (s === 'suspended' || s === 'invited') return 0;
-  const fund = Math.max(0, fundBalance(g));
-  return s === 'restricted' ? Math.min(fund, Math.max(0, memberOf(g, userId).balance)) : fund;
+  const fund = Math.max(0, availableFunds(db, g));
+  return s === 'restricted' ? Math.min(fund, Math.max(0, unreservedBalance(db, g, userId))) : fund;
 }
 
 export function purchaseBlocker(db: Db, groupId: string, userId: UserId): string | null {
@@ -158,10 +168,11 @@ export function purchaseBlocker(db: Db, groupId: string, userId: UserId): string
   if (!isActive(g)) return 'Waiting for everyone to accept their invite and make their first deposit.';
   const s = standing(g, userId);
   if (s === 'suspended') return 'Your account is suspended until you repay what you owe the group.';
-  if (s === 'restricted' && memberOf(g, userId).balance <= 0) return `Add your ${money(shares(g)[userId])} share for this period to use the card.`;
-  if (fundBalance(g) <= 0) return 'The group fund is empty.';
   const pending = pendingCharge(db, groupId);
-  if (pending) return `Agree on the split for ${pending.merchant} before the next purchase.`;
+  if (pending && g.singleOpenCharge) return `Agree on the split for ${pending.merchant} before the next purchase.`;
+  if (s === 'restricted' && unreservedBalance(db, g, userId) <= 0) return `Add your ${money(shares(g)[userId])} share for this period to use the card.`;
+  if (fundBalance(g) <= 0) return 'The group fund is empty.';
+  if (availableFunds(db, g) <= 0) return 'The rest of the group fund is held for splits that are still being agreed.';
   if (!card) return 'You don’t have a card for this group yet.';
   if (card.frozen) return 'Your card is frozen.';
   if (!card.wallet) return 'Add your card to a wallet first.';
@@ -243,6 +254,7 @@ export function createGroup(db: Db, actor: UserId, input: {name: string; inviteI
     periodStart: now,
     members: ids.map(userId => ({userId, status: 'invited', balance: 0, autoDeposit: true, failTopUps: false, suspended: false, fundedPeriod: null})),
     defaultSplit: {method: 'equal'},
+    singleOpenCharge: true,
     frozen: null,
   };
   db.groups.push(g);
@@ -299,6 +311,12 @@ export function setDefaultSplit(db: Db, actor: UserId, groupId: string, split: D
     if (result.error) fail(result.error);
   }
   g.defaultSplit = split;
+}
+
+export function setSingleOpenCharge(db: Db, actor: UserId, groupId: string, on: boolean) {
+  const g = groupById(db, groupId);
+  joinedMember(g, actor);
+  g.singleOpenCharge = on;
 }
 
 export function proposeBudget(db: Db, actor: UserId, groupId: string, amount: number, now: number) {

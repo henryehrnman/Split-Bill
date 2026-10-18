@@ -6,7 +6,7 @@ import {seed} from './seed';
 
 // Fake backend: same call shape a real HTTP client will have later, with every rule
 // enforced in domain.ts and data persisted on this device.
-const STORAGE_KEY = 'splitbill.fake-backend.v5';
+const STORAGE_KEY = 'splitbill.fake-backend.v6';
 const LATENCY_MS = 120;
 
 let db: Db | null = null;
@@ -20,7 +20,7 @@ function decode(raw: string | null): Db | null {
   try {
     const x = JSON.parse(raw);
     const lists = ['users', 'groups', 'cards', 'charges', 'budgetProposals', 'ledger', 'notifications'];
-    return x && x.version === 5 && lists.every(k => Array.isArray(x[k])) ? (x as Db) : null;
+    return x && x.version === 6 && lists.every(k => Array.isArray(x[k])) ? (x as Db) : null;
   } catch {
     return null;
   }
@@ -69,6 +69,7 @@ export const api = {
   setAutoDeposit: (actor: UserId, groupId: string, on: boolean) => mutate(x => d.setAutoDeposit(x, actor, groupId, on)),
   setFailTopUps: (actor: UserId, groupId: string, on: boolean) => mutate(x => d.setFailTopUps(x, actor, groupId, on)),
   setDefaultSplit: (actor: UserId, groupId: string, split: DefaultSplit) => mutate(x => d.setDefaultSplit(x, actor, groupId, split)),
+  setSingleOpenCharge: (actor: UserId, groupId: string, on: boolean) => mutate(x => d.setSingleOpenCharge(x, actor, groupId, on)),
   proposeBudget: (actor: UserId, groupId: string, amount: number) => mutate((x, t) => d.proposeBudget(x, actor, groupId, amount, t)),
   respondBudget: (actor: UserId, proposalId: string, accept: boolean) => mutate(x => d.respondBudget(x, actor, proposalId, accept)),
   addToWallet: (actor: UserId, cardId: string, wallet: Wallet) => mutate(x => d.addToWallet(x, actor, cardId, wallet)),

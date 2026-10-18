@@ -13,7 +13,7 @@ const [henry, maya, jordan, connor, saahil] = DEMO_USERS.map(u => u.id);
 
 // Built through the same rules the fake backend enforces so the history is internally consistent.
 export function seed(now: number): Db {
-  const db: Db = {version: 5, seq: 0, clockOffset: 0, users: DEMO_USERS.map(u => ({...u})), groups: [], cards: [], charges: [], budgetProposals: [], ledger: [], notifications: []};
+  const db: Db = {version: 6, seq: 0, clockOffset: 0, users: DEMO_USERS.map(u => ({...u})), groups: [], cards: [], charges: [], budgetProposals: [], ledger: [], notifications: []};
   const at = (t: number) => {
     tick(db, t);
     return t;
