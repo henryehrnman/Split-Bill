@@ -436,6 +436,7 @@ const mountedMethods = source.slice(mountedReturn.argument.start, mountedReturn.
 function transitionFixture() {
   const events: string[] = [];
   const panes = {app: {innerHTML: 'current pane'}, modal: {innerHTML: 'current modal'}};
+  const screen = {getAnimations: () => []};
   const transition = {
     refresh: false, nextTab: null as string | null,
     outgoing: {remove() { events.push('remove outgoing'); }},
@@ -444,7 +445,10 @@ function transitionFixture() {
   };
   const context: any = {
     activeTabTransition: transition, disposed: false, busy: false, focusedForm: false,
+    pendingMotionRefresh: null, renderedRouteKey: 'groups:',
     state: {tab: 'groups', stack: [], splitDrafts: {kept: true}, selectionDrafts: {kept: true}},
+    routeKey: () => `${context.state.tab}:`,
+    $: () => screen,
     adopt(next: {version: number}) { events.push(`adopt ${next.version}`); },
     routeChanged() { events.push('route'); },
     safeRender() { events.push('refresh'); },
@@ -458,7 +462,7 @@ function transitionFixture() {
     toastTimer: 1, searchTimer: 2,
     clearTimeout(timer: number) { events.push(`clear timer ${timer}`); },
   };
-  runInNewContext(['update', 'nav', 'finishTabTransition'].map(declaration).join('\n')
+  runInNewContext(['update', 'refreshAfterMotion', 'nav', 'finishTabTransition'].map(declaration).join('\n')
     + `\nthis.mounted=${mountedMethods};this.lifecycle={update,nav,finishTabTransition};`, context);
   return {context, transition, events, panes};
 }
@@ -564,4 +568,242 @@ for (const queued of [null, 'groups']) {
   assert.deepEqual(f.events, ['remove outgoing', 'remove class tab-incoming', 'cancel 0', 'cancel 1']);
 }
 
-console.log('PASS phone runtime: item actions and draft isolation, custom preview/validation and canonical cents, input preservation, one-render updates, queued tab transitions, and disposal cleanup.');
+// Model browser animation completion without replacing the production refresh
+// scheduler. A reversed animation gets a new finished promise, as in the browser.
+function motion(playState = 'running', endTime = 280, pending = false) {
+  let resolve!: () => void;
+  let reject!: (reason: Error) => void;
+  const result = {
+    playState, pending,
+    effect: {getComputedTiming: () => ({endTime})},
+    finished: Promise.resolve(),
+    restart() {
+      result.playState = 'running';
+      result.pending = false;
+      result.finished = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+    },
+    finish() { result.playState = 'finished'; result.pending = false; resolve(); },
+    cancel() { result.playState = 'idle'; result.pending = false; reject(Error('Animation canceled')); },
+  };
+  result.restart();
+  result.playState = playState;
+  result.pending = pending;
+  return result;
+}
+type TestMotion = ReturnType<typeof motion>;
+
+function motionFixture(animations: TestMotion[] = []) {
+  const adopted: number[] = [], refreshed: {version: number; key: string}[] = [];
+  const initialScreen = {getAnimations(options: {subtree: boolean}) {
+    assert.equal(options.subtree, true, 'Card and carousel descendants must participate in the wait');
+    return animations;
+  }};
+  let screen: any = initialScreen;
+  const panes = {app: {innerHTML: 'current screen'}, modal: {innerHTML: ''}};
+  const context: any = {
+    disposed: false, busy: false, focusedForm: false, pendingMotionRefresh: null,
+    renderedRouteKey: 'group:g', key: 'group:g', version: 0,
+    document: {activeElement: {closest: () => ({})}},
+    root: {contains: () => context.focusedForm,
+      querySelector: (selector: string) => selector === '#app' ? panes.app : panes.modal},
+    $: () => screen,
+    routeKey: () => context.key,
+    adopt(next: {version: number; route?: string}) {
+      adopted.push(next.version);
+      context.version = next.version;
+      context.nextRoute = next.route;
+    },
+    routeChanged() { if (context.nextRoute) context.key = context.nextRoute; },
+    safeRender() {
+      refreshed.push({version: context.version, key: context.key});
+      context.renderedRouteKey = context.key;
+      screen = {getAnimations: () => []};
+    },
+    listeners: {abort() {}}, toastTimer: 0, searchTimer: 0,
+    clearTimeout() {}, finishTabTransition() {},
+  };
+  runInNewContext(['update', 'refreshAfterMotion'].map(declaration).join('\n')
+    + `\nthis.mounted=${mountedMethods};`, context);
+  return {context, adopted, refreshed, animations, initialScreen, panes,
+    update(version: number, route?: string) { context.mounted.update({version, route}); },
+    get screen() { return screen; },
+    replaceScreen() { screen = {getAnimations: () => []}; },
+  };
+}
+const settleMotion = () => new Promise<void>(resolve => setImmediate(resolve));
+
+// Use the real router reconciler with the same mounted update/animation
+// lifecycle: store notifications may arrive before the URL reflects a local push.
+function bridgeRouteFixture(animations: TestMotion[] = []) {
+  const f = motionFixture(animations), context = f.context;
+  Object.assign(context, {
+    lastBridgeRouteKey: null,
+    state: {tab: 'groups', stack: []},
+    bridge: {route: {type: 'groups', tab: 'groups'}},
+    renderedRouteKey: 'groups:',
+  });
+  const renderSnapshot = context.safeRender;
+  context.safeRender = () => { context.key = context.routeKey(); renderSnapshot(); };
+  runInNewContext(['current', 'routeKey', 'routeChanged'].map(declaration).join('\n'), context);
+  context.routeChanged();
+  return f;
+}
+
+{
+  const entrance = motion(), f = bridgeRouteFixture([entrance]);
+  // The click has already pushed/rendered the group, but selectGroup publishes
+  // a store snapshot while the bridge still reports the previous Groups URL.
+  const stack = [{type: 'group', id: 'g'}];
+  f.context.state.stack = stack;
+  f.context.renderedRouteKey = 'group:g';
+  f.update(1);
+  f.update(2);
+  assert.equal(f.context.state.stack, stack, 'An unchanged old URL must not undo the local push');
+  assert.equal(f.context.routeKey(), 'group:g');
+  assert.equal(f.screen, f.initialScreen);
+  assert.deepEqual(f.refreshed, []);
+
+  // The matching router echo acknowledges the push without replacing its stack
+  // or animated DOM. Finishing the entrance flushes the latest data exactly once.
+  f.context.bridge.route = {type: 'group', id: 'g', tab: 'groups'};
+  f.update(3);
+  assert.equal(f.context.lastBridgeRouteKey, 'group:g');
+  assert.equal(f.context.state.stack, stack);
+  assert.deepEqual(f.refreshed, []);
+  entrance.finish();
+  await settleMotion();
+  assert.deepEqual(f.refreshed, [{version: 3, key: 'group:g'}]);
+
+  // Browser Back is a newly changed URL, even though it was seen before the
+  // push. It must still navigate to Groups after the matching echo was recorded.
+  f.context.bridge.route = {type: 'groups', tab: 'groups'};
+  f.update(4);
+  assert.equal(f.context.routeKey(), 'groups:');
+  assert.equal(f.context.state.stack.length, 0);
+  assert.deepEqual(f.refreshed.at(-1), {version: 4, key: 'groups:'});
+}
+{
+  const f = bridgeRouteFixture();
+  f.context.bridge.route = {type: 'group', id: 'g2', tab: 'spending'};
+  f.update(1);
+  assert.equal(f.context.routeKey(), 'group:g2');
+  assert.equal(f.context.state.tab, 'spending');
+  assert.deepEqual(clone(f.context.state.stack), [{type: 'group', id: 'g2'}]);
+  assert.deepEqual(f.refreshed, [{version: 1, key: 'group:g2'}]);
+  f.context.bridge.route = {type: 'home'};
+  f.update(2);
+  assert.equal(f.context.state.tab, 'home');
+  assert.deepEqual(clone(f.context.state.stack), []);
+  assert.deepEqual(f.refreshed.at(-1), {version: 2, key: 'home:'});
+}
+
+// CSS entry, card arrival, and carousel motion share a screen. Store refreshes
+// and URL echoes must adopt immediately without replacing any animated DOM.
+{
+  const entry = motion(), card = motion('running', 580), carousel = motion('idle', 360, true);
+  const f = motionFixture([entry, card, carousel]);
+  for (const version of [1, 2, 3]) f.update(version, 'group:g');
+  assert.deepEqual(f.adopted, [1, 2, 3]);
+  assert.deepEqual(f.refreshed, []);
+  assert.equal(f.screen, f.initialScreen);
+  entry.finish();
+  await settleMotion();
+  assert.equal(f.screen, f.initialScreen, 'Finishing entry alone must not truncate card/carousel motion');
+  f.update(4, 'group:g');
+  card.finish();
+  await settleMotion();
+  assert.deepEqual(f.refreshed, []);
+  carousel.finish();
+  await settleMotion();
+  assert.deepEqual(f.refreshed, [{version: 4, key: 'group:g'}], 'All echoes coalesce into the latest snapshot');
+  assert.notEqual(f.screen, f.initialScreen);
+  await settleMotion();
+  assert.equal(f.refreshed.length, 1);
+}
+
+// Canceled CSS motion can be replaced, and reversing the same animation handle
+// starts another completion promise. Neither event grants permission to redraw early.
+for (const change of ['cancel and replace', 'reverse same handle'] as const) {
+  const first = motion(), f = motionFixture([first]);
+  f.update(1);
+  let current: TestMotion;
+  if (change === 'cancel and replace') {
+    first.cancel();
+    current = motion('running', 360);
+    f.animations.splice(0, 1, current);
+  } else {
+    first.finish();
+    first.restart();
+    current = first;
+  }
+  await settleMotion();
+  assert.deepEqual(f.refreshed, [], change);
+  assert.equal(f.screen, f.initialScreen);
+  f.update(2);
+  current.finish();
+  await settleMotion();
+  assert.deepEqual(f.refreshed, [{version: 2, key: 'group:g'}], change);
+}
+
+// Decorative loops, paused effects, and zero-duration/reduced-motion effects
+// must not hold fresh data hostage to a finished promise that may never resolve.
+for (const ignored of [motion('running', Infinity), motion('paused'), motion('running', 0), motion('finished')]) {
+  const f = motionFixture([ignored]);
+  f.update(1);
+  assert.deepEqual(f.refreshed, [{version: 1, key: 'group:g'}]);
+}
+{
+  const f = motionFixture();
+  delete (f.initialScreen as {getAnimations?: unknown}).getAnimations;
+  f.update(1);
+  assert.deepEqual(f.refreshed, [{version: 1, key: 'group:g'}], 'Browsers without animation inspection still refresh');
+}
+
+// A URL navigation must render its destination immediately, even while the
+// previous route moves; that old completion may not redraw the destination.
+{
+  const active = motion(), f = motionFixture([active]);
+  f.update(1);
+  f.update(2, 'profile:');
+  assert.deepEqual(f.refreshed, [{version: 2, key: 'profile:'}]);
+  active.finish();
+  await settleMotion();
+  assert.equal(f.refreshed.length, 1);
+}
+for (const invalidation of ['route', 'screen', 'unmount'] as const) {
+  const active = motion(), f = motionFixture([active]);
+  f.update(1);
+  if (invalidation === 'route') f.context.key = 'profile:';
+  if (invalidation === 'screen') f.replaceScreen();
+  if (invalidation === 'unmount') f.context.mounted.destroy();
+  active.finish();
+  await settleMotion();
+  assert.deepEqual(f.refreshed, [], `Stale completion after ${invalidation}`);
+  if (invalidation === 'unmount') {
+    assert.equal(f.context.pendingMotionRefresh, null);
+    assert.equal(f.panes.app.innerHTML, '');
+    f.update(2);
+    assert.deepEqual(f.adopted, [1]);
+  }
+}
+
+// Work or form editing can begin while an animation is settling. Its callback
+// must respect those guards, and the next eligible update catches up once.
+for (const guard of ['busy', 'focusedForm'] as const) {
+  const active = motion(), f = motionFixture([active]);
+  f.context[guard] = true;
+  f.update(1);
+  assert.deepEqual(f.adopted, [1]);
+  assert.deepEqual(f.refreshed, []);
+  f.context[guard] = false;
+  f.update(2);
+  f.context[guard] = true;
+  active.finish();
+  await settleMotion();
+  assert.deepEqual(f.refreshed, [], `Animation completion during ${guard}`);
+  f.context[guard] = false;
+  f.update(3);
+  assert.deepEqual(f.refreshed, [{version: 3, key: 'group:g'}]);
+}
+
+console.log('PASS phone runtime: item actions and draft isolation, custom preview/validation and canonical cents, input preservation, one-render updates, queued tab transitions, motion-preserving snapshots, and disposal cleanup.');

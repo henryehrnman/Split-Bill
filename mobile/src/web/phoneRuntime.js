@@ -1007,8 +1007,11 @@ SOFTWARE.
 
   let renderRevision = 0,
     renderedRouteKey = null,
+    renderedWalletPhase = null,
     renderedHeaderHtml = null,
-    activeTabTransition = null;
+    lastBridgeRouteKey = null,
+    activeTabTransition = null,
+    pendingMotionRefresh = null;
   function finishTabTransition(flush = false) {
     const transition = activeTabTransition;
     if (!transition) return;
@@ -1147,13 +1150,17 @@ SOFTWARE.
       app.innerHTML = (renderedHeaderHtml || "") + markup + (rootLevel ? navBar() : "");
     }
     const screen = $(".screen", app);
-    // Entry animations belong to the first paint of a route. A realtime refresh of the same route must not replay
-    // them, or the confirmation card keeps flying in while the person reads it.
-    if (sameRoute)
+    // Lift the card once when entering the reader or its payment confirmation,
+    // without replaying it on later snapshots of the same wallet phase.
+    const walletPhase = r.type === "wallet"
+      ? `${key}:${state.paymentResult || (gById(r.id).wallet ? "reader" : "setup")}`
+      : null;
+    if (sameRoute && walletPhase === renderedWalletPhase)
       screen
         .querySelectorAll(".wallet-card-arrival")
         .forEach((el) => el.classList.remove("wallet-card-arrival"));
     renderedRouteKey = key;
+    renderedWalletPhase = walletPhase;
     screen.scrollTop = desiredScroll;
     bindSplitPin();
     if (focusedAction) {
@@ -1477,8 +1484,33 @@ SOFTWARE.
     adopt(next);
     if (!busy) {
       routeChanged();
-      if (!root.contains(document.activeElement?.closest("form"))) safeRender();
+      refreshAfterMotion();
     }
+  }
+  function refreshAfterMotion() {
+    if (disposed || busy || root.contains(document.activeElement?.closest("form"))) return;
+    const screen = $(".screen"), key = routeKey();
+    // A route echo or live snapshot must not remove the DOM that is animating.
+    // This includes CSS screen/card entrances and carousel transitions, not only root-tab swipes.
+    const animations = renderedRouteKey === key
+      ? (screen?.getAnimations?.({ subtree: true }) || []).filter((animation) => {
+        const end = animation.effect?.getComputedTiming().endTime;
+        return (animation.pending || animation.playState === "running") && Number.isFinite(end) && end > 0;
+      })
+      : [];
+    if (!animations.length) {
+      pendingMotionRefresh = null;
+      safeRender();
+      return;
+    }
+    const refresh = { screen, key };
+    pendingMotionRefresh = refresh;
+    Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+      if (pendingMotionRefresh !== refresh || disposed || screen !== $(".screen") || key !== routeKey()) return;
+      pendingMotionRefresh = null;
+      // A gesture may have reversed the carousel while we waited; respect its new motion too.
+      refreshAfterMotion();
+    });
   }
   function safeRender() {
     const previousRoute = routeKey();
@@ -1896,6 +1928,10 @@ SOFTWARE.
     const r = bridge.route;
     if (!r) return;
     const key = r.type + ":" + (r.id || "");
+    // Selecting a group can publish its data before the router echoes our new URL.
+    // Only a changed URL can navigate us; an unchanged old URL must not undo a local push.
+    if (key === lastBridgeRouteKey) return;
+    lastBridgeRouteKey = key;
     if (key === routeKey()) return;
     state.tab = ["home", "groups", "spending"].includes(r.tab) ? r.tab : "home";
     if (["home", "groups", "spending"].includes(r.type)) {
@@ -2353,6 +2389,7 @@ SOFTWARE.
     },
     destroy() {
       disposed = true;
+      pendingMotionRefresh = null;
       listeners.abort();
       clearTimeout(toastTimer);
       clearTimeout(searchTimer);
