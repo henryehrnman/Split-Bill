@@ -6,6 +6,7 @@ Repository: https://github.com/henryehrnman/Split-Bill
 - `schema.txt`: product schema (source of truth for product rules).
 - `README.md`: current state, architecture and next steps.
 - `backend.txt`: draft backend plan (stack, endpoints, data model, build order).
+- `launch.txt`: launch plan (APIs and hosting, steps to TestFlight with test-mode money, then real cards).
 - `mobile/`: React Native / Expo app, fake backend, tests, lockfile and build configuration.
 - `docs/`: project log, design research, feasibility and wallet plan.
 - `dist/`: saved web preview and downloadable native source.

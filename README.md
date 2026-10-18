@@ -66,6 +66,7 @@ Built in the app (simulated by the fake backend):
 - Activity (group month/all-time spend, charge details) and Profile (balance, period spend, charges, funding history).
 - **Demo user switcher**: tap the "Demo · Name" badge or use Profile to act as Henry, Maya, Jordan, Connor, or Saahil. This stands in for each person using their own phone. Henry has a pending invite to Connor's "Tahoe ski trip".
 - Demo controls: skip to the next budget period, skip ahead 7 days, simulate bank declines, reset demo data.
+- Installable on iPhone from Safari (Share → Add to Home Screen, "Open as Web App" on): opens full screen with its own icon.
 
 Verified: TypeScript, lint, and unit tests for split math and all backend rules (invites, periods, restriction, debt recovery, suspension, claim board) pass, and the web bundle exports. The October 17 schema update has not yet been clicked through in a browser.
 

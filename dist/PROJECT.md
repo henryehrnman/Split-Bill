@@ -1,6 +1,9 @@
 # Split Bill — project plan and progress
 Updated: October 17, 2026, Pacific. Owners: Henry Ehrnman, Connor Zacharias. Stage: hackathon MVP.
 
+## Home Screen app — October 17, 2026 (Saahil)
+The web build can be installed on an iPhone from Safari (Share → Add to Home Screen, with "Open as Web App" on) and then opens full screen with its own icon, no Safari bars. Added `mobile/public/index.html` (Apple web-app tags, `viewport-fit=cover`), `mobile/public/manifest.json` and icons generated from `assets/icon.png` (still Expo's template icon). No service worker, so deploys reach phones immediately. Checked at iPhone 15 Pro size in headless Chrome; not yet tried on a physical iPhone. This is the install path for the hosted URL in `launch.txt` section 8.
+
 ## Spending rule and first proposal — October 17, 2026 (Saahil; supersedes parts of the next section)
 Spending: balances have no minimum. A member who brought their balance up to their share at the start of the period (leftover balance counts) can spend whatever is in the group fund; a member who skipped their top-up can only spend up to their own balance until they add it. This replaces the $0 restriction. A confirmed split that takes someone below $0 charges their personal card back to $0; suspension if that fails is unchanged.
 First proposal: after a purchase the charge is the cardholder's draft. They pick who was part of it and how much (or scan the receipt) and send it; only people with a share are notified. Leaving the split screen, backgrounding the app or switching demo user sends the group's default split; the fake backend also sends it after 10 minutes. Notifications show on Home as a stand-in for push.
