@@ -115,7 +115,7 @@ export default function Profile() {
 }
 
 function GroupBalance({group}: {group: Group}) {
-  const {db, viewer, now, run, demoMode, busy} = useStore();
+  const {db, viewer, now, run, demoMode, busy, setGroupId} = useStore();
   const [amount, setAmount] = useState('');
   const me = memberOf(group, viewer.id);
   const share = shares(group)[viewer.id];
@@ -147,15 +147,15 @@ function GroupBalance({group}: {group: Group}) {
       </T>
       {me.suspended && <T style={{color: C.danger, fontSize: 13, marginTop: 8}}>Suspended: we couldn’t charge your personal card for {money(-me.balance)}. The group is covering it until you add funds.</T>}
       {me.status === 'invited' ? (
-        <Button title="View invitation" onPress={() => router.replace('/')} />
+        <Button title="View invitation" onPress={() => { setGroupId(group.id); router.replace('/'); }} />
       ) : (
         <>
           <Field label="Amount ($)" value={amount} onChange={setAmount} placeholder={me.balance < share ? (Math.max(0, share - me.balance) / 100).toFixed(2) : '0.00'} />
           <Row>
-            <View style={{flex: 1}}><Button secondary title="Withdraw" disabled={!value || !!pending} onPress={() => run(a => api.withdraw(a, group.id, value ?? 0), `Withdrew ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
+            <View style={{flex: 1}}><Button secondary title="Withdraw" disabled={!value || !!pending || !!group.frozen} onPress={() => run(a => api.withdraw(a, group.id, value ?? 0), `Withdrew ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
             <View style={{flex: 1}}><Button title="Add funds" disabled={!value} onPress={() => run(a => api.deposit(a, group.id, value ?? 0), `Added ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
           </Row>
-          {pending && <T style={s.caption}>Withdrawals open once {openCharges(db, group.id).length > 1 ? 'every open split is' : `the ${pending.merchant} split is`} settled.</T>}
+          {group.frozen ? <T style={s.caption}>Withdrawals are paused while this group is frozen: {group.frozen.reason}</T> : pending ? <T style={s.caption}>Withdrawals open once {openCharges(db, group.id).length > 1 ? 'every open split is' : `the ${pending.merchant} split is`} settled.</T> : null}
           <Row style={{paddingTop: 10}}>
             <View style={{flex: 1}}>
               <T style={{fontSize: 14}}>Auto-refill each period</T>
