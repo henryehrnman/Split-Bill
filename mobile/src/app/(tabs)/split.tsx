@@ -7,16 +7,17 @@ import {api} from '../../lib/api';
 import {money, cents, toInput, allocate} from '../../lib/money';
 import {computeSplit} from '../../lib/split';
 import type {SplitInput} from '../../lib/split';
-import {SPLIT_DEADLINE, DAY, currentProposal, isDraft, itemBoardStatus, memberIds, openCharges, requiredApprovers, userById, waitingOn} from '../../lib/domain';
-import type {Charge, Group, Receipt} from '../../lib/domain';
+import {createFirstSendController} from '../../lib/firstSend';
+import type {FirstSend} from '../../lib/firstSend';
+import {SPLIT_DEADLINE, DAY, currentProposal, isDraft, itemBoardStatus, memberIds, openCharges, receiptApprovalKey, requiredApprovers, userById, waitingOn} from '../../lib/domain';
+import type {Charge, Db, Group, Receipt} from '../../lib/domain';
 
 export default function Split() {
   const {db, group, viewer} = useStore();
   const {charge: linked} = useLocalSearchParams<{charge?: string}>();
-  const [picked, setPicked] = useState<string | null>(null);
   const open = group ? openCharges(db, group.id) : [];
   const myDraft = open.find(c => isDraft(c) && c.cardholderId === viewer.id);
-  const pending = myDraft ?? open.find(c => c.id === (picked ?? linked)) ?? open[0];
+  const pending = myDraft ?? open.find(c => c.id === linked) ?? open[0];
   if (!group || !pending) {
     return (
       <Page title="Split" subtitle="Agree on who owes what after each purchase.">
@@ -34,7 +35,7 @@ export default function Split() {
     open.length > 1 && !myDraft ? (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8, paddingBottom: 18}}>
         {open.map(c => (
-          <Chip key={c.id} label={`${c.merchant} · ${money(c.amount)}`} selected={c.id === pending.id} onPress={() => setPicked(c.id)} />
+          <Chip key={c.id} label={`${c.merchant} · ${money(c.amount)}`} selected={c.id === pending.id} onPress={() => router.setParams({charge: c.id})} />
         ))}
       </ScrollView>
     ) : null;
@@ -46,46 +47,46 @@ type Mode = 'items' | 'proposal';
 const defaultLabel = (g: Group) => (g.defaultSplit.method === 'equal' ? 'an even split between everyone' : 'the group’s default percentages');
 
 // While the cardholder drafts the first proposal, leaving the screen, backgrounding the app, or handing the
-// demo to another person sends the default split. Returns a callback to call before sending anything by hand.
+// demo to another person sends the default split. Manual operations use the same
+// controller so a failed request remains retryable and cannot race a default send.
 function useSendDefaultOnLeave(group: Group, charge: Charge) {
-  const {db, viewer, run} = useStore();
+  const {viewer, run} = useStore();
   const drafting = isDraft(charge) && viewer.id === charge.cardholderId;
   const label = defaultLabel(group);
-  const live = useRef({drafting, run, label});
-  const handled = useRef(false);
+  const focused = useRef(false);
+  const canSend = useCallback(() => drafting, [drafting]);
+  // Keep the original payer during demo viewer-switch cleanup. Store.run
+  // blocks this callback if the authenticated account or backend mode changed.
+  const sendDefault = useCallback(() => run(() => api.sendDefaultSplit(charge.cardholderId, charge.id), `You left without choosing, so ${label} was sent to everyone involved.`), [run, charge.cardholderId, charge.id, label]);
+  const [controller] = useState(() => createFirstSendController<Db>({canSend, sendDefault}));
   useEffect(() => {
-    live.current = {drafting, run, label};
-  });
-  const send = useCallback(() => {
-    if (!live.current.drafting || handled.current) return;
-    handled.current = true;
-    live.current.run(() => api.sendDefaultSplit(charge.cardholderId, charge.id), `You left without choosing, so ${live.current.label} was sent to everyone involved.`);
-  }, [charge.cardholderId, charge.id]);
+    controller.update({canSend, sendDefault});
+  }, [controller, canSend, sendDefault]);
 
-  useFocusEffect(useCallback(() => send, [send]));
+  useFocusEffect(useCallback(() => {
+    focused.current = true;
+    if (AppState.currentState === 'active') controller.returnToScreen();
+    return () => {
+      focused.current = false;
+      void controller.leave();
+    };
+  }, [controller]));
   useEffect(() => {
-    const sub = AppState.addEventListener('change', state => state !== 'active' && send());
+    const sub = AppState.addEventListener('change', state => {
+      if (state !== 'active') void controller.leave();
+      else if (focused.current) controller.returnToScreen();
+    });
     return () => sub.remove();
-  }, [send]);
+  }, [controller]);
 
-  const previousViewer = useRef(viewer.id);
-  useEffect(() => {
-    const left = previousViewer.current === charge.cardholderId && viewer.id !== charge.cardholderId;
-    previousViewer.current = viewer.id;
-    const payer = userById(db, charge.cardholderId).name;
-    if (left && isDraft(charge)) run(() => api.sendDefaultSplit(charge.cardholderId, charge.id), `${payer} left without choosing, so ${label} was sent to everyone involved.`);
-  }, [viewer.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return () => {
-    handled.current = true;
-  };
+  return controller.manual;
 }
 
 function ChargeSplit({group, charge, picker}: {group: Group; charge: Charge; picker: React.ReactNode}) {
   const {db, now, viewer} = useStore();
-  const [mode, setMode] = useState<Mode>(isDraft(charge) || charge.receipt?.itemized === false ? 'proposal' : 'items');
+  const [mode, setMode] = useState<Mode>(charge.receipt?.itemized === true ? 'items' : 'proposal');
   const [editing, setEditing] = useState(false);
-  const markSent = useSendDefaultOnLeave(group, charge);
+  const sendFirst = useSendDefaultOnLeave(group, charge);
   const daysLeft = Math.max(0, Math.ceil((charge.createdAt + SPLIT_DEADLINE - now) / DAY));
   const p = currentProposal(charge);
   const payer = userById(db, charge.cardholderId).name;
@@ -122,9 +123,9 @@ function ChargeSplit({group, charge, picker}: {group: Group; charge: Charge; pic
           )}
           <Segmented options={[['items', 'By item'], ['proposal', 'Percent / amount']]} value={mode} onChange={setMode} />
           {mode === 'items' ? (
-            charge.receipt ? <ClaimBoard key={charge.receipt.scannedAt} group={group} charge={charge} receipt={charge.receipt} /> : <ScanPrompt charge={charge} onSend={markSent} />
+            charge.receipt ? <ClaimBoard key={charge.receipt.scannedAt} group={group} charge={charge} receipt={charge.receipt} /> : <ScanPrompt charge={charge} onSend={sendFirst} />
           ) : draft ? (
-            <ProposalEditor key={p.id} group={group} charge={charge} first onSend={markSent} onDone={() => {}} />
+            <ProposalEditor key={p.id} group={group} charge={charge} first onSend={sendFirst} onDone={() => {}} />
           ) : editing ? (
             <ProposalEditor key={p.id} group={group} charge={charge} onDone={() => setEditing(false)} />
           ) : (
@@ -136,7 +137,7 @@ function ChargeSplit({group, charge, picker}: {group: Group; charge: Charge; pic
   );
 }
 
-function ScanPrompt({charge, onSend}: {charge: Charge; onSend: () => void}) {
+function ScanPrompt({charge, onSend}: {charge: Charge; onSend: FirstSend<Db>}) {
   const {run} = useStore();
   const draft = isDraft(charge);
   return (
@@ -147,10 +148,7 @@ function ScanPrompt({charge, onSend}: {charge: Charge; onSend: () => void}) {
       <Button
         secondary
         title="Scan receipt (demo)"
-        onPress={() => {
-          onSend();
-          run(a => api.scanReceipt(a, charge.id), draft ? 'Receipt scanned and sent. Everyone has been asked to claim their items.' : 'Receipt scanned. Tap your name on the items you had.');
-        }}
+        onPress={() => onSend(() => run(a => api.scanReceipt(a, charge.id), draft ? 'Receipt scanned and sent. Everyone has been asked to claim their items.' : 'Receipt scanned. Tap your name on the items you had.'))}
       />
     </View>
   );
@@ -162,6 +160,7 @@ function ItemsFooter({charge}: {charge: Charge}) {
   const {db, viewer, run} = useStore();
   const r = charge.receipt;
   if (!r) return null;
+  const reviewedReceipt = receiptApprovalKey(r);
   const st = itemBoardStatus(charge);
   const locked = r.locked.includes(viewer.id);
   const others = st.unlocked.filter(id => id !== viewer.id).map(id => userById(db, id).name);
@@ -178,7 +177,7 @@ function ItemsFooter({charge}: {charge: Charge}) {
       ) : (
         <Button
           title="Lock in my items"
-          onPress={() => run(a => api.setLocked(a, charge.id, true), st.unlocked.length <= 1 && !st.unclaimed.length && !r.edits.length ? 'Split confirmed. Balances are updated and the card is ready again.' : 'Your items are locked in.')}
+          onPress={() => run(a => api.setLocked(a, charge.id, true, reviewedReceipt), st.unlocked.length <= 1 && !st.unclaimed.length && !r.edits.length ? 'Split confirmed. Balances are updated and the card is ready again.' : 'Your items are locked in.')}
         />
       )}
     </>
@@ -328,7 +327,8 @@ function ReceiptEditor({charge, receipt: r, onDone}: {charge: Charge; receipt: R
 
 function ProposalFooter({charge, onEdit}: {charge: Charge; onEdit: () => void}) {
   const {db, viewer, run} = useStore();
-  const waiting = waitingOn(currentProposal(charge));
+  const proposal = currentProposal(charge);
+  const waiting = waitingOn(proposal);
   return (
     <>
       <T style={[s.small, {textAlign: 'center', marginBottom: 6}]}>
@@ -338,7 +338,7 @@ function ProposalFooter({charge, onEdit}: {charge: Charge; onEdit: () => void}) 
         <View style={{flex: 1}}><Button secondary title="Propose changes" onPress={onEdit} /></View>
         {waiting.includes(viewer.id) && (
           <View style={{flex: 1}}>
-            <Button title="Accept split" onPress={() => run(a => api.acceptSplit(a, charge.id), waiting.length === 1 ? 'Split settled. Balances are updated and the card is ready again.' : 'You accepted this split.')} />
+            <Button title="Accept split" onPress={() => run(a => api.acceptSplit(a, charge.id, proposal.id), waiting.length === 1 ? 'Split settled. Balances are updated and the card is ready again.' : 'You accepted this split.')} />
           </View>
         )}
       </Row>
@@ -379,8 +379,9 @@ function ProposalView({group, charge}: {group: Group; charge: Charge}) {
 
 type Method = 'equal' | 'percent' | 'amount';
 
-function ProposalEditor({group, charge, onDone, first, onSend}: {group: Group; charge: Charge; onDone: () => void; first?: boolean; onSend?: () => void}) {
+function ProposalEditor({group, charge, onDone, first, onSend}: {group: Group; charge: Charge; onDone: () => void; first?: boolean; onSend?: FirstSend<Db>}) {
   const {db, run} = useStore();
+  const send: FirstSend<Db> = onSend ?? (operation => operation());
   const ids = memberIds(group);
   const p = currentProposal(charge);
   const [method, setMethod] = useState<Method>(p.input.method === 'items' ? 'amount' : p.input.method);
@@ -444,10 +445,7 @@ function ProposalEditor({group, charge, onDone, first, onSend}: {group: Group; c
             <Button
               secondary
               title="Send default"
-              onPress={() => {
-                onSend?.();
-                run(a => api.sendDefaultSplit(a, charge.id), 'Default split sent. Everyone with a share has been notified.');
-              }}
+              onPress={() => send(() => run(a => api.sendDefaultSplit(a, charge.id), 'Default split sent. Everyone with a share has been notified.'))}
             />
           ) : (
             <Button secondary title="Cancel" onPress={onDone} />
@@ -459,8 +457,7 @@ function ProposalEditor({group, charge, onDone, first, onSend}: {group: Group; c
             disabled={!!error || !input}
             onPress={async () => {
               if (!input) return;
-              onSend?.();
-              const ok = await run(a => api.proposeSplit(a, charge.id, input!), 'Proposal sent. Everyone with a share has been notified and needs to accept it.');
+              const ok = await send(() => run(a => api.proposeSplit(a, charge.id, input!), 'Proposal sent. Everyone with a share has been notified and needs to accept it.'));
               if (ok) onDone();
             }}
           />

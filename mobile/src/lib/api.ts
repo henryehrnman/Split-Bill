@@ -7,6 +7,8 @@ import {accessToken, backendIdentity} from './auth';
 import {apiUrl, publishableKey} from './config';
 import {createRpcClient, RpcError} from './http';
 
+export type ReceiptPhoto = {data: string; mediaType: string};
+
 // Fake backend: same call shape a real HTTP client will have later, with every rule
 // enforced in domain.ts and data persisted on this device.
 const STORAGE_KEY = 'splitbill.fake-backend.v6';
@@ -78,15 +80,15 @@ const fakeApi = {
   addToWallet: (actor: UserId, cardId: string, wallet: Wallet) => mutate(x => d.addToWallet(x, actor, cardId, wallet)),
   setCardFrozen: (actor: UserId, cardId: string, frozen: boolean) => mutate(x => d.setCardFrozen(x, actor, cardId, frozen)),
   purchase: (actor: UserId, groupId: string, input: {merchant: string; amount: number}) => mutate((x, t) => void d.purchase(x, actor, groupId, input, t)),
-  scanReceipt: (actor: UserId, chargeId: string) => mutate((x, t) => void d.scanReceipt(x, actor, chargeId, t)),
+  scanReceipt: (actor: UserId, chargeId: string, _photo?: ReceiptPhoto) => mutate((x, t) => void d.scanReceipt(x, actor, chargeId, t)),
   updateReceipt: (actor: UserId, chargeId: string, input: {items: {id: string; name: string; amount: number}[]; tax: number; tip: number}) => mutate(x => d.updateReceipt(x, actor, chargeId, input)),
   toggleClaim: (actor: UserId, chargeId: string, itemId: string) => mutate(x => d.toggleClaim(x, actor, chargeId, itemId)),
-  setLocked: (actor: UserId, chargeId: string, locked: boolean) => mutate((x, t) => d.setLocked(x, actor, chargeId, locked, t)),
+  setLocked: (actor: UserId, chargeId: string, locked: boolean, expectedReceiptKey?: string) => mutate((x, t) => d.setLocked(x, actor, chargeId, locked, t, expectedReceiptKey)),
   suggestItemEdit: (actor: UserId, chargeId: string, itemId: string, targetId: UserId) => mutate((x, t) => d.suggestItemEdit(x, actor, chargeId, itemId, targetId, t)),
   respondItemEdit: (actor: UserId, chargeId: string, editId: string, accept: boolean) => mutate((x, t) => d.respondItemEdit(x, actor, chargeId, editId, accept, t)),
   proposeSplit: (actor: UserId, chargeId: string, input: SplitInput) => mutate((x, t) => d.proposeSplit(x, actor, chargeId, input, t)),
   sendDefaultSplit: (actor: UserId, chargeId: string) => mutate((x, t) => d.sendDefaultSplit(x, actor, chargeId, t)),
-  acceptSplit: (actor: UserId, chargeId: string) => mutate((x, t) => d.acceptSplit(x, actor, chargeId, t)),
+  acceptSplit: (actor: UserId, chargeId: string, expectedProposalId: string) => mutate((x, t) => d.acceptSplit(x, actor, chargeId, t, expectedProposalId)),
   fileChargeback: (actor: UserId, chargeId: string) => mutate((x, t) => d.fileChargeback(x, actor, chargeId, t)),
   // Demo controls with no production equivalent.
   resolveDisputes: (groupId: string) => mutate((x, t) => d.resolveDisputes(x, groupId, t)),
@@ -104,6 +106,8 @@ const fakeApi = {
 };
 
 const rpc = createRpcClient({url: apiUrl, publishableKey, getToken: accessToken});
+// Vision processing can take longer than ordinary group actions.
+const photoRpc = createRpcClient({url: apiUrl, publishableKey, getToken: accessToken, timeoutMs: 60000});
 let remoteQueue: Promise<unknown> = Promise.resolve();
 let remoteViewer: {identity: ReturnType<typeof backendIdentity>; id: UserId} | null = null;
 export const remoteViewerId = () => remoteViewer?.identity === backendIdentity() ? remoteViewer.id : null;
@@ -115,7 +119,8 @@ function remoteState(method: string, args: unknown[] = []): Promise<Db> {
   };
   const result = remoteQueue.then(async () => {
     check();
-    const state = await rpc.state(method, args);
+    const client = method === 'scanReceipt' && args[1] ? photoRpc : rpc;
+    const state = await client.state(method, args);
     check();
     remoteViewer = {identity, id: state.viewerId};
     return state.db;

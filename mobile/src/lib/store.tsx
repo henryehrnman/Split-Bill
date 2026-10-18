@@ -1,7 +1,7 @@
 import React, {createContext, useCallback, useContext, useEffect, useRef, useState} from 'react';
 import {ActivityIndicator, Pressable, Text, View} from 'react-native';
 import {api, createProfile, now, remoteViewerId} from './api';
-import {groupsFor} from './domain';
+import {groupsFor, StaleStateError} from './domain';
 import type {Db, Group, User} from './domain';
 import type {UserId} from './split';
 import {useSession} from './session';
@@ -123,7 +123,10 @@ function AccountStore({children}: {children: React.ReactNode}) {
       setNotice(success ? {kind: 'success', text: success} : null);
       return next;
     } catch (error) {
-      if (current()) setNotice({kind: 'error', text: message(error)});
+      if (current()) {
+        setNotice({kind: 'error', text: message(error)});
+        if (error instanceof StaleStateError || (error instanceof RpcError && error.code === 'stale')) refreshAgain.current = true;
+      }
       return null;
     } finally {
       pending.current = false;
