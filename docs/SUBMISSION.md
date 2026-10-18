@@ -54,7 +54,7 @@ A vision model is useful only with a check. If the read does not match the charg
 
 We also learned to say the simulation out loud. Judges can watch the rules run. They should not be asked to believe a browser charged a real card.
 
-### What's next for Split Bill
+### What's next for chipin
 
 A partner bank and a card issuer, then real Apple Wallet and Google Wallet provisioning, so a tap at the store is the same flow the demo already runs. A recorded two-phone walkthrough of the hosted app. Standing groups for groceries, household bills, and trips, with the period budget already in the product.
 
