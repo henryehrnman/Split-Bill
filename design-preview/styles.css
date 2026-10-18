@@ -70,3 +70,5 @@
 
 /* Item editing and personal selection share the same card. */
 .item-draft-fields{align-items:end}.item-draft-fields>.item-name-input,.item-draft-fields>.custom-allocation{height:34px;min-height:34px;align-self:end}.item-draft-fields>.custom-allocation{align-items:center;padding:7px 0}.item-card-heading h2{margin:0}.item-card-heading .text-action{min-height:30px;padding:5px 0;color:var(--blue);background:transparent;border:0;box-shadow:none;font-size:11px}.item-selection .selection-items{padding:0}.item-selection .selection-totals{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}.item-card-actions{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+
+.fund-metrics>div:last-child{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between}.fund-metrics>div:last-child strong{margin-top:0}
