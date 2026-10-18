@@ -156,7 +156,13 @@ export function waitingOn(p: Proposal) {
 
 // A member's balance minus their shares of charges still being agreed.
 function unreservedBalance(db: Db, g: Group, userId: UserId) {
-  return memberOf(g, userId).balance - openCharges(db, g.id).reduce((a, c) => a + (currentProposal(c).shares[userId] ?? 0), 0);
+  return memberOf(g, userId).balance - openCharges(db, g.id).reduce((held, c) => {
+    const r = c.receipt;
+    if (!r) return held + (currentProposal(c).shares[userId] ?? 0);
+    const result = computeSplit(memberIds(g), c.amount, {method: 'items', items: r.items, tax: r.tax, tip: r.tip});
+    // Until every item is assigned, keep the full charge held rather than reusing an old proposal.
+    return held + (result.error ? c.amount : result.shares[userId] ?? 0);
+  }, 0);
 }
 
 export function spendLimit(db: Db, groupId: string, userId: UserId) {
@@ -177,7 +183,10 @@ export function purchaseBlocker(db: Db, groupId: string, userId: UserId): string
   if (s === 'suspended') return 'Your account is suspended until you repay what you owe the group.';
   const pending = pendingCharge(db, groupId);
   if (pending && g.singleOpenCharge) return `Agree on the split for ${pending.merchant} before the next purchase.`;
-  if (s === 'restricted' && unreservedBalance(db, g, userId) <= 0) return `Add your ${money(periodShares(g)[userId])} share for this period to use the card.`;
+  if (s === 'restricted' && unreservedBalance(db, g, userId) <= 0) {
+    if (memberOf(g, userId).balance > 0) return 'Your balance is held for pending splits. Settle them or add your share for this period before paying again.';
+    return `Add your ${money(periodShares(g)[userId])} share for this period to use the card.`;
+  }
   if (fundBalance(g) <= 0) return 'The group fund is empty.';
   if (availableFunds(db, g) <= 0) return 'The rest of the group fund is held for splits that are still being agreed.';
   if (!card) return 'You don’t have a card for this group yet.';
