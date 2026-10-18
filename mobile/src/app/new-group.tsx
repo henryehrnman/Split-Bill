@@ -100,7 +100,7 @@ export default function NewGroup() {
       {results.map(u => (
         <Pressable key={u.id} accessibilityRole="button" accessibilityLabel={`Invite ${u.name}`} onPress={() => { setInvites(current => current.some(invitee => invitee.id === u.id) ? current : [...current, u]); setQuery(''); }} style={s.listRow}>
           <Avatar user={u} size={34} />
-          <View style={{flex: 1}}>
+          <View style={{flex: 1, minWidth: 0}}>
             <T style={{fontWeight: '500'}}>{u.name}</T>
             <T style={s.caption}>@{u.handle} · {u.email}</T>
           </View>
@@ -115,11 +115,11 @@ export default function NewGroup() {
           return (
             <Row key={id} style={{paddingVertical: 8}}>
               <Avatar user={u} size={30} />
-              <View style={{flex: 1}}>
+              <View style={{flex: 1, minWidth: 0}}>
                 <T style={{fontSize: 14}}>{u.name}{id === viewer.id ? ' (you)' : ''}</T>
                 <T style={s.caption}>{id === viewer.id ? 'Deposits now' : 'Invited · deposits on accepting'}</T>
               </View>
-              {!!amount && <T style={s.strong}>{money(each[i])}</T>}
+              {!!amount && <T style={[s.strong, {flexShrink: 0}]}>{money(each[i])}</T>}
               {id !== viewer.id && (
                 <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${u.name}`} onPress={() => setInvites(invites.filter(x => x.id !== id))} style={{padding: 6}}>
                   <Icon name="x" size={16} color={C.muted} />

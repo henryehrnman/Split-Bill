@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
-import {View, Switch, Pressable} from 'react-native';
+import {View, Pressable} from 'react-native';
 import {router} from 'expo-router';
-import {Page, T, Avatar, Button, Field, Row, StandingPill, periodLabel, shortDate, s, C} from '../lib/ui';
+import {Page, T, Avatar, Button, Field, Row, StandingPill, periodLabel, shortDate, Toggle, s, C} from '../lib/ui';
 import {useStore} from '../lib/store';
 import {useSession} from '../lib/session';
 import {apiUrl} from '../lib/config';
@@ -20,6 +20,33 @@ const LEDGER_LABEL: Record<LedgerEntry['kind'], string> = {
   'debt-recovery-failed': 'Card charge failed',
 };
 const FAILED: LedgerEntry['kind'][] = ['top-up-failed', 'debt-recovery-failed'];
+
+function FundButton({title, onPress, disabled, secondary = false}: {title: string; onPress: () => void; disabled: boolean; secondary?: boolean}) {
+  const {busy} = useStore();
+  const off = disabled || busy;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{disabled: off}}
+      disabled={off}
+      onPress={onPress}
+      style={({pressed}) => [{
+        width: '100%',
+        backgroundColor: off ? '#e9ecf2' : secondary ? 'white' : C.blue,
+        borderWidth: 1,
+        borderColor: off ? '#e9ecf2' : secondary ? '#c5ccd6' : C.blue,
+        borderRadius: 12,
+        minHeight: 52,
+        justifyContent: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 8,
+        marginVertical: 5,
+        opacity: pressed ? 0.8 : 1,
+      }]}>
+      <T style={{fontWeight: '700', textAlign: 'center', fontSize: 16, color: off ? '#717b8b' : secondary ? C.ink : 'white'}}>{title}</T>
+    </Pressable>
+  );
+}
 
 export default function Profile() {
   const {db, viewer, setViewerId, group, now, run, demoMode, busy} = useStore();
@@ -64,22 +91,22 @@ export default function Profile() {
       {!myCharges.length && <T style={s.small}>None yet.</T>}
       {myCharges.map(c => (
         <Row key={c.id} style={{paddingVertical: 8}}>
-          <View style={{flex: 1}}>
+          <View style={{flex: 1, minWidth: 0}}>
             <T style={{fontSize: 14}}>{c.merchant}</T>
             <T style={s.caption}>{groupById(db, c.groupId).name} · {shortDate(c.createdAt)} · {c.status}</T>
           </View>
-          <T style={s.strong}>{money(currentProposal(c).shares[viewer.id])}</T>
+          <T style={[s.strong, {flexShrink: 0}]}>{money(currentProposal(c).shares[viewer.id])}</T>
         </Row>
       ))}
 
       <T style={s.section}>Funding history</T>
       {!myLedger.length && <T style={s.small}>No deposits yet.</T>}
       {myLedger.map(e => (
-        <Row key={e.id} style={{paddingVertical: 6}}>
-          <T style={[s.small, {flex: 1, color: FAILED.includes(e.kind) ? C.danger : C.muted}]}>
+        <Row key={e.id} style={{paddingVertical: 6, alignItems: 'flex-start'}}>
+          <T style={[s.small, {flex: 1, minWidth: 0, color: FAILED.includes(e.kind) ? C.danger : C.muted}]}>
             {LEDGER_LABEL[e.kind]} · {groupById(db, e.groupId).name} · {shortDate(e.at)}
           </T>
-          <T style={[s.small, {fontVariant: ['tabular-nums'], fontWeight: '500', color: FAILED.includes(e.kind) ? C.danger : e.amount > 0 ? C.success : C.ink}]}>{FAILED.includes(e.kind) ? money(e.amount) : (e.amount > 0 ? '+' : '') + money(e.amount)}</T>
+          <T style={[s.small, {flexShrink: 0, fontVariant: ['tabular-nums'], fontWeight: '500', color: FAILED.includes(e.kind) ? C.danger : e.amount > 0 ? C.success : C.ink}]}>{FAILED.includes(e.kind) ? money(e.amount) : (e.amount > 0 ? '+' : '') + money(e.amount)}</T>
         </Row>
       ))}
 
@@ -129,18 +156,19 @@ function GroupBalance({group}: {group: Group}) {
 
   return (
     <View style={[s.box, {marginTop: 24}]}>
-      <Row>
-        <T style={{fontSize: 17, fontWeight: '700'}}>{group.name}</T>
-        <StandingPill standing={standing(group, viewer.id)} />
+      <Row style={{alignItems: 'flex-start'}}>
+        <T style={{fontSize: 17, fontWeight: '700', flex: 1, minWidth: 0}}>{group.name}</T>
+        <View style={{flexShrink: 0}}><StandingPill standing={standing(group, viewer.id)} /></View>
       </Row>
-      <T style={s.caption}>Current budget {money(currentBudget)} {periodLabel(group.periodDays)} · next period in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}</T>
+      <T style={s.caption}>Current budget {money(currentBudget)} {periodLabel(group.periodDays)}</T>
+      <T style={s.caption}>next period in {daysLeft}{'\u00A0'}{daysLeft === 1 ? 'day' : 'days'}</T>
       {group.budget !== currentBudget && <T style={s.caption}>Next period: {money(group.budget)} budget · your share {money(nextShare)}</T>}
-      <Row style={{marginTop: 14}}>
-        <View>
+      <Row style={{marginTop: 14, alignItems: 'flex-start'}}>
+        <View style={{flexShrink: 0}}>
           <T style={s.caption}>Your balance</T>
           <T style={{fontSize: 26, fontWeight: '700', fontVariant: ['tabular-nums'], color: me.balance < 0 ? C.danger : C.ink}}>{money(me.balance)}</T>
         </View>
-        <View style={{alignItems: 'flex-end'}}>
+        <View style={{alignItems: 'flex-end', flex: 1, minWidth: 0, marginLeft: 12}}>
           <T style={s.caption}>Your share this period</T>
           <T style={{fontSize: 17, fontWeight: '500', fontVariant: ['tabular-nums']}}>{money(share)}</T>
         </View>
@@ -155,8 +183,8 @@ function GroupBalance({group}: {group: Group}) {
         <>
           <Field label="Amount ($)" value={amount} onChange={setAmount} placeholder={me.balance < share ? (Math.max(0, share - me.balance) / 100).toFixed(2) : '0.00'} />
           <Row>
-            <View style={{flex: 1}}><Button secondary title="Withdraw" disabled={!value || !!pending || !!group.frozen} onPress={() => run(a => api.withdraw(a, group.id, value ?? 0), `Withdrew ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
-            <View style={{flex: 1}}><Button title="Add funds" disabled={!value} onPress={() => run(a => api.deposit(a, group.id, value ?? 0), `Added ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
+            <View style={{flex: 1, minWidth: 0}}><FundButton secondary title="Withdraw" disabled={!value || !!pending || !!group.frozen} onPress={() => run(a => api.withdraw(a, group.id, value ?? 0), `Withdrew ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
+            <View style={{flex: 1, minWidth: 0}}><FundButton title="Add funds" disabled={!value} onPress={() => run(a => api.deposit(a, group.id, value ?? 0), `Added ${money(value ?? 0)}.`).then(ok => ok && setAmount(''))} /></View>
           </Row>
           {group.frozen ? <T style={s.caption}>Withdrawals are paused while this group is frozen: {group.frozen.reason}</T> : pending ? <T style={s.caption}>Withdrawals open once {openCharges(db, group.id).length > 1 ? 'every open split is' : `the ${pending.merchant} split is`} settled.</T> : null}
           <Row style={{paddingTop: 10}}>
@@ -164,14 +192,14 @@ function GroupBalance({group}: {group: Group}) {
               <T style={{fontSize: 14}}>Auto-refill each period</T>
               <T style={s.caption}>Charge my bank back up to {money(nextShare)} when a new period starts</T>
             </View>
-            <Switch disabled={busy} accessibilityLabel={`Auto-refill for ${group.name}`} value={me.autoDeposit} trackColor={{false: '#dfe3ea', true: C.blue}} onValueChange={v => { run(a => api.setAutoDeposit(a, group.id, v)); }} />
+            <Toggle label={`Auto-refill for ${group.name}`} disabled={busy} value={me.autoDeposit} onValueChange={v => { run(a => api.setAutoDeposit(a, group.id, v)); }} />
           </Row>
           {demoMode && <Row style={{paddingTop: 10}}>
             <View style={{flex: 1}}>
               <T style={{fontSize: 14}}>Simulate bank declines</T>
               <T style={s.caption}>Demo: deposits, refills and debt recovery from you fail</T>
             </View>
-            <Switch disabled={busy} accessibilityLabel={`Simulate failed top-ups for ${group.name}`} value={me.failTopUps} trackColor={{false: '#dfe3ea', true: C.danger}} onValueChange={v => { run(a => api.setFailTopUps(a, group.id, v)); }} />
+            <Toggle label={`Simulate failed top-ups for ${group.name}`} color={C.danger} disabled={busy} value={me.failTopUps} onValueChange={v => { run(a => api.setFailTopUps(a, group.id, v)); }} />
           </Row>}
         </>
       )}

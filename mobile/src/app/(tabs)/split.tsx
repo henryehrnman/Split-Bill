@@ -118,8 +118,9 @@ function ChargeSplitPane({group, charge, picker, sendFirst}: {group: Group; char
             <T style={{fontSize: 13, color: C.blue, fontWeight: '700', fontVariant: ['tabular-nums']}}>{money(myShare)}</T>
           </View>
         )}
-        <T style={[s.small, {marginTop: 8, color: daysLeft <= 2 ? C.danger : C.muted}]}>
-          {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left to agree · {group.singleOpenCharge ? 'the card stays locked until this is settled' : 'held from the group fund until settled'}
+        <T style={[s.small, {marginTop: 8, textAlign: 'center', color: daysLeft <= 2 ? C.danger : C.muted}]}>
+          {daysLeft}{'\u00A0'}{daysLeft === 1 ? 'day' : 'days'} left to agree{'\n'}
+          {group.singleOpenCharge ? 'the card stays locked until this is settled' : 'held from the group fund until settled'}
         </T>
       </View>
       {draft && !mine ? (
@@ -188,8 +189,8 @@ function ScanPrompt({charge, onSend}: {charge: Charge; onSend: FirstSend<Db>}) {
       </T>
       {!demoMode && (
         <Row style={{alignSelf: 'stretch'}}>
-          <View style={{flex: 1}}><Button title="Take photo" onPress={() => scanPhoto(true)} /></View>
-          <View style={{flex: 1}}><Button secondary title="Choose photo" onPress={() => scanPhoto(false)} /></View>
+          <View style={{flex: 1, minWidth: 0}}><Button title="Take photo" onPress={() => scanPhoto(true)} /></View>
+          <View style={{flex: 1, minWidth: 0}}><Button secondary title="Choose photo" onPress={() => scanPhoto(false)} /></View>
         </Row>
       )}
       {demoMode ? (
@@ -252,8 +253,8 @@ function ClaimBoard({group, charge, receipt: r, onFix}: {group: Group; charge: C
             {userById(db, e.authorId).name} suggests {e.action === 'add' ? 'adding you to' : 'removing you from'} {itemName(e.itemId)}
           </T>
           <Row style={{marginTop: 10}}>
-            <View style={{flex: 1}}><Button secondary title="Reject" onPress={() => run(a => api.respondItemEdit(a, charge.id, e.id, false), 'Edit rejected.')} /></View>
-            <View style={{flex: 1}}><Button title="Accept" onPress={() => run(a => api.respondItemEdit(a, charge.id, e.id, true), 'Edit accepted.')} /></View>
+            <View style={{flex: 1, minWidth: 0}}><Button secondary title="Reject" onPress={() => run(a => api.respondItemEdit(a, charge.id, e.id, false), 'Edit rejected.')} /></View>
+            <View style={{flex: 1, minWidth: 0}}><Button title="Accept" onPress={() => run(a => api.respondItemEdit(a, charge.id, e.id, true), 'Edit accepted.')} /></View>
           </Row>
         </View>
       ))}
@@ -269,8 +270,8 @@ function ClaimBoard({group, charge, receipt: r, onFix}: {group: Group; charge: C
       {r.items.map(item => (
         <View key={item.id} style={{paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.line}}>
           <Row>
-            <T style={{fontWeight: '500', flex: 1}}>{item.name}</T>
-            <T style={s.strong}>{money(item.amount)}</T>
+            <T style={{fontWeight: '500', flex: 1, minWidth: 0}}>{item.name}</T>
+            <T style={[s.strong, {flexShrink: 0}]}>{money(item.amount)}</T>
           </Row>
           {!item.people.length && <T style={[s.caption, {color: C.warn}]}>Unclaimed</T>}
           <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8}}>
@@ -340,8 +341,8 @@ function ReceiptEditor({charge, receipt: r, onDone}: {charge: Charge; receipt: R
       <T style={[s.small, {marginBottom: 6}]}>Items, tax and tip must add up to {money(charge.amount)}. Saving releases everyone’s locks so they can re-check.</T>
       {items.map((item, index) => (
         <Row key={item.id} style={{alignItems: 'flex-end'}}>
-          <View style={{flex: 2}}><Field text label={`Item ${index + 1}`} value={item.name} onChange={name => setItem(index, {name})} /></View>
-          <Field label="Amount ($)" value={item.amount} onChange={amount => setItem(index, {amount})} />
+          <View style={{flex: 2, minWidth: 0}}><Field text label={`Item ${index + 1}`} value={item.name} onChange={name => setItem(index, {name})} /></View>
+          <View style={{flex: 1, minWidth: 0}}><Field label="Amount ($)" value={item.amount} onChange={amount => setItem(index, {amount})} /></View>
           <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.name || 'item'}`} onPress={() => setItems(items.filter((_, i) => i !== index))} style={{padding: 10, paddingBottom: 14}}>
             <Icon name="trash-2" size={16} color={C.muted} />
           </Pressable>
@@ -355,7 +356,7 @@ function ReceiptEditor({charge, receipt: r, onDone}: {charge: Charge; receipt: R
       <T style={[s.small, {marginTop: 10, color: total === charge.amount ? C.success : C.danger}]}>Adds up to {money(total)} of {money(charge.amount)}</T>
       <Row style={{marginTop: 8}}>
         <View style={{flex: 1}}><Button secondary title="Cancel" onPress={onDone} /></View>
-        <View style={{flex: 1.4}}>
+        <View style={{flex: 1.4, minWidth: 0}}>
           <Button
             title="Save receipt"
             onPress={async () => {
@@ -381,9 +382,9 @@ function ProposalFooter({charge, onEdit}: {charge: Charge; onEdit: () => void}) 
         {waiting.length ? `Waiting on ${listNames(waiting.map(id => (id === viewer.id ? 'you' : userById(db, id).name)))}` : 'Everyone has accepted'}
       </T>
       <Row>
-        <View style={{flex: 1}}><Button secondary title="Change split" onPress={onEdit} /></View>
+        <View style={{flex: 1, minWidth: 0}}><Button secondary title="Change split" onPress={onEdit} /></View>
         {waiting.includes(viewer.id) && (
-          <View style={{flex: 1}}>
+          <View style={{flex: 1, minWidth: 0}}>
             <Button title="Accept split" onPress={() => run(a => api.acceptSplit(a, charge.id, proposal.id), waiting.length === 1 ? 'Split settled. Balances are updated and the card is ready again.' : 'You accepted this split.')} />
           </View>
         )}
@@ -411,14 +412,14 @@ function ProposalView({group, charge}: {group: Group; charge: Charge}) {
         return (
           <View key={id} style={s.listRow}>
             <Avatar user={userById(db, id)} size={36} />
-            <View style={{flex: 1}}>
+            <View style={{flex: 1, minWidth: 0}}>
               <T style={{fontWeight: '500'}}>{userById(db, id).name}{id === viewer.id ? ' (you)' : ''}</T>
               <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
                 {involved && <Icon name={accepted ? 'check' : 'clock'} size={12} color={accepted ? C.success : C.warn} />}
                 <T style={[s.caption, {color: !involved ? C.muted : accepted ? C.success : C.warn}]}>{!involved ? 'Not involved' : accepted ? 'Accepted' : 'Needs to accept'}</T>
               </View>
             </View>
-            <T style={s.strong}>{money(p.shares[id] ?? 0)}</T>
+            <T style={[s.strong, {flexShrink: 0}]}>{money(p.shares[id] ?? 0)}</T>
           </View>
         );
       })}
@@ -473,7 +474,7 @@ function ProposalEditor({group, charge, onDone, first, onSend}: {group: Group; c
       {ids.map(id => (
         <View key={id} style={[s.listRow, {paddingVertical: 12}]}>
           <Avatar user={userById(db, id)} size={32} />
-          <T style={{fontWeight: '500', flex: 1}}>{userById(db, id).name}</T>
+          <T style={{fontWeight: '500', flex: 1, minWidth: 0}}>{userById(db, id).name}</T>
           {method !== 'equal' && (
             <TextInput
               accessibilityLabel={`${userById(db, id).name} ${method}`}
@@ -484,12 +485,12 @@ function ProposalEditor({group, charge, onDone, first, onSend}: {group: Group; c
             />
           )}
           {method === 'percent' && <T style={s.small}>%</T>}
-          <T style={[s.strong, {minWidth: 70, textAlign: 'right'}]}>{preview && !preview.error ? money(preview.shares[id]) : '—'}</T>
+          <T style={[s.strong, {minWidth: 64, flexShrink: 0, textAlign: 'right'}]}>{preview && !preview.error ? money(preview.shares[id]) : '—'}</T>
         </View>
       ))}
       {!!error && <T accessibilityRole="alert" style={{color: C.danger, fontSize: 12, marginTop: 10}}>{error}</T>}
       <Row style={{marginTop: 12}}>
-        <View style={{flex: 1}}>
+        <View style={{flex: 1, minWidth: 0}}>
           {first ? (
             <Button
               secondary
@@ -500,7 +501,7 @@ function ProposalEditor({group, charge, onDone, first, onSend}: {group: Group; c
             <Button secondary title="Cancel" onPress={onDone} />
           )}
         </View>
-        <View style={{flex: 1.4}}>
+        <View style={{flex: 1.4, minWidth: 0}}>
           <Button
             title="Send proposal"
             disabled={!!error || !input}

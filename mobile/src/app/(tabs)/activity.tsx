@@ -42,7 +42,7 @@ export default function Activity() {
 
 function Stat({label, value}: {label: string; value: string}) {
   return (
-    <View style={[s.box, {flex: 1, marginBottom: 0, padding: 16}]}>
+    <View style={[s.box, {flex: 1, minWidth: 0, marginBottom: 0, padding: 16}]}>
       <T style={s.caption}>{label}</T>
       <T style={{fontSize: 22, fontWeight: '700', marginTop: 4, fontVariant: ['tabular-nums']}}>{value}</T>
     </View>
@@ -62,11 +62,11 @@ function ChargeRow({charge, open, onToggle}: {charge: Charge; open: boolean; onT
         <View style={{width: 38, height: 38, borderRadius: 10, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center'}}>
           <Icon name={charge.receipt ? 'file-text' : 'shopping-bag'} size={18} color={C.muted} />
         </View>
-        <View style={{flex: 1}}>
+        <View style={{flex: 1, minWidth: 0}}>
           <T style={{fontWeight: '500'}}>{charge.merchant}</T>
           <T style={s.caption}>{shortDate(charge.createdAt)} · paid by {userById(db, charge.cardholderId).name}{mine ? ` · your share ${money(mine)}` : ''}</T>
         </View>
-        <View style={{alignItems: 'flex-end', gap: 4}}>
+        <View style={{alignItems: 'flex-end', gap: 4, flexShrink: 0}}>
           <T style={s.strong}>{money(charge.amount)}</T>
           <Pill label={status[0]} tone={status[1]} />
         </View>
@@ -76,11 +76,11 @@ function ChargeRow({charge, open, onToggle}: {charge: Charge; open: boolean; onT
           {group &&
             memberIds(group).map(id => (
               <Row key={id} style={{paddingVertical: 6}}>
-                <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
+                <View style={{flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0}}>
                   <Avatar user={userById(db, id)} size={26} />
-                  <T style={{fontSize: 14}}>{userById(db, id).name}</T>
+                  <T style={{fontSize: 14, flexShrink: 1}}>{userById(db, id).name}</T>
                 </View>
-                <T style={[s.small, {fontVariant: ['tabular-nums'], color: C.ink}]}>{(p.shares[id] ?? 0) ? money(p.shares[id]) : 'Not involved'}</T>
+                <T style={[s.small, {flexShrink: 0, fontVariant: ['tabular-nums'], color: C.ink}]}>{(p.shares[id] ?? 0) ? money(p.shares[id]) : 'Not involved'}</T>
               </Row>
             ))}
           {charge.receipt && (
