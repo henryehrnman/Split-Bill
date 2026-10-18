@@ -1,11 +1,12 @@
 import React, {createContext, useContext, useEffect, useRef, useState} from 'react';
-import {ActivityIndicator, AppState, Platform, Pressable, Text, View} from 'react-native';
+import {AppState, Platform, Pressable, Text, View} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {Session} from '@supabase/supabase-js';
 import AuthScreen from './AuthScreen';
 import {setBackendIdentity, supabase} from './auth';
 import {apiUrl, configurationError, supabaseUrl} from './config';
 import {createAuthIntent} from './authIntent';
+import {Splash, splashLink, splashText} from './Splash';
 
 type SessionContext = {
   demoMode: boolean;
@@ -113,10 +114,10 @@ export function SessionProvider({children}: {children: React.ReactNode}) {
     return pending;
   };
 
-  if (signingOut || (!ready && !demoMode)) return <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16}}>
-    <ActivityIndicator /><Text>{signingOut ? 'Signing out…' : 'Restoring your session…'}</Text>
-    {!signingOut && <Pressable accessibilityRole="button" onPress={enterDemo} style={{padding: 16}}><Text>Try demo mode</Text></Pressable>}
-  </View>;
+  if (signingOut || (!ready && !demoMode)) return <Splash>
+    <Text style={splashText}>{signingOut ? 'Signing out…' : 'Restoring your session…'}</Text>
+    {!signingOut && <Pressable accessibilityRole="button" onPress={enterDemo} style={{padding: 16}}><Text style={splashLink}>Try demo mode</Text></Pressable>}
+  </Splash>;
   if (storageRecovery && !demoMode) return <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16}}>
     <Text accessibilityRole="alert">{error}</Text>
     <Pressable accessibilityRole="button" onPress={() => { void (storageRecovery === 'restore' ? restoreRef.current() : signOut()); }} style={{padding: 16}}><Text>Retry</Text></Pressable>

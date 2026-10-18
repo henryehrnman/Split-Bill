@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
-import {View, Switch, Pressable} from 'react-native';
+import {View, Pressable} from 'react-native';
 import {router} from 'expo-router';
-import {Page, T, Button, CardVisual, Icon, Field, GroupPicker, EmptyState, Row, s, C} from '../../lib/ui';
+import {Page, T, Button, CardVisual, Toggle, Icon, Field, GroupPicker, EmptyState, Row, s, C} from '../../lib/ui';
 import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents} from '../../lib/money';
@@ -99,7 +99,7 @@ export default function Card() {
       <View style={[s.listRow, {paddingVertical: 16}]}>
         <Icon name="lock" size={18} color={C.muted} />
         <T style={{flex: 1, fontSize: 14}}>Freeze my card</T>
-        <Switch accessibilityLabel="Freeze card" value={card.frozen} trackColor={{false: '#dfe3ea', true: C.blue}} onValueChange={v => { run(a => api.setCardFrozen(a, card.id, v)); }} />
+        <Toggle label="Freeze card" value={card.frozen} onValueChange={v => { run(a => api.setCardFrozen(a, card.id, v)); }} />
       </View>
 
       <T style={s.section}>Make a purchase (demo)</T>

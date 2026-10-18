@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
-import {View, Pressable, Switch, TextInput} from 'react-native';
+import {View, Pressable, TextInput} from 'react-native';
 import {router} from 'expo-router';
-import {Page, T, Button, Avatar, Icon, Pill, Segmented, Field, GroupPicker, EmptyState, Row, StandingPill, ago, periodLabel, s, C} from '../../lib/ui';
+import {Page, T, Button, Toggle, Avatar, Icon, Pill, Segmented, Field, GroupPicker, EmptyState, Row, StandingPill, ago, periodLabel, s, C} from '../../lib/ui';
 import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents, toInput} from '../../lib/money';
@@ -288,10 +288,9 @@ function GroupSettings({group}: {group: Group}) {
               : 'Several splits can be open at once. Open charges are held from the fund, and from the balance of anyone who hasn’t added their share.'}
           </T>
         </View>
-        <Switch
-          accessibilityLabel={`One purchase at a time for ${group.name}`}
+        <Toggle
+          label={`One purchase at a time for ${group.name}`}
           value={group.singleOpenCharge}
-          trackColor={{false: '#dfe3ea', true: C.blue}}
           onValueChange={v => {
             run(a => api.setSingleOpenCharge(a, group.id, v), v ? 'The card now waits for each split to be agreed.' : 'Several splits can now be open at once.');
           }}

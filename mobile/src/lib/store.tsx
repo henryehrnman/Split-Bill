@@ -1,5 +1,5 @@
 import React, {createContext, useCallback, useContext, useEffect, useRef, useState} from 'react';
-import {ActivityIndicator, Pressable, Text, View} from 'react-native';
+import {Pressable, Text, View} from 'react-native';
 import {api, createProfile, now, remoteViewerId} from './api';
 import {groupsFor, StaleStateError} from './domain';
 import type {Db, Group, User} from './domain';
@@ -8,6 +8,7 @@ import {useSession} from './session';
 import {backendIdentity} from './auth';
 import {RpcError} from './http';
 import {subscribeToChanges} from './realtime';
+import {Splash, splashLink, splashText} from './Splash';
 import AuthScreen from './AuthScreen';
 import {finishProfile} from './profileSetup';
 
@@ -140,13 +141,12 @@ function AccountStore({children}: {children: React.ReactNode}) {
   if (needsProfile) return <AuthScreen profileOnly onDemo={enterDemo} onSignOut={signOut}
     onSignIn={async () => {}} onSignUp={async () => {}}
     onCompleteProfile={async profile => { apply(await finishProfile(() => createProfile({...profile, email: session?.user.email ?? ''}), () => api.fetch())); }} />;
-  if (!db) return <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16}}>
-    {refreshing && <ActivityIndicator />}
-    <Text accessibilityRole={loadError ? 'alert' : undefined}>{loadError || 'Loading Split Bill…'}</Text>
-    {!!loadError && <Pressable accessibilityRole="button" disabled={refreshing} onPress={() => void refresh()} style={{padding: 16}}><Text>Retry</Text></Pressable>}
-    {!demoMode && <Pressable accessibilityRole="button" onPress={() => void signOut()} style={{padding: 16}}><Text>Sign out</Text></Pressable>}
-    <Pressable accessibilityRole="button" onPress={enterDemo} style={{padding: 16}}><Text>Try demo mode</Text></Pressable>
-  </View>;
+  if (!db) return <Splash immediate={!!loadError && !refreshing}>
+    <Text accessibilityRole={loadError ? 'alert' : undefined} style={splashText}>{loadError || 'Loading your groups…'}</Text>
+    {!!loadError && <Pressable accessibilityRole="button" disabled={refreshing} onPress={() => void refresh()} style={{padding: 16}}><Text style={splashLink}>Retry</Text></Pressable>}
+    {!demoMode && <Pressable accessibilityRole="button" onPress={() => void signOut()} style={{padding: 16}}><Text style={splashLink}>Sign out</Text></Pressable>}
+    <Pressable accessibilityRole="button" onPress={enterDemo} style={{padding: 16}}><Text style={splashLink}>Try demo mode</Text></Pressable>
+  </Splash>;
   const viewer = db.users.find(u => u.id === viewerId)!;
   return <Context.Provider value={{db, now: now(db), viewer, demoMode, group, setGroupId, busy, refreshing, live,
     refresh: () => { void refresh(); }, notice, clearNotice: () => setNotice(null), run,

@@ -1,5 +1,5 @@
-import React from 'react';
-import {View, Text, Pressable, ScrollView, StyleSheet, TextInput, ActivityIndicator, StyleProp, TextStyle, TextProps, ViewStyle} from 'react-native';
+import React, {useEffect} from 'react';
+import {View, Text, Pressable, ScrollView, StyleSheet, TextInput, ActivityIndicator, Switch, StyleProp, TextStyle, TextProps, ViewStyle} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {router} from 'expo-router';
 import Feather from '@expo/vector-icons/Feather';
@@ -85,12 +85,18 @@ export function Chip({label, selected, onPress, check = true}: {label: string; s
   );
 }
 
+// Floats over the top of the page so showing or dismissing it never shifts the content; confirmations clear after a few seconds, errors stay until tapped.
 function NoticeBanner() {
   const {notice, clearNotice} = useStore();
+  useEffect(() => {
+    if (!notice || notice.kind === 'error') return;
+    const t = setTimeout(clearNotice, 4000);
+    return () => clearTimeout(t);
+  }, [notice, clearNotice]);
   if (!notice) return null;
   const error = notice.kind === 'error';
   return (
-    <Pressable accessibilityRole="alert" onPress={clearNotice} style={{flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: error ? C.softDanger : C.softSuccess, borderRadius: 12, padding: 14, marginBottom: 18}}>
+    <Pressable accessibilityRole="alert" onPress={clearNotice} style={[s.notice, {backgroundColor: error ? C.softDanger : C.softSuccess, borderColor: error ? '#f3d3d6' : '#cfe6d8'}]}>
       <Icon name={error ? 'alert-circle' : 'check-circle'} size={18} color={error ? C.danger : C.success} />
       <T style={{flex: 1, fontSize: 13, lineHeight: 19, color: error ? C.danger : C.success}}>{notice.text}</T>
       <Icon name="x" size={16} color={C.muted} />
@@ -130,20 +136,25 @@ export function Page({title, subtitle, children, footer, back = false}: {title: 
           </View>
         )}
         <View style={[s.row, {gap: 10}]}>
+          {/* Fixed-size slot, so saving and live refreshes never move the page. */}
+          <View accessibilityLiveRegion="polite" accessibilityLabel={busy ? 'Saving' : refreshing ? 'Updating' : undefined} style={{width: 18, alignItems: 'center'}}>
+            {(busy || refreshing) && <ActivityIndicator size="small" color={C.blue} />}
+          </View>
           <ViewerSwitch />
           <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => router.push('/profile')} style={{padding: 4}}>
             <Avatar user={viewer} size={34} />
           </Pressable>
         </View>
       </View>
-      <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
-        <T style={s.title}>{title}</T>
-        {subtitle && <T style={s.sub}>{subtitle}</T>}
-        <NoticeBanner />
-        {(busy || refreshing) && <View accessibilityLiveRegion="polite" style={[s.row, {justifyContent: 'flex-start', marginBottom: 12}]}><ActivityIndicator size="small" color={C.blue} /><T style={s.small}>{busy ? 'Saving…' : 'Updating…'}</T></View>}
-        {!demoMode && <Pressable accessibilityRole="button" accessibilityLabel="Refresh group" accessibilityState={{disabled: busy || refreshing}} disabled={busy || refreshing} onPress={refresh} style={{paddingVertical: 10}}><T style={s.caption}>{live ? 'Live updates on · Tap to refresh' : 'Live updates reconnecting · Tap to refresh'}</T></Pressable>}
-        {children}
-      </ScrollView>
+      <View style={{flex: 1}}>
+        <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
+          <T style={s.title}>{title}</T>
+          {subtitle && <T style={s.sub}>{subtitle}</T>}
+          {!demoMode && <Pressable accessibilityRole="button" accessibilityLabel="Refresh group" accessibilityState={{disabled: busy || refreshing}} disabled={busy || refreshing} onPress={refresh} style={{paddingVertical: 10}}><T style={s.caption}>{live ? 'Live updates on · Tap to refresh' : 'Live updates reconnecting · Tap to refresh'}</T></Pressable>}
+          {children}
+        </ScrollView>
+        <View pointerEvents="box-none" style={s.noticeLayer}><NoticeBanner /></View>
+      </View>
       {footer && <View style={s.footer}>{footer}</View>}
     </SafeAreaView>
   );
@@ -159,6 +170,22 @@ export function Field({label, value, onChange, text = false, placeholder}: {labe
       <Label>{label}</Label>
       <TextInput accessibilityLabel={label} placeholder={placeholder} placeholderTextColor="#9aa1ad" keyboardType={text ? 'default' : 'decimal-pad'} value={value} onChangeText={onChange} style={s.input} />
     </View>
+  );
+}
+
+// Switch with the same white thumb on iOS, Android and web (react-native-web otherwise draws a teal thumb).
+export function Toggle({value, onValueChange, label, disabled, color = C.blue}: {value: boolean; onValueChange: (v: boolean) => void; label: string; disabled?: boolean; color?: string}) {
+  return (
+    <Switch
+      accessibilityLabel={label}
+      disabled={disabled}
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{false: '#dfe3ea', true: color}}
+      thumbColor="white"
+      ios_backgroundColor="#dfe3ea"
+      {...({activeThumbColor: 'white'} as object)}
+    />
   );
 }
 
@@ -281,6 +308,8 @@ export const s = StyleSheet.create({
   cardLabel: {color: '#8899b6', fontSize: 9, letterSpacing: 1},
   cardValue: {color: '#e6ebf4', fontSize: 13, fontWeight: '500', letterSpacing: 1, marginTop: 2},
   cardArc: {position: 'absolute', width: 240, height: 240, borderRadius: 120, borderWidth: 32, borderColor: '#263750', right: -70, top: -110},
+  noticeLayer: {position: 'absolute', top: 6, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 16, zIndex: 10},
+  notice: {flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderRadius: 12, borderWidth: 1, padding: 14, width: '100%', maxWidth: 448, shadowColor: '#171e2d', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: {width: 0, height: 4}, elevation: 4},
   footer: {borderTopWidth: 1, borderColor: C.line, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 14, backgroundColor: 'white'},
   money: {fontSize: 52, lineHeight: 62, fontWeight: '500', letterSpacing: -2.2, fontVariant: ['tabular-nums']},
   listRow: {flexDirection: 'row', alignItems: 'center', paddingVertical: 16, gap: 12, borderBottomWidth: 1, borderColor: C.line},
