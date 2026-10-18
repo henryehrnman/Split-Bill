@@ -12,11 +12,12 @@ Implements `launch.txt` 8.ii for the server track: one `app_state` row, one `rpc
 - Demo mode (`DEMO_MODE=1`): body may include `actor` for seeded users that have no login, and `resolveDisputes`, `skipAhead`, `reset` work. `reset` reseeds and clears all logins.
 
 ## Receipt photos
-- `scanReceipt [chargeId, photo?]`. `photo` is `{data, mediaType}`: a base64 JPEG/PNG/WebP/GIF, about 4.5 MB max (the app sends a 1568px JPEG).
-- With a photo, `functions/rpc/receipt.ts` asks a Claude vision model for items, tax and tip as JSON. The model is called once, after checking the caller can scan that open charge and before the write loop, so a lost race doesn't pay for a second read.
-- `fromScan()` in `fakeOcr.ts` checks the read: if items + tax + tip don't equal the charge, the receipt becomes one editable line and members fix items by hand before claiming.
-- Errors: 503 `scan_off` when `ANTHROPIC_API_KEY` isn't set, 502 `scan_failed` when the model call fails, 400 `bad_photo` for anything that isn't a photo (so a client can't submit its own read), 400 `rule` if the caller couldn't scan that charge anyway.
+- `scanReceipt [chargeId, photo?]`. `photo` is `{data, mediaType}`: a base64 JPEG, PNG, WebP, or GIF, about 4.5 MB max (the app sends a 1568px JPEG).
+- With a photo, `functions/rpc/receipt.ts` asks a vision model for items, tax and tip as JSON. Gemini is used when `GEMINI_API_KEY` is set (`GEMINI_MODEL` defaults to `gemini-3.5-flash-lite`). Otherwise Claude is used when `ANTHROPIC_API_KEY` is set (`RECEIPT_MODEL` defaults to `claude-sonnet-5-5`). The model is called once, after checking the caller can scan that open charge and before the write loop, so a lost race doesn't pay for a second read.
+- `fromScan()` in `fakeOcr.ts` checks the read: if items + tax + tip don't equal the charge, the receipt becomes one editable line and members fix items by hand before claiming. A client can't submit its own read.
+- Errors: 503 `scan_off` when neither key is set, 502 `scan_failed` when the model call fails, 400 `bad_photo` for anything that isn't a photo, 400 `rule` if the caller couldn't scan that charge anyway.
 - Without a photo, the sample scanner still runs (demo merchants get exact receipts, others get one line).
+- Free Gemini keys come from [Google AI Studio](https://aistudio.google.com). The free tier has quotas, and Google's unpaid terms restrict sensitive data, so demo photos should be synthetic or redacted receipts. Gemini's documented image formats are JPEG, PNG, and WebP.
 
 ## Realtime
 Differs from launch.txt 8.ii.e: subscribe to `postgres_changes` on **`app_state_ping`**, not `app_state`, then call rpc `fetch`. This keeps other groups' data off the realtime channel.
@@ -27,12 +28,13 @@ node scripts/copy-shared.mjs          # copies domain/split/money/fakeOcr/seed i
 supabase link --project-ref <ref>
 supabase db push
 supabase secrets set DEMO_MODE=1      # optional, for judges
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...   # receipt photos; RECEIPT_MODEL defaults to claude-sonnet-5-5
+supabase secrets set GEMINI_API_KEY=...            # free receipt photos; optional GEMINI_MODEL
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...   # Claude fallback; RECEIPT_MODEL defaults to claude-sonnet-5-5
 supabase functions deploy rpc
 ```
 Supabase dashboard: turn off email confirmations. Re-run the copy script after any change to `mobile/src/lib`.
 
 ## Test
 ```sh
-node scripts/copy-shared.mjs && node --experimental-strip-types supabase/tests/core.test.ts
+node scripts/copy-shared.mjs && node --experimental-strip-types supabase/tests/core.test.ts && node --experimental-strip-types supabase/tests/receipt.test.ts
 ```
