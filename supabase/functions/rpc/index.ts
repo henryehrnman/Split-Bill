@@ -3,10 +3,13 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.45.4';
 import {handle} from './core.ts';
 import type {Links, State, Store} from './core.ts';
+import {claudeReader} from './receipt.ts';
 
 const url = Deno.env.get('SUPABASE_URL')!;
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const demo = Deno.env.get('DEMO_MODE') === '1';
+const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+const readReceipt = anthropicKey ? claudeReader({apiKey: anthropicKey, model: Deno.env.get('RECEIPT_MODEL') ?? 'claude-sonnet-5-5'}) : undefined;
 const admin = createClient(url, serviceKey, {auth: {persistSession: false}});
 
 const cors = {
@@ -55,7 +58,7 @@ Deno.serve(async req => {
     authId = data.user?.id ?? null;
   }
   try {
-    const reply = await handle(store, authId, body, {demo});
+    const reply = await handle(store, authId, body, {demo, readReceipt});
     return json(reply.status, reply.body);
   } catch (e) {
     console.error(e);

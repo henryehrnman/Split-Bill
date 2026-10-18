@@ -14,6 +14,8 @@
     "expo": "~58.0.11",
     "expo-constants": "~58.0.12",
     "expo-font": "~58.0.8",
+    "expo-image-manipulator": "~58.0.14",
+    "expo-image-picker": "~58.0.10",
     "expo-linking": "~58.0.13",
     "expo-router": "~58.0.20",
     "expo-status-bar": "~58.0.3",
@@ -32,7 +34,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types tests/split.test.ts && node --experimental-strip-types tests/domain.test.ts && node --experimental-strip-types tests/http.test.ts",
+    "test": "node --experimental-strip-types tests/split.test.ts && node --experimental-strip-types tests/domain.test.ts && node --experimental-strip-types tests/http.test.ts && node --experimental-strip-types tests/first-send.test.ts",
     "test:network": "node ../scripts/copy-shared.mjs && node --experimental-strip-types tests/network.test.ts"
   },
   "private": true
