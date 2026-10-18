@@ -6,42 +6,47 @@ import {useStore} from '../../lib/store';
 import {api} from '../../lib/api';
 import {money, cents} from '../../lib/money';
 import {SAMPLE_PURCHASES} from '../../lib/fakeOcr';
-import {cardFor, isActive, pendingCharge, purchaseBlocker, spendLimit, standing} from '../../lib/domain';
+import {cardFor, isActive, standing} from '../../lib/domain';
 import type {Wallet} from '../../lib/domain';
+import {groupSpendingView} from '../../lib/spendingView';
 
 export default function Card() {
-  const {db, viewer, group, run} = useStore();
+  const {db, viewer, group, run, demoMode} = useStore();
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState('');
   const card = group ? cardFor(db, group.id, viewer.id) : null;
 
   if (!group || !card) {
+    const invited = group && standing(group, viewer.id) === 'invited';
     return (
       <Page title="Your card" subtitle="One card per person, all drawing from the group fund.">
         <GroupPicker />
         <EmptyState
           icon="credit-card"
-          title={group ? 'Accept your invite first' : 'No group yet'}
-          body={group ? 'Your card is issued once you accept the invite and deposit your share of the budget.' : 'Create or join a group to get a card.'}
+          title={!group ? 'No group yet' : invited ? 'Accept your invite first' : !isActive(group) ? 'Your group is still forming' : 'Card unavailable'}
+          body={!group ? 'Create or join a group to get a card.' : invited ? 'Review the invitation and join the group. Your final share is collected when the group forms.' : !isActive(group) ? 'Final equal shares are collected after everyone responds and at least two members join.' : 'Refresh to load your group card.'}
           action={<Button title="Go home" onPress={() => router.push('/')} />}
         />
       </Page>
     );
   }
 
-  const limit = spendLimit(db, group.id, viewer.id);
-  const blocker = purchaseBlocker(db, group.id, viewer.id);
+  const spending = groupSpendingView(db, group, viewer.id, demoMode);
+  const blocker = spending ? spending.purchaseBlocker : 'Spending information is unavailable. Refresh to try again.';
   const st = standing(group, viewer.id);
-  const pending = pendingCharge(db, group.id);
   const blockerAction =
-    !blocker ? null
-    : pending && group.singleOpenCharge && blocker.includes(pending.merchant) ? {label: 'Open the split', onPress: () => router.push('/split')}
+    !blocker || !spending ? null
+    : blocker === 'The group fund is empty.' ? {label: 'Add funds', onPress: () => router.push('/profile')}
     : !card.wallet && blocker.startsWith('Add your card') ? {label: 'Add to Apple Wallet', onPress: () => { run(a => api.addToWallet(a, card.id, 'Apple Wallet'), 'Added to Apple Wallet (simulated).'); }}
     : null;
-  const buy = (m: string, a: number) =>
-    run(x => api.purchase(x, group.id, {merchant: m, amount: a}), `${money(a)} at ${m} approved. Choose who was part of it, or leave and the default split is sent to everyone.`).then(ok => {
-      if (ok) router.push('/split');
+  const buy = (m: string, a: number) => {
+    const previous = new Set(db.charges.map(c => c.id));
+    return run(x => api.purchase(x, group.id, {merchant: m, amount: a}), `${money(a)} at ${m} approved. Choose who was part of it, or leave and the default split is sent to everyone.`).then(next => {
+      // Responses list newest charges first; open the purchase from this call, not an older pending split.
+      const created = next?.charges.find(c => !previous.has(c.id) && c.groupId === group.id && c.cardholderId === viewer.id && c.merchant === m && c.amount === a);
+      if (created) router.push({pathname: '/split', params: {charge: created.id}});
     });
+  };
 
   return (
     <Page title="Your card" subtitle={`${group.name} · each member has their own card on the same fund`}>
@@ -50,7 +55,7 @@ export default function Card() {
       <Row style={{marginBottom: 4, alignItems: 'flex-end'}}>
         <View>
           <T style={s.caption}>Available to spend</T>
-          <T style={{fontSize: 26, fontWeight: '500', fontVariant: ['tabular-nums'], letterSpacing: -0.6}}>{money(limit)}</T>
+          <T style={{fontSize: 26, fontWeight: '500', fontVariant: ['tabular-nums'], letterSpacing: -0.6}}>{spending ? money(spending.spendLimit) : '—'}</T>
         </View>
         <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6}}>
           <View style={{width: 6, height: 6, borderRadius: 3, backgroundColor: blocker ? '#ac742d' : C.success}} />
@@ -74,12 +79,7 @@ export default function Card() {
       )}
       {isActive(group) && !group.frozen && st === 'on-track' && (
         <T style={s.small}>
-          You can spend up to everything in the group fund. Your share is settled after each purchase; if it takes you below $0, the difference is charged to your personal card.
-        </T>
-      )}
-      {isActive(group) && !group.frozen && st === 'restricted' && (
-        <T style={s.small}>
-          You haven’t added your share for this period yet, so you can only spend up to your own balance until you do.
+          With a balance of $0 or more, you can spend the available group funds. Open purchases stay held until settled. If your agreed share takes you below $0, the difference is charged to your personal card.
         </T>
       )}
 

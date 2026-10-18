@@ -26,31 +26,39 @@ const READ_ONLY = new Set(['fetch', 'searchUsers']);
 type Ctx = {db: Db; actor: d.Db['users'][number]['id']; t: number};
 type Method = (c: Ctx, a: any[]) => unknown;
 
+function requiredBoolean(value: unknown): boolean {
+  if (typeof value !== 'boolean') throw new d.ApiError('Choose either yes or no.');
+  return value;
+}
+
 // Same names and argument order as mobile/src/lib/api.ts, minus the leading actor (it comes from the JWT).
 const methods: Record<string, Method> = {
   fetch: () => undefined,
   searchUsers: ({db, actor}, [query, exclude]) => d.searchUsers(db, String(query ?? ''), [actor, ...(Array.isArray(exclude) ? exclude : [])]).map(u => searchResult(u, String(query ?? ''))),
   createGroup: ({db, actor, t}, [input]) => void d.createGroup(db, actor, input, t),
-  respondInvite: ({db, actor, t}, [groupId, accept, expectedContribution]) => d.respondInvite(db, actor, groupId, !!accept, t, expectedContribution),
+  respondInvite: ({db, actor, t}, [groupId, accept, expectedContribution, initialContributionLimit]) => d.respondInvite(db, actor, groupId, requiredBoolean(accept), t, expectedContribution, initialContributionLimit),
   deposit: ({db, actor, t}, [groupId, amount]) => d.deposit(db, actor, groupId, amount, t),
   withdraw: ({db, actor, t}, [groupId, amount]) => d.withdraw(db, actor, groupId, amount, t),
-  setAutoDeposit: ({db, actor}, [groupId, on]) => d.setAutoDeposit(db, actor, groupId, !!on),
-  setFailTopUps: ({db, actor}, [groupId, on]) => d.setFailTopUps(db, actor, groupId, !!on),
-  setSingleOpenCharge: ({db, actor}, [groupId, on]) => d.setSingleOpenCharge(db, actor, groupId, !!on),
+  setAutoDeposit: ({db, actor}, [groupId, on]) => d.setAutoDeposit(db, actor, groupId, requiredBoolean(on)),
+  setFailTopUps: ({db, actor}, [groupId, on]) => d.setFailTopUps(db, actor, groupId, requiredBoolean(on)),
+  // One-release compatibility for cached clients; the purchase lock is no longer a setting.
+  setSingleOpenCharge: ({db, actor}, [groupId]) => {
+    if (d.memberOf(d.groupById(db, groupId), actor).status !== 'joined') throw new d.ApiError('Accept the invite to this group first.');
+  },
   setDefaultSplit: ({db, actor}, [groupId, split]) => d.setDefaultSplit(db, actor, groupId, split),
   proposeBudget: ({db, actor, t}, [groupId, amount]) => d.proposeBudget(db, actor, groupId, amount, t),
-  respondBudget: ({db, actor}, [proposalId, accept]) => d.respondBudget(db, actor, proposalId, !!accept),
+  respondBudget: ({db, actor}, [proposalId, accept]) => d.respondBudget(db, actor, proposalId, requiredBoolean(accept)),
   addToWallet: ({db, actor}, [cardId, wallet]) => d.addToWallet(db, actor, cardId, wallet),
-  setCardFrozen: ({db, actor}, [cardId, frozen]) => d.setCardFrozen(db, actor, cardId, !!frozen),
+  setCardFrozen: ({db, actor}, [cardId, frozen]) => d.setCardFrozen(db, actor, cardId, requiredBoolean(frozen)),
   purchase: ({db, actor, t}, [groupId, input]) => void d.purchase(db, actor, groupId, input, t),
   setChargeNote: ({db, actor, t}, [chargeId, text]) => d.setChargeNote(db, actor, chargeId, text, t),
   // The second argument here is the model's read, never the client's: handle() swaps the photo out first.
   scanReceipt: ({db, actor, t}, [chargeId, read]) => void d.scanReceipt(db, actor, chargeId, t, read),
   updateReceipt: ({db, actor}, [chargeId, input]) => d.updateReceipt(db, actor, chargeId, input),
   toggleClaim: ({db, actor}, [chargeId, itemId]) => d.toggleClaim(db, actor, chargeId, itemId),
-  setLocked: ({db, actor, t}, [chargeId, locked, expectedReceiptKey]) => d.setLocked(db, actor, chargeId, !!locked, t, expectedReceiptKey),
+  setLocked: ({db, actor, t}, [chargeId, locked, expectedReceiptKey]) => d.setLocked(db, actor, chargeId, requiredBoolean(locked), t, expectedReceiptKey),
   suggestItemEdit: ({db, actor, t}, [chargeId, itemId, targetId]) => d.suggestItemEdit(db, actor, chargeId, itemId, targetId, t),
-  respondItemEdit: ({db, actor, t}, [chargeId, editId, accept]) => d.respondItemEdit(db, actor, chargeId, editId, !!accept, t),
+  respondItemEdit: ({db, actor, t}, [chargeId, editId, accept]) => d.respondItemEdit(db, actor, chargeId, editId, requiredBoolean(accept), t),
   proposeSplit: ({db, actor, t}, [chargeId, input]) => d.proposeSplit(db, actor, chargeId, input, t),
   sendDefaultSplit: ({db, actor, t}, [chargeId]) => d.sendDefaultSplit(db, actor, chargeId, t),
   acceptSplit: ({db, actor, t}, [chargeId, expectedProposalId]) => d.acceptSplit(db, actor, chargeId, t, expectedProposalId),
@@ -89,6 +97,18 @@ export function viewFor(db: Db, userId: string): Db {
     // An invitation must not reveal contacts that search deliberately masks.
     users: db.users.filter(u => people.has(u.id)).map(u => u.id === userId ? u : {...u, email: '', phone: ''}),
     groups,
+    // Private first proposals still reserve pooled funds. Calculate before filtering charges.
+    spendingView: {
+      viewerId: userId,
+      groups: Object.fromEntries(groups.map(g => [g.id, {
+        availableFunds: Math.max(0, d.availableFunds(db, g)),
+        spendLimit: d.spendLimit(db, g.id, userId),
+        purchaseBlocker: d.purchaseBlocker(db, g.id, userId),
+        pendingCount: d.openCharges(db, g.id).length,
+        withdrawalBlocked: d.memberOf(g, userId).status !== 'joined' || !!g.frozen || db.charges.some(c => c.groupId === g.id
+          && (c.status === 'pending' || (c.status === 'disputed' && c.settledAt === undefined))),
+      }])),
+    },
     cards: db.cards.filter(c => c.userId === userId),
     // A draft the cardholder has not sent yet is theirs alone.
     charges: db.charges.filter(c => groupIds.has(c.groupId) && (c.sentAt !== null || c.cardholderId === userId)),

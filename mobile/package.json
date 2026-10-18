@@ -34,7 +34,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types tests/split.test.ts && node --experimental-strip-types tests/domain.test.ts && node --experimental-strip-types tests/http.test.ts && node --experimental-strip-types tests/first-send.test.ts && node --experimental-strip-types tests/auth-fetch.test.ts && node --experimental-strip-types tests/auth-intent.test.ts && node --experimental-strip-types tests/profile-setup.test.ts",
+    "test": "node --experimental-strip-types tests/split.test.ts && node --experimental-strip-types tests/domain.test.ts && node --experimental-strip-types tests/http.test.ts && node --experimental-strip-types tests/first-send.test.ts && node --experimental-strip-types tests/auth-fetch.test.ts && node --experimental-strip-types tests/auth-intent.test.ts && node --experimental-strip-types tests/profile-setup.test.ts && node --experimental-strip-types tests/spending-view.test.ts && node --experimental-strip-types tests/group-rules-audit.test.ts",
     "test:network": "node ../scripts/copy-shared.mjs && node --experimental-strip-types tests/network.test.ts"
   },
   "private": true
