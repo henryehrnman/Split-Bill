@@ -6,7 +6,7 @@
   const SCENES = {
     intro: ['Meet chipin'], groups: ['Your shared groups'],
     budget: ['Set a monthly budget', '$125 per person'],
-    invite: ['Review your invitation', 'Everyone is in'], cards: ['One shared fund'],
+    invite: ['You are invited', 'Review your contribution', 'Everyone is in'], cards: ['One shared fund'],
     pay: ['Ready to pay', '$64 paid'], split: ['Equally, $16 each', 'A custom split'],
     henry: ['Henry pays for dinner', 'Dinner paid'],
     receipt: ['Receipt attached', 'Scripted Gemini scan', 'Review the item list'],
@@ -123,7 +123,7 @@
   function build(scene, phase) {
     resetBaseline();
     const index = Object.keys(SCENES).indexOf(scene);
-    if (index >= 4 || scene === 'invite' && phase === 1) fundGroup();
+    if (index >= 4 || scene === 'invite' && phase === 2) fundGroup();
     let store, dinner;
     if (index > 5 || scene === 'pay' && phase === 1) store = buy('Corner Store', 64, 'story-store', 'member-0');
     if (store && (index > 6 || scene === 'split' && phase === 1)) customizeStore(store);
@@ -132,7 +132,7 @@
     if (scene === 'intro' || scene === 'outro') route('home');
     if (scene === 'groups') route('groups');
     if (scene === 'budget') route(phase ? 'budget' : 'create', 'apartment');
-    if (scene === 'invite') { state.displayName = phase ? 'Connor' : 'Henry'; route(phase ? 'members' : 'invitations', 'apartment'); }
+    if (scene === 'invite') { state.displayName = phase === 2 ? 'Connor' : 'Henry'; route(phase === 2 ? 'members' : 'invitations', 'apartment'); }
     if (scene === 'cards' || scene === 'clarity') route('group', 'apartment');
     if (scene === 'pay' || scene === 'henry') {
       state.displayName = scene === 'henry' ? 'Henry' : 'Connor';
@@ -191,7 +191,11 @@
       document.querySelector('[data-form="budget"]')?.remove();
       append(`<section class="card-section story-consent"><h2>Four people. One plan.</h2>${peopleRows('Monthly contribution cap')}<p class="form-footnote">Everyone reviews and agrees before the group is funded.</p></section>`);
     }
-    if (scene === 'invite' && phase === 1) {
+    if (scene === 'invite' && phase === 0) {
+      const group = gById('apartment');
+      screen().innerHTML = `${backbar('Invitation')}<div class="story-invite-intro">${stamp(group, 'overview-photo')}<h1>Apartment</h1><p>Connor invited you to share a fund.</p></div><section class="card-section story-invited-members"><h2>Your people</h2>${ROSTER.map(person => `<div class="person-row">${avatar(person)}<div class="person-info"><strong>${esc(person.name)}${person.id === 'member-1' ? ' (you)' : ''}</strong><small>${person.id === 'member-0' ? 'Group creator' : 'Invited'}</small></div></div>`).join('')}</section><section class="story-invite-summary"><span>Shared monthly budget</span><strong>$500.00</strong><small>Review your contribution before joining.</small></section>`;
+    }
+    if (scene === 'invite' && phase === 2) {
       screen().innerHTML = `${backbar('Your group is ready')}<div class="story-celebration"><div class="success-circle">${icon('check')}</div><h1>Everyone is in.</h1><p>Four approved contributions.</p></div><section class="card-section story-consent">${peopleRows('Agreed to contribute')}</section><section class="story-fund-total"><span>Group buying power</span><strong>$500.00</strong><small>$125 × 4 people</small></section>`;
     }
     if (scene === 'cards') {
@@ -251,7 +255,7 @@
   }
   function setScene(scene, progress = 0, force = false) {
     if (!Object.hasOwn(SCENES, scene) || !Number.isFinite(progress)) return false;
-    const phase = Math.min(SCENES[scene].length - 1, Math.floor(Math.max(0, Math.min(1, progress)) * SCENES[scene].length));
+    const phase = Math.min(SCENES[scene].length - 1, Math.floor(Math.max(0, Math.min(1, progress)) * SCENES[scene].length + 1e-7));
     const unchanged = active?.scene === scene && active.phase === phase;
     active = { scene, phase, progress, label: SCENES[scene][phase] };
     if (exploring) return false;

@@ -15,6 +15,48 @@
     {id:'clarity',label:'See the whole picture',title:'No guessing.<br><span class="accent">Everyone’s in sync.</span>',body:'Every charge. Every balance. What’s coming up next month.',script:'Everyone sees every charge, every balance, and what’s coming up next period.',word:'in sync',length:180,side:'left',camera:{side:'right',y:0,scale:1,rotate:-3}},
     {id:'outro',label:'Just chipin',title:'Just <span class="accent">chipin.</span>',body:'See? It’s easy when you chip in.',script:'See? It’s easy when you just Chipin.',word:'chipin',length:135,side:'center',camera:{side:'center',y:.14,scale:.82,rotate:0}}
   ];
+  // Seconds are narration time, not a percentage of the page. Extra motion
+  // stops let the phone arrive, hold, then perform an action on the spoken cue.
+  const cues = [
+    {time:0,scene:'intro',progress:0,label:'Meet chipin'},
+    {time:2,scene:'groups',progress:0,label:'One shared fund'},
+    {time:6,scene:'groups',progress:.6,label:'A card for every member'},
+    {time:8.36,scene:'budget',progress:0,label:'Agree on $500 every month'},
+    {time:14,scene:'invite',progress:0,label:'Everyone gets invited'},
+    {time:15.33,scene:'invite',progress:1/3,label:'See what you agree to'},
+    {time:17,scene:'invite',progress:2/3,label:'Chip in equally'},
+    {time:19,scene:'cards',progress:0,label:'Everyone has a card'},
+    {time:22,scene:'pay',progress:0,label:'Whoever is there pays'},
+    {time:27,scene:'pay',progress:.5,label:'Purchase withdraws group funds'},
+    {time:29,scene:'split',progress:0,label:'Buyer proposes the split'},
+    {time:31,scene:'split',progress:.24,label:'Equal shares by default'},
+    {time:35,scene:'split',progress:.5,label:'Customize individual amounts'},
+    {time:40,scene:'henry',progress:0,label:'Be like Henry'},
+    {time:45,scene:'henry',progress:.5,label:'Henry paid at Din Tai Fung'},
+    {time:50,scene:'receipt',progress:0,label:'Photograph the receipt'},
+    {time:52,scene:'receipt',progress:1/3,label:'Gemini reads the receipt'},
+    {time:55,scene:'claims',progress:0,label:'Claim your items'},
+    {time:60,scene:'clarity',progress:0,label:'Every charge, balance, and next period'},
+    {time:65,scene:'outro',progress:0,label:'Just chipin'}
+  ];
+  const duration=68;
+  const motionStops=[
+    [1.6,'intro',.75],[3,'groups',.3],[7.9,'groups',.88],
+    [9.4,'budget',.34],[12,'budget',.5],[18.6,'invite',.88],
+    [20,'cards',.34],[21.7,'cards',.88],[23,'pay',.34],[28.7,'pay',.88],
+    [39.5,'split',.88],[41,'henry',.34],[49.5,'henry',.88],
+    [50.7,'receipt',.25],[54,'receipt',2/3],[54.8,'receipt',.95],
+    [56.5,'claims',1/3],[58,'claims',2/3],[59.6,'claims',.95],
+    [60.9,'clarity',.34],[62,'clarity',.6],[64,'clarity',.9],
+    [66,'outro',.34],[duration,'outro',1]
+  ];
+  const timeline=[...cues,...motionStops.map(([time,scene,progress])=>({time,scene,progress}))]
+    .map(stop=>({...stop,position:scenes.findIndex(scene=>scene.id===stop.scene)+stop.progress}))
+    .sort((a,b)=>a.time-b.time);
+  scenes[1].phases=[{at:0,body:scenes[1].body},{at:.6,body:'One shared fund, with a card for every member.'}];
+  scenes[3].phases=[{at:0,body:'Invite Henry, Maya, and Jordan to the apartment fund.'},{at:1/3,body:'Everyone reviews the $500 monthly budget and their $125 contribution before agreeing.'},{at:2/3,body:'$125 each. Four approved contributions. $500 ready to spend.'}];
+  scenes[6].phases=[{at:0,body:'The purchase is already paid. The buyer proposes how to split it.'},{at:.24,body:'An even split by default: $16 for each of the four members.'},{at:.5,body:scenes[6].phases[1].body}];
+  scenes[7].phases[0].body='There’s an easier way to work out dinner. Meet Henry.';
   const $ = id => document.getElementById(id);
   const stage=$('story-stage'),rig=$('phone-rig'),phone=$('story-phone'),track=$('story-track');
   const copy=$('scene-copy'),title=$('scene-title'),body=$('scene-body'),kicker=$('scene-kicker');
@@ -26,13 +68,53 @@
   const lerp=(a,b,t)=>a+(b-a)*t;
   let bounds=[],frame=0,lastScene=-1,lastPhase=-1,ready=false,exploring=false,forcePhone=true;
   let active={index:0,progress:0},savedPosition={index:0,progress:0};
+  let playing=false,timed=false,playbackTime=0,clockStart=0,expectedScroll=null;
   track.innerHTML=scenes.map((scene,i)=>`<section class="story-step" id="scene-${scene.id}" style="height:${scene.length}vh" aria-labelledby="script-title-${i}"><div class="sr-only"><h2 id="script-title-${i}">${scene.label}</h2><p>${scene.script}</p></div></section>`).join('');
   track.style.paddingBottom='100vh';
   nav.innerHTML=scenes.map((scene,i)=>`<button class="chapter-dot" type="button" data-chapter="${i}" aria-label="${i+1}. ${scene.label}" title="${scene.label}"><span class="chapter-dot-mark"></span><span class="chapter-label">${scene.label}</span></button>`).join('');
   const dots=[...nav.querySelectorAll('button')];
   phone.tabIndex=-1;
-  function measure(){bounds=[...track.querySelectorAll('.story-step')].map(el=>({start:el.offsetTop,end:el.offsetTop+el.offsetHeight}));schedule();}
+  function measure(){const prior=bounds.length?locate(scrollY):null;bounds=[...track.querySelectorAll('.story-step')].map(el=>({start:el.offsetTop,end:el.offsetTop+el.offsetHeight}));if(timed)scrollToPosition(positionAtTime(playbackTime));else if(prior&&!exploring)scrollToPosition(prior.index+prior.progress);schedule();}
   function locate(y){let i=bounds.findIndex(b=>y<b.end);if(i<0)i=scenes.length-1;return {index:i,progress:clamp((y-bounds[i].start)/(bounds[i].end-bounds[i].start))};}
+  function interpolate(value,input,output){
+    if(value<=timeline[0][input])return timeline[0][output];
+    const end=timeline.findIndex(stop=>stop[input]>value);
+    if(end<0)return timeline[timeline.length-1][output];
+    const a=timeline[end-1],b=timeline[end];
+    return lerp(a[output],b[output],(value-a[input])/(b[input]-a[input]));
+  }
+  function positionAtTime(time){return interpolate(clamp(time,0,duration),'time','position');}
+  function timeAtPosition(position){return interpolate(clamp(position,0,scenes.length),'position','time');}
+  function splitPosition(position){const index=Math.min(scenes.length-1,Math.floor(position));return {index,progress:position-index};}
+  function scrollToPosition(position){const {index,progress}=splitPosition(position),b=bounds[index];expectedScroll=b.start+(b.end-b.start)*progress;if(Math.abs(scrollY-expectedScroll)>.5)scrollTo({top:expectedScroll,behavior:'instant'});}
+  function formatTime(time){return `${Math.floor(time/60)}:${String(Math.floor(time%60)).padStart(2,'0')}`;}
+  function paintPlayback(){
+    const toggle=$('playback-toggle'),label=$('playback-label'),icon=$('playback-icon'),timer=$('playback-time');
+    document.body.dataset.playing=String(playing);
+    if(toggle){toggle.setAttribute('aria-pressed',String(playing));toggle.setAttribute('aria-label',playing?'Pause story':'Play story');}
+    const labelText=playing?'Pause story':'Play story',iconText=playing?'Ⅱ':'▶',timeText=`${formatTime(playbackTime)} / ${formatTime(duration)}`;
+    if(label&&label.textContent!==labelText)label.textContent=labelText;
+    if(icon&&icon.textContent!==iconText)icon.textContent=iconText;
+    if(timer&&timer.textContent!==timeText)timer.textContent=timeText;
+  }
+  function pause(){if(playing)playbackTime=clamp((performance.now()-clockStart)/1000,0,duration);playing=false;paintPlayback();schedule();}
+  function play(){
+    if(playing)return;
+    if(exploring)setExplore(false);
+    if(!timed){const p=locate(scrollY);playbackTime=timeAtPosition(p.index+p.progress);}
+    if(playbackTime>=duration-.01)playbackTime=0;
+    // Cancel a chapter's in-flight smooth scroll before the narration clock starts.
+    timed=true;expectedScroll=scrollY;scrollTo({top:scrollY,behavior:'instant'});scrollToPosition(positionAtTime(playbackTime));
+    clockStart=performance.now()-playbackTime*1000;playing=true;paintPlayback();schedule();
+  }
+  function togglePlayback(){if(playing)pause();else play();}
+  function seekTime(time){if(!Number.isFinite(time))return;pause();if(exploring)setExplore(false);playbackTime=clamp(time,0,duration);timed=true;scrollToPosition(positionAtTime(playbackTime));forcePhone=true;paintPlayback();schedule();}
+  function manualOverride(){if(exploring)return;pause();timed=false;expectedScroll=null;const p=locate(scrollY);playbackTime=timeAtPosition(p.index+p.progress);paintPlayback();}
+  function onScroll(){
+    if(timed&&expectedScroll!==null&&Math.abs(scrollY-expectedScroll)>2)manualOverride();
+    if(!timed&&!exploring){const p=locate(scrollY);playbackTime=timeAtPosition(p.index+p.progress);paintPlayback();}
+    schedule();
+  }
   function sendPhone(scene,progress,force=false){if(ready)phone.contentWindow.postMessage({type:'chipin-story',scene,progress,force},location.origin);}
   function cameraFor(scene,mobile,w,h){
     const c=scene.camera,anchorX=mobile?.5:.72,compact=h<=520&&w>=600,still=reduced.matches||compact,side=still?'right':c.side;
@@ -48,14 +130,18 @@
     if(glow)glow.style.transform=reduced.matches?'translateY(-50%)':`translate3d(${lerp(prev.x,current.x,t)*.32}px,calc(-50% + ${Math.sin((index+p)*.6)*35}px),0)`;
   }
   function paintProps(scene,p){
-    const receiptOn=scene.id==='receipt',cardsOn=scene.id==='cards';
+    const receiptOn=scene.id==='receipt',earlyCards=scene.id==='groups'&&p>=.6,cardsOn=scene.id==='cards'||earlyCards;
     const enter=smooth(p/.25),exit=1-smooth((p-.82)/.18);
-    if(receipt){receipt.style.opacity=receiptOn?String(enter*exit):'0';receipt.style.transform=reduced.matches?'none':`translate3d(${(1-enter)*80}px,${(1-enter)*90}px,0) rotate(${lerp(17,-8,enter)}deg) scale(${lerp(.85,1,enter)})`;receipt.dataset.scanning=receiptOn&&p>=1/3&&p<2/3?'true':'false';}
-    if(fan){fan.style.opacity=cardsOn?String(enter*exit):'0';fan.style.setProperty('--fan-spread',cardsOn?String(enter):'0');fan.style.transform=reduced.matches?'none':`translateY(${(1-enter)*60}px) rotate(${(1-enter)*8}deg)`;}
+    if(receipt){receipt.style.opacity=receiptOn?String(enter*exit):'0';receipt.style.transform=reduced.matches?'none':`translate3d(${(1-enter)*80}px,${(1-enter)*90}px,0) rotate(${lerp(17,-8,enter)}deg) scale(${lerp(.85,1,enter)})`;receipt.dataset.scanning=receiptOn&&p>=1/3-1e-7&&p<2/3-1e-7?'true':'false';}
+    const cardEnter=earlyCards?smooth((p-.6)/.12):enter;
+    if(fan){fan.style.opacity=cardsOn?String(cardEnter*exit):'0';fan.style.setProperty('--fan-spread',cardsOn?String(cardEnter):'0');fan.style.transform=reduced.matches?'none':`translateY(${(1-cardEnter)*60}px) rotate(${(1-cardEnter)*8}deg)`;}
   }
-  function render(){frame=0;if(!bounds.length)return;active=locate(scrollY);const {index,progress:p}=active,scene=scenes[index];
+  function render(){frame=0;if(!bounds.length)return;
+    if(playing){playbackTime=clamp((performance.now()-clockStart)/1000,0,duration);if(playbackTime>=duration)playing=false;}
+    if(timed&&!exploring){const position=positionAtTime(playbackTime);scrollToPosition(position);active=splitPosition(position);}else active=locate(scrollY);
+    paintPlayback();const {index,progress:p}=active,scene=scenes[index];
     if(exploring){paintCamera(scene,p,index);return;}
-    let phase=0;if(scene.phases)scene.phases.forEach((v,i)=>{if(p>=v.at)phase=i;});
+    let phase=0;if(scene.phases)scene.phases.forEach((v,i)=>{if(p>=v.at-1e-7)phase=i;});
     if(lastScene!==index){document.body.dataset.scene=scene.id;document.body.dataset.tone=['cards','outro'].includes(scene.id)?'blue':'navy';document.body.dataset.copySide=reduced.matches?'left':scene.side;title.innerHTML=scene.title;kicker.textContent=scene.label;word.textContent=scene.word;count.textContent=`${String(index+1).padStart(2,'0')} / ${String(scenes.length).padStart(2,'0')}`;dots.forEach((dot,i)=>{dot.classList.toggle('active',i===index);if(i===index)dot.setAttribute('aria-current','step');else dot.removeAttribute('aria-current');});lastPhase=-1;lastScene=index;}
     if(lastPhase!==phase){body.textContent=scene.phases?.[phase].body||scene.body;lastPhase=phase;}
     // Copy changes in the quiet interval while the phone crosses the stage.
@@ -66,11 +152,12 @@
     stage.style.setProperty('--scene-progress',p);
     dots[index].style.setProperty('--chapter-progress',p);
     paintCamera(scene,p,index);paintProps(scene,p);sendPhone(scene.id,p,forcePhone);forcePhone=false;
+    if(playing)schedule();
   }
   function schedule(){if(!frame)frame=requestAnimationFrame(render);}
-  function seek(index,p=.32){index=clamp(index,0,scenes.length-1);if(exploring)setExplore(false);scrollTo({top:bounds[index].start+(bounds[index].end-bounds[index].start)*p,behavior:reduced.matches?'instant':'smooth'});}
+  function seek(index,p=.32){index=clamp(index,0,scenes.length-1);if(exploring)setExplore(false);manualOverride();scrollTo({top:bounds[index].start+(bounds[index].end-bounds[index].start)*clamp(p),behavior:reduced.matches?'instant':'smooth'});}
   function setExplore(enabled){
-    if(enabled===exploring)return;exploring=enabled;document.body.dataset.mode=enabled?'explore':'story';
+    if(enabled===exploring)return;if(enabled)pause();exploring=enabled;document.body.dataset.mode=enabled?'explore':'story';
     $('explore-toggle').textContent=enabled?'Back to story':'Explore the app';$('explore-toggle').setAttribute('aria-pressed',String(enabled));
     phone.tabIndex=enabled?0:-1;
     if(enabled){savedPosition=locate(scrollY);document.body.style.overflow='hidden';}
@@ -79,14 +166,26 @@
     schedule();
   }
   nav.addEventListener('click',e=>{const button=e.target.closest('[data-chapter]');if(button)seek(Number(button.dataset.chapter));});
-  $('replay').addEventListener('click',()=>seek(0,0));
+  $('replay').addEventListener('click',()=>seekTime(0));
+  $('playback-toggle')?.addEventListener('click',togglePlayback);
   $('explore-toggle').addEventListener('click',()=>setExplore(!exploring));
-  addEventListener('scroll',schedule,{passive:true});addEventListener('resize',measure,{passive:true});
-  addEventListener('keydown',e=>{if(e.key==='Escape'&&exploring){setExplore(false);return;}if(exploring||e.altKey||e.metaKey||e.ctrlKey||['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();seek(active.index+(e.key==='ArrowRight'?1:-1));}});
+  addEventListener('scroll',onScroll,{passive:true});addEventListener('resize',measure,{passive:true});
+  addEventListener('wheel',manualOverride,{passive:true});addEventListener('touchstart',manualOverride,{passive:true});
+  addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&exploring){setExplore(false);return;}
+    if(exploring||e.defaultPrevented||e.altKey||e.metaKey||e.ctrlKey||e.shiftKey||e.target.isContentEditable||e.target.closest?.('input,textarea,select,[contenteditable],[role="textbox"]')||['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
+    if(e.code==='Space'||e.key===' '){
+      if(e.target.closest?.('button,a,summary,[role="button"]'))return;
+      e.preventDefault();if(!e.repeat)togglePlayback();return;
+    }
+    if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();if(!e.repeat)seek(active.index+(e.key==='ArrowRight'?1:-1));}
+    else if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'].includes(e.key))manualOverride();
+  });
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
   function phoneReady(){ready=true;forcePhone=true;if(exploring)phone.contentWindow.postMessage({type:'chipin-story-explore',enabled:true},location.origin);schedule();}
   addEventListener('message',e=>{if(e.source!==phone.contentWindow||e.origin!==location.origin)return;if(e.data?.type==='chipin-story-ready')phoneReady();if(e.data?.type==='chipin-story-exit-explore')setExplore(false);});
   phone.addEventListener('load',phoneReady);
   reduced.addEventListener('change',()=>{lastScene=-1;measure();});
   document.body.dataset.mode='story';$('explore-toggle').setAttribute('aria-pressed','false');measure();
-  window.chipinStoryTimeline={scenes,seek,setExplore,getState:()=>({...active,exploring})};
+  window.chipinStoryTimeline={scenes,cues,duration,seek,seekTime,setExplore,play,pause,togglePlayback,positionAtTime,timeAtPosition,getState:()=>({...active,exploring,playing,time:playbackTime,duration})};
 })();

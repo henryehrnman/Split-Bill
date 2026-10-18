@@ -21,6 +21,15 @@ body { display: block; margin: 0; padding: 0; }
 .story-consent .person-row { padding: 12px 0; }
 .story-consent .person-row > strong { font-size: 13px; }
 .story-consent .person-info small { font-size: 9px; }
+.story-invite-intro { text-align: center; margin: 4px 0 22px; }
+.story-invite-intro > .group-icon { margin: 0 auto 12px; }
+.story-invite-intro h1 { font-size: 29px; margin-bottom: 6px; }
+.story-invite-intro p { font-size: 11px; color: var(--muted); }
+.story-invited-members .person-row { padding: 10px 0; }
+.story-invited-members h2 { margin-bottom: 5px; }
+.story-invite-summary { padding: 19px; text-align: center; background: var(--soft-blue); border-radius: 18px; }
+.story-invite-summary > span, .story-invite-summary > small { display: block; font-size: 10px; color: var(--muted); }
+.story-invite-summary > strong { display: block; color: var(--blue); font-size: 30px; letter-spacing: -1px; margin: 5px 0; }
 .story-check { color: var(--success); display: flex; }
 .story-check svg { width: 16px; height: 16px; }
 .story-celebration { text-align: center; margin: 16px 0 25px; }
