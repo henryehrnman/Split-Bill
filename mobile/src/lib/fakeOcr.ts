@@ -1,6 +1,7 @@
 import type {ReceiptItem} from './split.ts';
 
-export type ScannedReceipt = {items: Omit<ReceiptItem, 'people'>[]; tax: number; tip: number; itemized: boolean};
+export type ReceiptDraft = {items: {name: string; amount: number}[]; tax: number; tip: number};
+export type ScannedReceipt = {items: Omit<ReceiptItem, 'people'>[]; tax: number; tip: number; itemized: boolean; draft?: ReceiptDraft};
 
 type Sample = {merchant: string; amount: number; category: string; items: [string, number][]; tax: number; tip: number};
 
@@ -39,21 +40,29 @@ const cents = (v: unknown) => (Number.isSafeInteger(v) && (v as number) >= 0 ? (
 
 /**
  * Turns a receipt read elsewhere (the vision model on the server) into board items.
- * Anything malformed, or items + tax + tip that don't equal the charge, falls back to one editable line.
+ * Discount lines fold into the item above them and $0 lines are dropped. Only a read whose items + tax + tip
+ * equal the charge becomes the board; any other usable read is kept as a draft for the payer to fix, and the
+ * board stays one editable line until they do.
  */
 export function fromScan(read: unknown, merchant: string, amount: number, seed: string): ScannedReceipt {
   const r = read as {items?: unknown; tax?: unknown; tip?: unknown} | null;
   const raw = Array.isArray(r?.items) ? (r.items as {name?: unknown; amount?: unknown}[]) : [];
-  const items = raw.slice(0, 60).map((i, n) => ({
-    id: `${seed}-${n + 1}`,
-    name: typeof i?.name === 'string' ? i.name.trim().slice(0, 60) : '',
-    amount: cents(i?.amount) ?? 0,
-  }));
   const tax = cents(r?.tax);
   const tip = cents(r?.tip);
-  if (!items.length || raw.length > 60 || tax === null || tip === null || items.some(i => !i.name || i.amount <= 0)) return singleLine(merchant, amount, seed);
-  if (items.reduce((a, i) => a + i.amount, 0) + tax + tip !== amount) return singleLine(merchant, amount, seed);
-  return {items, tax, tip, itemized: true};
+  if (!raw.length || raw.length > 60 || tax === null || tip === null) return singleLine(merchant, amount, seed);
+  const lines: {name: string; amount: number}[] = [];
+  for (const i of raw) {
+    const name = typeof i?.name === 'string' ? i.name.trim().slice(0, 60) : '';
+    const value = Number.isSafeInteger(i?.amount) ? (i.amount as number) : null;
+    if (value === null || (!name && value !== 0)) return singleLine(merchant, amount, seed);
+    if (value === 0) continue;
+    if (value > 0) lines.push({name, amount: value});
+    else if (lines.length && lines[lines.length - 1].amount + value > 0) lines[lines.length - 1].amount += value;
+    else return singleLine(merchant, amount, seed);
+  }
+  if (!lines.length) return singleLine(merchant, amount, seed);
+  if (lines.reduce((a, i) => a + i.amount, 0) + tax + tip !== amount) return {...singleLine(merchant, amount, seed), draft: {items: lines, tax, tip}};
+  return {items: lines.map((i, n) => ({id: `${seed}-${n + 1}`, ...i})), tax, tip, itemized: true};
 }
 
 export function scanReceipt(merchant: string, amount: number, seed: string): ScannedReceipt {

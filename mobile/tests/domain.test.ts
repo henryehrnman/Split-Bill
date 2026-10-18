@@ -627,4 +627,27 @@ for (const legacy of [false, true]) {
   assert.equal(d.spendLimit(db, g.id, 'u_maya'), 9116, 'settling swaps the hold for the exact debit without changing remaining buying power');
 }
 
+// Photo reads: discounts fold into their item, $0 lines drop, and a read that doesn't add up is kept as a draft
+// behind a one-line board until the payer fixes it.
+{
+  const db = seed(T0);
+  const c = db.charges.find(x => x.merchant === 'Juniper')!;
+  const folded = d.scanReceipt(db, 'u_maya', c.id, T0, {items: [{name: 'Pasta', amount: 9000}, {name: 'Happy hour', amount: -1000}, {name: 'Bread', amount: 0}, {name: 'Wine', amount: 5000}], tax: 1020, tip: 1400});
+  assert.equal(folded.itemized, true);
+  assert.deepEqual(folded.items.map(i => [i.name, i.amount]), [['Pasta', 8000], ['Wine', 5000]]);
+  assert.equal(folded.draft, undefined);
+
+  const off = d.scanReceipt(db, 'u_maya', c.id, T0, {items: [{name: 'Pasta', amount: 9000}, {name: 'Wine', amount: 5000}], tax: 1020, tip: 1300});
+  assert.equal(off.itemized, false);
+  assert.deepEqual(off.items.map(i => i.amount), [15420], 'the board stays one line while the read is a draft');
+  assert.deepEqual(off.draft, {items: [{name: 'Pasta', amount: 9000}, {name: 'Wine', amount: 5000}], tax: 1020, tip: 1300});
+  throws(() => d.updateReceipt(db, 'u_maya', c.id, {items: [{id: 'a', name: 'Pasta', amount: 9000}, {id: 'b', name: 'Wine', amount: 5000}], tax: 1020, tip: 1300}), /add up to/);
+  d.updateReceipt(db, 'u_maya', c.id, {items: [{id: 'a', name: 'Pasta', amount: 9000}, {id: 'b', name: 'Wine', amount: 5000}], tax: 1020, tip: 400});
+  assert.equal(c.receipt!.itemized, true);
+  assert.equal(c.receipt!.draft, undefined);
+
+  assert.equal(d.scanReceipt(db, 'u_maya', c.id, T0, {items: [{name: 'Refund', amount: -500}], tax: 0, tip: 0}).draft, undefined, 'an unusable read keeps no draft');
+  assert.equal(d.scanReceipt(db, 'u_maya', c.id, T0, {items: [], tax: 0, tip: 0}).draft, undefined);
+}
+
 console.log('PASS domain: invite search, reviewed invitation deposits, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock and pooled-fund cap, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with proposal and receipt holds, active-only period refills, current and next-period budget targets, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');
