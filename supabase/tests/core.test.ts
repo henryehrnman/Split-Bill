@@ -96,7 +96,12 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
 
   // The retired one-purchase lock cannot be re-enabled by an older client.
   const gid = annDb.groups[0].id;
-  assert.equal((await call(s, 'auth-ann', 'setSingleOpenCharge', [gid, true])).status, 400);
+  const beforeRetiredLock = JSON.parse(JSON.stringify(s.state!.db));
+  for (const enabled of [true, false]) {
+    assert.equal((await call(s, 'auth-ann', 'setSingleOpenCharge', [gid, enabled])).status, 200);
+    assert.deepEqual(s.state!.db, beforeRetiredLock, 'the retired setting is a compatibility no-op');
+    assert.equal(Object.hasOwn(s.state!.db.groups.find(group => group.id === gid)!, 'singleOpenCharge'), false);
+  }
 
   // Search never returns the caller.
   const found = await call(s, 'auth-cy', 'searchUsers', ['Tester', []]);

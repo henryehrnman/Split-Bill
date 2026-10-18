@@ -14,6 +14,8 @@ export type Member = {
   autoDeposit: boolean;
   failTopUps: boolean;
   suspended: boolean;
+  // Maximum initial funding amount reviewed when this member created or joined the group.
+  initialContributionLimit?: number;
   // periodStart of the last period in which this member's balance reached their share.
   fundedPeriod: number | null;
 };
@@ -239,7 +241,13 @@ function credit(db: Db, g: Group, m: Member, amount: number, kind: LedgerEntry['
   ledger(db, {groupId: g.id, userId: m.userId, kind, amount, at: now});
 }
 
-export function createGroup(db: Db, actor: UserId, input: {name: string; inviteIds: UserId[]; budget: number; periodDays: number}, now: number) {
+function contributionLimit(estimate: number, budget: number, limit?: number) {
+  if (limit === undefined) return estimate;
+  if (!Number.isSafeInteger(limit) || limit < estimate || limit > Math.ceil(budget / 2)) fail('Review an initial contribution limit between your current share and the two-person maximum.');
+  return limit;
+}
+
+export function createGroup(db: Db, actor: UserId, input: {name: string; inviteIds: UserId[]; budget: number; periodDays: number; initialContributionLimit?: number}, now: number) {
   const name = input.name.trim();
   if (!name) fail('Give the group a name.');
   const ids = [actor, ...input.inviteIds.filter(id => id !== actor)];
@@ -248,6 +256,7 @@ export function createGroup(db: Db, actor: UserId, input: {name: string; inviteI
   if (ids.length < 2) fail('Invite at least one person.');
   if (!Number.isSafeInteger(input.budget) || input.budget < ids.length * 100) fail('Set a budget of at least $1 per person.');
   if (!Number.isInteger(input.periodDays) || input.periodDays < 1 || input.periodDays > 365) fail('Choose a budget period between 1 and 365 days.');
+  const limit = contributionLimit(allocate(input.budget, ids.map(() => 1))[0], input.budget, input.initialContributionLimit);
   const g: Group = {
     id: nextId(db, 'grp'),
     name,
@@ -263,7 +272,7 @@ export function createGroup(db: Db, actor: UserId, input: {name: string; inviteI
     frozen: null,
   };
   db.groups.push(g);
-  respondInvite(db, actor, g.id, true, now, shares(g)[actor]);
+  respondInvite(db, actor, g.id, true, now, shares(g)[actor], limit);
   return g;
 }
 
@@ -274,15 +283,18 @@ function activateIfReady(db: Db, g: Group, now: number) {
   g.periodBudget = g.budget;
   const owed = periodShares(g);
   for (const m of g.members) {
-    // Legacy forming groups may already have deposits; keep them and collect only the difference.
-    const need = owed[m.userId] - m.balance;
-    if (need <= 0) m.fundedPeriod = now;
-    else if (m.failTopUps) ledger(db, {groupId: g.id, userId: m.userId, kind: 'deposit-failed', amount: need, at: now});
+    // Missing legacy consent authorizes keeping existing funds, never another initial debit.
+    const limit = m.initialContributionLimit ?? m.balance;
+    if (owed[m.userId] > limit) m.autoDeposit = false;
+    const need = Math.max(0, Math.min(owed[m.userId], limit) - m.balance);
+    if (m.balance >= owed[m.userId]) m.fundedPeriod = now;
+    if (need <= 0) continue;
+    if (m.failTopUps) ledger(db, {groupId: g.id, userId: m.userId, kind: 'deposit-failed', amount: need, at: now});
     else credit(db, g, m, need, 'deposit', now);
   }
 }
 
-export function respondInvite(db: Db, actor: UserId, groupId: string, accept: boolean, now: number, expectedContribution?: number) {
+export function respondInvite(db: Db, actor: UserId, groupId: string, accept: boolean, now: number, expectedContribution?: number, initialContributionLimit?: number) {
   const g = groupById(db, groupId);
   const m = memberOf(g, actor);
   if (m.status === 'joined') fail('You already joined this group.');
@@ -301,6 +313,8 @@ export function respondInvite(db: Db, actor: UserId, groupId: string, accept: bo
   const contribution = shares(g)[actor];
   if (expectedContribution === undefined) throw new StaleStateError('Reload the app to review your share of the group budget before joining.');
   if (expectedContribution !== contribution) throw new StaleStateError('Your share of the group budget changed. Review the current amount before joining.');
+  const limit = contributionLimit(contribution, g.budget, initialContributionLimit);
+  m.initialContributionLimit = limit;
   m.status = 'joined';
   issueCard(db, groupId, actor);
   activateIfReady(db, g, now);

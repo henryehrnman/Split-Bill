@@ -39,8 +39,8 @@ Backend plan (draft for discussion; nothing here is built yet)
     i) Users and invites
       GET  /me                                   current user, groups, pending invites
       GET  /users/search?q=                      exact-ish match on username, email or phone (schema 1.i); returns minimal profile only
-      POST /groups                               {name, inviteIds, budget, periodDays}; create invitations without collecting money
-      POST /groups/:id/invites/:inviteId/accept  join and issue card; final invite resolution starts the period and collects every joined member's final equal share once
+      POST /groups                               {name, inviteIds, budget, periodDays, initialContributionLimit}; record the creator’s reviewed maximum and create invitations without collecting money
+      POST /groups/:id/invites/:inviteId/accept  {expectedContribution, initialContributionLimit}; record the reviewed maximum, join and issue card; final invite resolution starts the period and collects every joined member's final equal share once
       POST /groups/:id/invites/:inviteId/decline
     ii) Group and money
       GET  /groups/:id                           group, members, balances, standing, open charges, open budget proposal
@@ -84,7 +84,7 @@ Backend plan (draft for discussion; nothing here is built yet)
   4) data model (Postgres tables)
     users(id, name, handle unique, email unique, phone unique, created_at)
     groups(id, name, created_by, budget_cents, period_days, period_start, activated_at, default_split jsonb, frozen_reason, frozen_at)
-    memberships(group_id, user_id, status invited|joined, auto_refill, suspended, funded_period, joined_at)  -- balance is derived from ledger
+    memberships(group_id, user_id, status invited|joined, initial_contribution_limit, auto_refill, suspended, funded_period, joined_at)  -- balance is derived from ledger
     cards(id, group_id, user_id, issuer_card_id, last4, frozen, wallet_status)
     bank_accounts(id, user_id, provider, provider_account_id, last4, status)
     charges(id, group_id, cardholder_id, issuer_authorization_id, merchant, amount_cents, status pending|settled|disputed, created_at, sent_at, settled_at)

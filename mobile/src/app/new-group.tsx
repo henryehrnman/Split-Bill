@@ -51,7 +51,7 @@ export default function NewGroup() {
   }, [viewer.id, demoMode, query, invites, searchKey, searchAttempt]);
 
   const create = () =>
-    run(a => api.createGroup(a, {name, inviteIds: invites.map(u => u.id), budget: amount ?? 0, periodDays: days}), `${name.trim()} created. Your final share is collected once everyone responds and at least two members join.`).then(next => {
+    run(a => api.createGroup(a, {name, inviteIds: invites.map(u => u.id), budget: amount ?? 0, periodDays: days, initialContributionLimit: Math.ceil((amount ?? 0) / 2)}), `${name.trim()} created. Your final share is collected once everyone responds and at least two members join.`).then(next => {
       if (!next) return;
       setGroupId(next.groups[next.groups.length - 1].id);
       router.replace('/');

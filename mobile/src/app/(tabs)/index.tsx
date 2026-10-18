@@ -88,7 +88,7 @@ function InviteFooter({group}: {group: Group}) {
   const share = shares(group)[viewer.id];
   return (
     <>
-      <Button title="Join group" onPress={() => run(a => api.respondInvite(a, group.id, true, share), `You joined ${group.name}. The group forms when everyone responds and at least two members join; your final share is collected then.`)} />
+      <Button title="Join group" onPress={() => run(a => api.respondInvite(a, group.id, true, share, Math.ceil(group.budget / 2)), `You joined ${group.name}. The group forms when everyone responds and at least two members join; your final share is collected then.`)} />
       <Pressable accessibilityRole="button" disabled={!!busy} onPress={() => run(a => api.respondInvite(a, group.id, false), `You declined ${group.name}.`)} style={{alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16, marginTop: 2}}>
         <T style={{color: C.muted, fontWeight: '500', fontSize: 14}}>Decline invitation</T>
       </Pressable>

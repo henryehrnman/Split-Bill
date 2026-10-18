@@ -37,7 +37,7 @@ assert.equal(d.searchUsers(db, 'example.com', ['u_henry']).length, 4);
 
 // Formation and early joining move no money; activation collects the final equal shares.
 throws(() => d.createGroup(db, 'u_henry', {name: 'Solo', inviteIds: [], budget: 30000, periodDays: 14}, T0), /Invite at least one/);
-const g = d.createGroup(db, 'u_henry', {name: 'Trip', inviteIds: ['u_maya', 'u_jordan', 'u_connor'], budget: 30000, periodDays: 14}, T0);
+const g = d.createGroup(db, 'u_henry', {name: 'Trip', inviteIds: ['u_maya', 'u_jordan', 'u_connor'], budget: 30000, periodDays: 14, initialContributionLimit: 15000}, T0);
 assert.deepEqual(bal(g), [0, 0, 0, 0]);
 assert.equal(db.ledger.length, 0);
 assert.equal(g.activatedAt, null);
@@ -529,14 +529,58 @@ for (const bankDeclines of [false, true]) {
   throws(() => d.deposit(db, 'u_henry', g.id, 100, T0 + 2 * d.DAY), /accepted or declined/);
 }
 
-// Final accept or decline starts a fresh period and collects the final roster's shares once.
+// Invalid explicit limits fail before changing IDs, membership, balances, or cards.
+{
+  const db = seed(T0);
+  const input = {name: 'Reviewed limits', inviteIds: ['u_maya', 'u_jordan'], budget: 30000, periodDays: 1};
+  for (const limit of [9999, 15001, 10000.5, NaN, Infinity, '15000', null]) {
+    const before = JSON.parse(JSON.stringify(db));
+    throws(() => d.createGroup(db, 'u_henry', {...input, initialContributionLimit: limit as number}, T0), /contribution limit/);
+    assert.deepEqual(db, before);
+  }
+  const g = d.createGroup(db, 'u_henry', input, T0);
+  assert.equal(d.memberOf(g, 'u_henry').initialContributionLimit, 10000);
+  for (const limit of [9999, 15001, 10000.5, NaN, Infinity, '15000', null]) {
+    const before = JSON.parse(JSON.stringify(db));
+    throws(() => d.respondInvite(db, 'u_maya', g.id, true, T0, 10000, limit as number), /contribution limit/);
+    assert.deepEqual(db, before);
+  }
+  d.respondInvite(db, 'u_jordan', g.id, false, T0, undefined, NaN); // A decline authorizes no collection from that invitee.
+  assert.equal(d.memberOf(g, 'u_maya').status, 'invited');
+}
+
+// Older clients authorize only their reviewed estimate; a smaller explicit cap also remains binding.
+for (const initialContributionLimit of [undefined, 12000]) {
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Capped activation', inviteIds: ['u_maya', 'u_jordan'], budget: 30000, periodDays: 1, initialContributionLimit}, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, 10000, initialContributionLimit);
+  const limit = initialContributionLimit ?? 10000;
+  d.respondInvite(db, 'u_jordan', g.id, false, T0);
+  assert.deepEqual(bal(g), [limit, limit]);
+  assert(g.members.every(m => m.initialContributionLimit === limit && !m.autoDeposit && m.fundedPeriod === null));
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id).map(e => [e.kind, e.amount]), [['deposit', limit], ['deposit', limit]]);
+  const ledger = db.ledger.filter(e => e.groupId === g.id);
+  d.rollPeriods(db, T0 + d.DAY);
+  assert.deepEqual(bal(g), [limit, limit]);
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledger, 'a later refill cannot bypass the initial limit');
+
+  d.deposit(db, 'u_henry', g.id, 15000 - limit, T0 + d.DAY);
+  d.setAutoDeposit(db, 'u_maya', g.id, true);
+  d.rollPeriods(db, T0 + 2 * d.DAY);
+  assert.deepEqual(bal(g), [15000, 15000], 'manual funding and explicit refill opt-in can authorize the remaining amount');
+  assert.equal(d.memberOf(g, 'u_henry').autoDeposit, false, 'one manual deposit does not enable future automatic payments');
+}
+
+// Final accept or decline starts a fresh period and collects the final roster's shares once within disclosed caps.
 for (const finalAccept of [true, false]) {
   const db = seed(T0);
-  const g = d.createGroup(db, 'u_henry', {name: 'Waiting across periods', inviteIds: ['u_maya', 'u_jordan'], budget: 30000, periodDays: 1}, T0);
-  d.respondInvite(db, 'u_maya', g.id, true, T0, 10000);
+  const g = d.createGroup(db, 'u_henry', {name: 'Waiting across periods', inviteIds: ['u_maya', 'u_jordan'], budget: 30000, periodDays: 1, initialContributionLimit: 15000}, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, 10000, 15000);
   assert.deepEqual(bal(g), [0, 0, 0]);
   assert.equal(db.cards.filter(c => c.groupId === g.id).length, 2);
   assert(g.members.every(m => m.autoDeposit));
+  assert.equal(d.memberOf(g, 'u_henry').initialContributionLimit, 15000);
+  assert.equal(d.memberOf(g, 'u_maya').initialContributionLimit, 15000);
   const activated = T0 + 3 * d.DAY + 123;
   d.rollPeriods(db, activated);
   assert.equal(g.periodStart, T0, 'forming groups do not accrue refill periods');
@@ -587,7 +631,7 @@ for (const finalAccept of [true, false]) {
   d.purchase(db, 'u_henry', g.id, {merchant: 'Pooled purchase', amount: 10000}, T0);
 }
 
-// Legacy forming groups retain earlier deposits and collect only the missing final shares.
+// Legacy forming groups retain earlier deposits without debiting members who never reviewed a limit.
 for (const finalAccept of [false, true]) {
   const db = seed(T0);
   const g = d.createGroup(db, 'u_henry', {name: 'Legacy formation', inviteIds: finalAccept ? ['u_maya'] : ['u_maya', 'u_jordan'], budget: 30000, periodDays: 1}, T0);
@@ -595,6 +639,7 @@ for (const finalAccept of [false, true]) {
   delete g.activatedAt;
   // Hydrate the deposits an older client collected before all invitations were resolved.
   for (const m of g.members.filter(m => m.status === 'joined')) {
+    delete m.initialContributionLimit;
     m.balance = 10000;
     m.fundedPeriod = T0;
     db.ledger.push({id: `legacy_${m.userId}`, groupId: g.id, userId: m.userId, kind: 'deposit', amount: 10000, at: T0});
@@ -606,14 +651,15 @@ for (const finalAccept of [false, true]) {
   d.respondInvite(db, finalAccept ? 'u_maya' : 'u_jordan', g.id, finalAccept, activated, finalAccept ? 15000 : undefined);
   assert.equal(g.activatedAt, activated);
   assert.equal(g.periodStart, activated);
-  assert.deepEqual(bal(g), [15000, 15000]);
+  assert.deepEqual(bal(g), finalAccept ? [10000, 15000] : [10000, 10000]);
+  assert.equal(d.memberOf(g, 'u_henry').autoDeposit, false);
   assert.deepEqual(db.ledger.filter(e => e.groupId === g.id && e.at === activated).map(e => [e.userId, e.kind, e.amount]), finalAccept
-    ? [['u_maya', 'deposit', 15000], ['u_henry', 'deposit', 5000]]
-    : [['u_maya', 'deposit', 5000], ['u_henry', 'deposit', 5000]]);
+    ? [['u_maya', 'deposit', 15000]]
+    : []);
   for (const card of cards) assert.deepEqual(d.cardFor(db, g.id, card.userId), card);
   const ledger = db.ledger.filter(e => e.groupId === g.id);
-  d.rollPeriods(db, activated);
-  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledger);
+  d.rollPeriods(db, activated + d.DAY);
+  assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledger, 'legacy balances cannot be increased later without new consent');
 }
 
 // Already active legacy groups keep their current period and balances; reads do not recharge them.
@@ -621,6 +667,7 @@ for (const finalAccept of [false, true]) {
   const db = seed(T0);
   const g = db.groups[0];
   delete g.activatedAt;
+  for (const m of g.members) delete m.initialContributionLimit;
   const before = JSON.parse(JSON.stringify(db));
   d.tick(db, T0);
   assert.deepEqual(db, before);

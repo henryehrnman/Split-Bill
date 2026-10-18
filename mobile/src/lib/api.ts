@@ -67,8 +67,8 @@ function mutate(fn: (x: Db, t: number) => void): Promise<Db> {
 const fakeApi = {
   fetch: () => mutate(() => {}),
   searchUsers: async (actor: UserId, query: string, exclude: UserId[]) => d.searchUsers(await load(), query, [actor, ...exclude]),
-  createGroup: (actor: UserId, input: {name: string; inviteIds: UserId[]; budget: number; periodDays: number}) => mutate((x, t) => void d.createGroup(x, actor, input, t)),
-  respondInvite: (actor: UserId, groupId: string, accept: boolean, expectedContribution?: number) => mutate((x, t) => d.respondInvite(x, actor, groupId, accept, t, expectedContribution)),
+  createGroup: (actor: UserId, input: {name: string; inviteIds: UserId[]; budget: number; periodDays: number; initialContributionLimit?: number}) => mutate((x, t) => void d.createGroup(x, actor, input, t)),
+  respondInvite: (actor: UserId, groupId: string, accept: boolean, expectedContribution?: number, initialContributionLimit?: number) => mutate((x, t) => d.respondInvite(x, actor, groupId, accept, t, expectedContribution, initialContributionLimit)),
   deposit: (actor: UserId, groupId: string, amount: number) => mutate((x, t) => d.deposit(x, actor, groupId, amount, t)),
   withdraw: (actor: UserId, groupId: string, amount: number) => mutate((x, t) => d.withdraw(x, actor, groupId, amount, t)),
   setAutoDeposit: (actor: UserId, groupId: string, on: boolean) => mutate(x => d.setAutoDeposit(x, actor, groupId, on)),

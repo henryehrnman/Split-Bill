@@ -230,7 +230,7 @@ test('CAS replay rejects a reviewed invitation amount when another invitee decli
   const {alice, bob, bobId} = await accounts(h);
   const charlie = h.client('jwt-charlie');
   const c = await charlie.state('createUser', [{name: 'Charlie Tester', handle: 'charlie.test', email: 'charlie@t.dev', phone: '555-0103'}]);
-  const created = await alice.state('createGroup', [{name: 'Concurrent invitations', inviteIds: [bobId, c.viewerId], budget: 30000, periodDays: 7}]);
+  const created = await alice.state('createGroup', [{name: 'Concurrent invitations', inviteIds: [bobId, c.viewerId], budget: 30000, periodDays: 7, initialContributionLimit: 15000}]);
   const groupId = created.db.groups[0].id;
   const saves = h.saves;
   const conflicts = h.conflicts;
@@ -308,11 +308,12 @@ test('a final decline collects the final equal contributions from previously joi
   const {alice, bob, bobId} = await accounts(h);
   const charlie = h.client('jwt-charlie');
   const c = await charlie.state('createUser', [{name: 'Charlie Tester', handle: 'charlie.test', email: 'charlie@t.dev', phone: '555-0103'}]);
-  const created = await alice.state('createGroup', [{name: 'Final membership', inviteIds: [bobId, c.viewerId], budget: 30000, periodDays: 7}]);
+  const created = await alice.state('createGroup', [{name: 'Final membership', inviteIds: [bobId, c.viewerId], budget: 30000, periodDays: 7, initialContributionLimit: 15000}]);
   const groupId = created.db.groups[0].id;
-  const partial = await bob.state('respondInvite', [groupId, true, 10000]);
+  const partial = await bob.state('respondInvite', [groupId, true, 10000, 15000]);
   assert.equal(partial.db.groups[0].activatedAt, null);
   assert(partial.db.groups[0].members.every(member => member.balance === 0));
+  assert(partial.db.groups[0].members.filter(member => member.status === 'joined').every(member => member.initialContributionLimit === 15000));
   assert.deepEqual(h.state!.db.ledger.filter(entry => entry.groupId === groupId), [], 'neither creator nor early acceptor is charged');
   assert.equal(partial.db.cards.length, 1, 'accepting still issues the member card');
 
@@ -327,6 +328,31 @@ test('a final decline collects the final equal contributions from previously joi
   assert.equal(deposits.length, 2);
   assert(deposits.every(entry => entry.kind === 'deposit' && entry.amount === 15000 && entry.at === activatedAt));
   assert.equal(deposits.some(entry => entry.userId === c.viewerId), false, 'the declining invitee is never charged');
+});
+
+test('older clients never authorize more than the reviewed contribution after another invitee declines', async () => {
+  const h = harness();
+  const {alice, bob, bobId} = await accounts(h);
+  const charlie = h.client('jwt-charlie');
+  const c = await charlie.state('createUser', [{name: 'Charlie Tester', handle: 'charlie.test', email: 'charlie@t.dev', phone: '555-0103'}]);
+  const created = await alice.state('createGroup', [{name: 'Older client consent', inviteIds: [bobId, c.viewerId], budget: 30000, periodDays: 7}]);
+  const groupId = created.db.groups[0].id;
+  await bob.state('respondInvite', [groupId, true, 10000]);
+  assert.deepEqual(h.state!.db.ledger.filter(entry => entry.groupId === groupId), []);
+
+  await charlie.state('respondInvite', [groupId, false]);
+  const activated = await alice.state('fetch');
+  assert.equal(activated.db.groups[0].activatedAt, T0);
+  assert(activated.db.groups[0].members.every(member => member.status === 'joined'
+    && member.balance === 10000 && member.initialContributionLimit === 10000 && !member.autoDeposit));
+  const deposits = h.state!.db.ledger.filter(entry => entry.groupId === groupId);
+  assert.equal(deposits.length, 2);
+  assert(deposits.every(entry => entry.kind === 'deposit' && entry.amount === 10000));
+
+  h.advanceTo(T0 + 7 * 86400000);
+  const renewed = await bob.state('fetch');
+  assert(renewed.db.groups[0].members.every(member => member.balance === 10000 && !member.autoDeposit));
+  assert.deepEqual(h.state!.db.ledger.filter(entry => entry.groupId === groupId), deposits, 'the next period cannot collect an unapproved increase through automatic funding');
 });
 
 test('accepting a previously viewed split rejects a replacement proposal without writing state', async () => {
