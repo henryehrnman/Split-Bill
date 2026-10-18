@@ -101,14 +101,6 @@
 }
 .phone-host .app { height: 100%; min-height: 0; }
 .phone-host .screen { min-width: 0; }
-.phone-host .home-screen { overflow-y: auto; }
-.phone-host .home-screen.home-sparse { justify-content: flex-start; gap: 18px; }
-.phone-host .home-screen.home-sparse .hero {
-  flex: none;
-  height: clamp(160px, 27dvh, 220px);
-  min-height: 160px;
-}
-.phone-host .home-screen.home-sparse .section-heading { margin: 8px 0 -8px; }
 .phone-host .bank-card { min-width: 0; width: 100%; flex-shrink: 0; }
 .phone-host .bank-number { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .phone-host .bank-bottom { gap: 12px; }
