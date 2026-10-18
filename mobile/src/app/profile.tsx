@@ -79,7 +79,7 @@ export default function Profile() {
           <T style={[s.small, {flex: 1, color: FAILED.includes(e.kind) ? C.danger : C.muted}]}>
             {LEDGER_LABEL[e.kind]} · {groupById(db, e.groupId).name} · {shortDate(e.at)}
           </T>
-          <T style={[s.small, {fontVariant: ['tabular-nums'], color: C.ink}]}>{FAILED.includes(e.kind) ? money(e.amount) : (e.amount > 0 ? '+' : '') + money(e.amount)}</T>
+          <T style={[s.small, {fontVariant: ['tabular-nums'], fontWeight: '500', color: FAILED.includes(e.kind) ? C.danger : e.amount > 0 ? C.success : C.ink}]}>{FAILED.includes(e.kind) ? money(e.amount) : (e.amount > 0 ? '+' : '') + money(e.amount)}</T>
         </Row>
       ))}
 

@@ -72,10 +72,15 @@ export function Segmented<K extends string>({options, value, onChange}: {options
   );
 }
 
-export function Chip({label, selected, onPress}: {label: string; selected: boolean; onPress: () => void}) {
+export function Chip({label, selected, onPress, check = true}: {label: string; selected: boolean; onPress: () => void; check?: boolean}) {
   return (
-    <Pressable accessibilityRole="checkbox" accessibilityState={{checked: selected}} onPress={onPress} style={{minHeight: 40, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 10, backgroundColor: selected ? '#eaf0ff' : C.bg}}>
-      <T style={{fontSize: 12, color: selected ? C.blue : C.muted, fontWeight: selected ? '500' : '400'}}>{label}</T>
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{checked: selected}}
+      onPress={onPress}
+      style={{minHeight: 40, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, borderWidth: 1, borderColor: selected ? C.blue : C.bg, backgroundColor: selected ? '#eaf0ff' : C.bg}}>
+      {selected && check && <Feather name="check" size={13} color={C.blue} />}
+      <T style={{fontSize: 12, color: selected ? C.blue : C.muted, fontWeight: selected ? '700' : '400'}}>{label}</T>
     </Pressable>
   );
 }
@@ -190,9 +195,9 @@ export function GroupPicker({allowNew = false}: {allowNew?: boolean}) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8, paddingBottom: 18}}>
       {groups.map(g => (
-        <Chip key={g.id} label={g.name} selected={g.id === group?.id} onPress={() => setGroupId(g.id)} />
+        <Chip key={g.id} label={g.name} selected={g.id === group?.id} check={false} onPress={() => setGroupId(g.id)} />
       ))}
-      {allowNew && <Chip label="+ New group" selected={false} onPress={() => router.push('/new-group')} />}
+      {allowNew && <Chip label="+ New group" selected={false} check={false} onPress={() => router.push('/new-group')} />}
     </ScrollView>
   );
 }
