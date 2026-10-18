@@ -1,0 +1,53 @@
+Competitors and positioning (research, October 17, 2026; for the hackathon pitch)
+  Use: one slide and a 20-second answer to "how is this different from Splitwise / Venmo / Cino?" Don't spend more build time on this before 10am.
+
+  1) the market, in three groups
+    i) Pay first, chase later (one person fronts the money, everyone repays):
+      a) Splitwise: expense tracker, settle via Splitwise Pay (US), Venmo or PayPal. Huge network, no card.
+      b) Venmo Groups (since Nov 2023): add expenses, see who owes what, settle up inside Venmo. No card.
+      c) splyt (Splyt Tech Inc.): host pays, uploads the receipt, friends claim items and repay through Venmo/Cash App. About 50,000 monthly users (Google for Startups profile).
+      d) Split - Pay Together (Split Mobile Inc., splitapp.co): host scans a receipt and sends a pay link; guests pay by Apple Pay/Google Pay/card without the app. 4.7 stars from 779 ratings; 5% fee on guest card payments per developer replies; reviews complain about scan accuracy, fees and slow payouts. Virtual cards are listed as "not live yet / future roadmap".
+      e) tricount: expense tracking, tied to bunq cards in Europe.
+    ii) Split at the moment of payment (group card that charges each person's own card):
+      a) Cino: shared virtual Mastercard, each share is charged instantly to members' personal cards. Raised EUR 3.5M (Balderton, 2025). EU/EEA + UK only; no US launch found. Splits are set when paying, so they don't adapt to who actually ordered what.
+      b) Splita: shared virtual Visa linked to your debit card, "split in real time". Waitlist (~1,200), appears UK-focused.
+      c) Split (split-card.com): waitlist; equal/custom splits and AI receipt scanning.
+    iii) Pooled money (everyone pays into one pot first):
+      a) Splitcard: organizer collects shares into a pool by link; one group virtual card. Organizers adjust splits.
+      b) Zeta: joint bank account and cards for couples; either partner can empty or close the account.
+
+  2) what makes Split Bill different
+    i) Nobody fronts the money and nobody chases. Unlike group i, every member pays from the shared fund with their own card.
+    ii) The split is agreed after the purchase, by the people involved. Unlike Cino/Splita's split-at-checkout, the payer sends the first proposal (who was there, how much, or the scanned receipt) and every person with a share must accept. Itemized receipts become a claim board: claim, lock in, suggest edits.
+    iii) Built for standing groups, not one-off dinners: roommates, couples, trips, teams. A budget per period with automatic top-ups up to each person's share, unlike one-off pools (Splitcard) or pay links (Split, splyt).
+    iv) Trust with guardrails, which pooled accounts like Zeta lack: one open charge at a time; members who skip their top-up can only spend their own balance; negative balances are recovered from the member's personal card or the member is suspended; withdrawals locked while a split is pending; unresolved splits freeze after 7 days.
+    v) Fair math: exact cents, tax and tip proportional to each person's items, shared items supported.
+
+  3) why we have a chance
+    i) US gap: the closest card products (Cino, Splita) are Europe/UK, and Split Mobile's card is still on its roadmap.
+    ii) Recurring household spending (groceries, utilities, rent extras, trips) is where IOU apps create the most chasing, and where a standing fund makes the most sense.
+    iii) Existing apps' top complaints (scan accuracy, fees on repayment, slow payouts, one person carrying the bill) are what our flow removes: scans are checked against the card charge and can be fixed before claiming, and there's no repayment step at all.
+    iv) The rules engine is already built and tested; the same code would approve real card taps.
+
+  4) honest weaknesses (judges may ask)
+    i) Regulation: pooled consumer money needs a partner bank and an issuer that supports consumer programs (launch.txt 0.ii). Cino has licensed partners and funding; we don't yet.
+    ii) Pre-funding friction: members put money in before spending, unlike pay-later IOU apps.
+    iii) Agreeing after the purchase can stall; the 7-day freeze and first-proposal rule limit that, but it's a real cost.
+    iv) Network effects: Splitwise and Venmo are already on everyone's phone.
+
+  5) one-line pitch
+    "A shared fund with a card for everyone: spend together, agree on the split after, and nobody ever fronts the bill or chases a friend for money."
+
+  6) sources
+    https://apps.apple.com/us/app/split-pay-together/id6753594526
+    https://www.splitapp.co/
+    https://apps.apple.com/app/id1605675055
+    https://startup.google.com/stories/splyt
+    https://www.getcino.com/
+    https://techcrunch.com/2025/03/04/cino-has-cracked-bill-splitting-at-the-moment-of-payment-raises-seed
+    https://altss.com/profile/cino
+    https://splita.me/
+    https://split-card.com/
+    https://splitcard.com/
+    https://www.finder.com/banking/lendingclub-bank/zeta-joint-cards
+    https://www.paymentsjournal.com/venmo-launches-venmo-groups-to-split-common-expenses
