@@ -17,6 +17,8 @@ body { display: block; margin: 0; padding: 0; }
 .story-mode[data-story-scene="intro"] .home-screen { gap: 18px; justify-content: flex-start; }
 .story-mode[data-story-scene="intro"] .home-screen .hero { flex: 1; max-height: 235px; }
 .story-mode[data-story-scene="intro"] .home-screen .section-heading { margin: 4px 0 0; }
+.story-mode[data-story-scene="outro"] .home-screen { justify-content: flex-start; gap: 10px; }
+.story-mode[data-story-scene="outro"] .home-screen .section-heading { margin: 8px 0 -2px; }
 .story-mode[data-story-scene="budget"] .story-consent .story-check { display: none; }
 .story-consent .person-row { padding: 12px 0; }
 .story-consent .person-row > strong { font-size: 13px; }

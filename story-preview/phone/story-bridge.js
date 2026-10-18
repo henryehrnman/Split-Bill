@@ -19,6 +19,8 @@
     { id: 'member-2', name: 'Saahil', initials: 'S', tone: 'maya' },
     { id: 'member-3', name: 'Nathan', initials: 'N', tone: 'jordan' }
   ];
+  // Capture the copied app's original, dated Apartment ledger before story reset.
+  const APARTMENT_HISTORY = clone(charges.filter(charge => charge.group === 'apartment'));
   const ITEMS = [
     ['xiaolongbao', 'Pork xiaolongbao', 24], ['wontons', 'Spicy wontons', 26],
     ['noodles', 'Noodles', 22], ['rice', 'Fried rice', 28],
@@ -95,29 +97,30 @@
     if (result.error) throw new Error(result.error);
     delete state.splitDrafts[charge.id];
   }
-  // The final storyboard snapshot includes an agreed, settled store purchase.
-  // The copied preview has no settlement action: project that fixture into its
-  // existing settled ledger, without charging the already-paid card again.
-  function recordStoreSettlement(charge) {
-    const allocation = currentAllocation(charge), members = chargePeople(charge);
-    const cents = allocation.map(moneyCents), total = moneyCents(charge.total);
-    if (cents.some(value => value === null) || cents.reduce((sum, value) => sum + value, 0) !== total) {
-      throw new Error('The scripted settlement must reconcile to the purchase.');
+  // The closing screens are independent illustrative monthly snapshots. The
+  // statistics view preserves the original ledger; Home scales the same dated
+  // series to $238.20 personally, preserving zeros, timing and relative weights.
+  function loadClosingHistory(scene) {
+    const rows = clone(APARTMENT_HISTORY), group = gById('apartment');
+    if (scene === 'outro') {
+      const originalPersonalCents = rows.reduce((sum, row) => sum + moneyCents(row.memberShares['member-0']), 0);
+      const scaled = Object.fromEntries(ROSTER.map(person => {
+        const weights = rows.map(row => moneyCents(row.memberShares[person.id]));
+        const memberTarget = Math.round(weights.reduce((sum, cents) => sum + cents, 0) * 23820 / originalPersonalCents);
+        return [person.id, distributeWeighted(memberTarget, weights)];
+      }));
+      rows.forEach((row, index) => {
+        row.memberShares = Object.fromEntries(ROSTER.map(person => [person.id, scaled[person.id][index] / 100]));
+        row.amount = row.memberShares['member-0'];
+        row.groupAmount = ROSTER.reduce((sum, person) => sum + scaled[person.id][index], 0) / 100;
+      });
     }
-    const group = gById(charge.group);
-    const balances = Object.fromEntries(members.map((person, index) => [person.id,
-      (moneyCents(group.memberBalances[person.id]) - cents[index]) / 100]));
-    if (Object.values(balances).some(value => value < 0)) throw new Error('The scripted settlement exceeds a member balance.');
-    charges.unshift({ id: charge.id, name: charge.name, merchant: charge.merchant,
-      group: charge.group, icon: charge.icon, date: 'Oct 17', amount: allocation[0],
-      groupAmount: charge.total, memberShares: Object.fromEntries(members.map((person, index) => [person.id, allocation[index]])) });
-    pending.splice(pending.findIndex(item => item.id === charge.id), 1);
-    group.memberBalances = balances;
-    group.balance = balances['member-0'];
+    replace(charges, rows);
     group.total = spendingTotal(9, group.id);
-    for (const key of ['approved', 'proposals', 'publishedMethods', 'proposalDetails', 'splitDrafts', 'selectionDrafts', 'itemConfirmations']) {
-      delete state[key][charge.id];
-    }
+    // Earlier funding covers this earlier settled history. The current $500
+    // fund and both already-debited, pending story purchases remain unchanged.
+    group.historicalFunding = Object.fromEntries(ROSTER.map(person => [person.id,
+      rows.reduce((sum, row) => sum + moneyCents(row.memberShares[person.id]), 0) / 100]));
   }
   function receiptDraft(charge, scanned) {
     state.splitDrafts[charge.id] = {
@@ -183,7 +186,7 @@
         } else route('split', dinner.id);
       }
     }
-    if (scene === 'clarity' || scene === 'outro') recordStoreSettlement(store);
+    if (scene === 'clarity' || scene === 'outro') loadClosingHistory(scene);
     state.notice = pending.length > 0;
     render(false, { resetScroll: true });
     decorate(scene, phase);
@@ -327,6 +330,7 @@
     setScene, setExplore, reset: () => { exploring = false; setScene('intro', 0, true); },
     getState: () => ({ ...active, exploring, buyingPower: gById('apartment').power,
       personalSpending: spendingTotal(9), memberBalances: clone(gById('apartment').memberBalances),
+      historicalFunding: clone(gById('apartment').historicalFunding || {}),
       settled: clone(charges),
       pending: pending.map(charge => ({ id: charge.id, total: charge.total, allocation: [...currentAllocation(charge)] })) })
   });
