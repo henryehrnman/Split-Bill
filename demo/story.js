@@ -187,6 +187,25 @@
   }
   function schedule(){if(!frame)frame=requestAnimationFrame(render);}
   function seek(index,p=.32){index=clamp(index,0,scenes.length-1);if(exploring)setExplore(false);manualOverride();scrollTo({top:bounds[index].start+(bounds[index].end-bounds[index].start)*clamp(p),behavior:reduced.matches?'instant':'smooth'});}
+  // Arrow keys step cue to cue, not scene to scene, so every beat inside a chapter gets its turn. The page
+  // scrolls smoothly between cues, which plays the motion stops and prop animations on the way.
+  function currentTime(){if(timed)return playbackTime;const p=locate(scrollY);return timeAtPosition(p.index+p.progress);}
+  function seekCue(direction){
+    if(exploring)setExplore(false);
+    const now=currentTime(),gap=.05;
+    // A cue at the top of a scene is where the phone starts crossing the stage and the copy is still hidden;
+    // stop where the arrival has finished instead, so each press lands on a readable frame. If the scene's
+    // next cue sits right there anyway, go straight to it rather than showing two near-identical frames.
+    const landing=.3;
+    const landingOf=cue=>{if(!cue)return null;if(cue.progress===0){const next=cues[cues.indexOf(cue)+1];if(next&&next.scene===cue.scene&&next.progress<=landing+.06)return landingOf(next);const index=scenes.findIndex(scene=>scene.id===cue.scene);return {index,progress:Math.max(splitPosition(positionAtTime(cue.time)).progress,landing)};}return splitPosition(positionAtTime(cue.time));};
+    const timeOf=spot=>timeAtPosition(spot.index+spot.progress);
+    let spot;
+    if(direction>0){const cue=cues.find(cue=>timeOf(landingOf(cue))>now+gap);spot=cue?landingOf(cue):splitPosition(positionAtTime(duration));}
+    else{const cue=[...cues].reverse().find(cue=>timeOf(landingOf(cue))<now-gap);spot=cue?landingOf(cue):{index:0,progress:0};}
+    manualOverride();
+    const {index,progress}=spot,b=bounds[index];
+    scrollTo({top:b.start+(b.end-b.start)*progress,behavior:reduced.matches?'instant':'smooth'});
+  }
   function setExplore(enabled){
     if(enabled===exploring)return;if(enabled)pause();exploring=enabled;document.body.dataset.mode=enabled?'explore':'story';
     phone.tabIndex=enabled?0:-1;
@@ -205,7 +224,7 @@
       if(e.target.closest?.('button,a,summary,[role="button"]'))return;
       e.preventDefault();if(!e.repeat)togglePlayback();return;
     }
-    if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();if(!e.repeat)seek(active.index+(e.key==='ArrowRight'?1:-1));}
+    if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();if(!e.repeat)seekCue(e.key==='ArrowRight'?1:-1);}
     else if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'].includes(e.key))manualOverride();
   });
   document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
@@ -214,5 +233,5 @@
   phone.addEventListener('load',phoneReady);
   reduced.addEventListener('change',()=>{lastScene=-1;measure();});
   document.body.dataset.mode='story';measure();
-  window.chipinStoryTimeline={scenes,cues,duration,seek,seekTime,setExplore,play,pause,togglePlayback,positionAtTime,timeAtPosition,getState:()=>({...active,exploring,playing,time:playbackTime,duration})};
+  window.chipinStoryTimeline={scenes,cues,duration,seek,seekCue,seekTime,setExplore,play,pause,togglePlayback,positionAtTime,timeAtPosition,getState:()=>({...active,exploring,playing,time:playbackTime,duration})};
 })();

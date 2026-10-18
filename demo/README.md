@@ -10,7 +10,7 @@ python3 -m http.server 4174 --bind 127.0.0.1 --directory demo
 
 Open **http://localhost:4174**. If that port is already in use, choose another port. You can also serve the repository root and open `/demo/`; all runtime paths are relative. Use an HTTP server rather than opening `index.html` as a file so parent/phone messaging has a shared origin.
 
-For pitch-deck stills, use the chapter dots or left/right arrows to choose a scene. The `window.chipinStoryTimeline.seekTime(seconds)` console helper can stop at an exact narration cue, such as `60` for group statistics or `65` for the closing Home. The full scene and cue list is below.
+For pitch-deck stills, use the right arrow to step cue by cue, or the chapter dots to choose a scene. The `window.chipinStoryTimeline.seekTime(seconds)` console helper can stop at an exact narration cue, such as `60` for group statistics or `112` for the closing Home. The full scene and cue list is below.
 
 ## Controls
 
@@ -19,7 +19,7 @@ For pitch-deck stills, use the chapter dots or left/right arrows to choose a sce
 - Scroll in either direction to play or rewind the story. Phone state is rebuilt from a canonical snapshot, so rewinding cannot duplicate purchases or contributions.
 - The page scrollbar is hidden; wheel, trackpad, touch, and keyboard scrolling remain available.
 - Scrolling, chapter navigation, or hiding the browser tab pauses playback. Resuming continues from that position; resizing preserves narration time. Space keeps its normal behavior in form fields and on other buttons/links.
-- Chapter dots and the left/right arrow keys jump between scenes. The chipin wordmark returns to the beginning.
+- Left/right arrow keys step to the next or previous narration cue (the table below), scrolling smoothly so the transitions inside a scene play on the way. Chapter dots jump between scenes. The chipin wordmark returns to the beginning.
 - The layout adapts to mobile screens. Reduced-motion mode removes large camera moves, rotations, and scan animation while retaining every scene.
 
 ## Narration and scenes
