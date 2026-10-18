@@ -13,6 +13,11 @@
     {id:'receipt',label:'Snap the receipt',title:'Snap it.<br><span class="accent">Let <span class="gemini-word">Gemini<img class="gemini-logo" src="assets/gemini-logo.png" alt="" width="512" height="512"></span> read it.</span>',body:'A photo of the receipt becomes an itemized list.',script:'Then, instead of worrying about how much everyone owes, he snapped a photo of the receipt. Gemini reads the receipt and lists out line items.',word:'snap',length:240,side:'right',camera:{side:'left',y:.06,scale:1.07,rotate:-4},phases:[{at:0,body:'One photo. Every dish, ready to review.'},{at:1/3,body:'Gemini reads the receipt and identifies each line item.'},{at:2/3,body:'Review the items, tax, and tip. Everything adds up to $154.20.'}]},
     {id:'claims',label:'Claim your items',title:'Claim yours.<br><span class="accent">Keep moving.</span>',body:'Everyone opens their own app and selects what they had.',script:'Then, we all go into our apps, claim what’s ours, and move on.',word:'yours',length:240,side:'right',camera:{side:'left',y:.045,scale:1.08,rotate:2},phases:[{at:0,body:'Everyone opens their own app and selects what they had.'},{at:1/3,body:'Xiaolongbao and cucumber salad? Tap. Tap. Confirm your selection.'},{at:2/3,body:'A clear breakdown for each person, with tax and tip included.'}]},
     {id:'clarity',label:'See the whole picture',title:'No guessing.<br><span class="accent">Everyone’s in sync.</span>',body:'Every charge. Every balance. What’s coming up next month.',script:'Everyone sees every charge, every balance, and what’s coming up next period.',word:'in sync',length:180,side:'left',camera:{side:'right',y:0,scale:1,rotate:-3}},
+    // Pitch chapters. The phone leaves the stage and a data prop takes its place.
+    {id:'market',label:'The market',title:'$2 trillion<br><span class="accent">moves between friends.</span>',body:'US mobile P2P payments: $2.0 trillion in 2025, 170 million people, $7,200 each per year. Most of it is friends paying friends back.',script:'US mobile peer-to-peer payments moved two trillion dollars in 2025, across 170 million people. Most of it is one friend paying another back. Our wedge is the 25 million 18-to-34-year-olds in standing groups: roommates, couples, friends who travel. About 60 billion dollars of card spend a year.',word:'$2T',length:190,side:'left',deck:'market',camera:{side:'right',y:0,scale:1,rotate:0},phases:[{at:0,body:'US mobile P2P payments: $2.0 trillion in 2025, 170 million people, $7,200 each per year. Most of it is friends paying friends back.'},{at:.5,body:'Our wedge: 25 million 18-to-34-year-olds in standing groups. Roommates, couples, friends who travel. About $60 billion of shared card spend a year.'}]},
+    {id:'competition',label:'The competition',title:'They split the bill.<br><span class="accent">We split the card.</span>',body:'Splitwise, Venmo and Cash App settle up after someone has already paid. chipin removes the fronting and the repayment.',script:'Everyone else helps you settle up after one person has already paid. Splitwise and Venmo keep a ledger. Cash App has a pot. The two shared-card products are Europe-only. chipin is the only one where every member has a card on one fund, the split is agreed afterward, and everyone involved accepts it.',word:'ahead',length:200,side:'left',deck:'competition',camera:{side:'right',y:0,scale:1,rotate:0},phases:[{at:0,body:'Splitwise, Venmo and Cash App settle up after someone has already paid. chipin removes the fronting and the repayment.'},{at:.5,body:'The only product where every member has a card on one shared fund, the split is agreed after the purchase, and everyone involved accepts it.'}]},
+    {id:'model',label:'How we make money',title:'Deposits earn.<br><span class="accent">Spending earns.</span>',body:'Group funds sit in low-risk, high-yield instruments: government money market and T-bills. chipin keeps the yield and fronts every card charge from the pool.',script:'Here’s how we make money. Group deposits sit in low-risk, high-yield instruments, government money market funds and Treasury bills, and chipin keeps the yield while fronting every card charge from the pool. Every tap of a chipin card also earns interchange from the merchant. Two revenue streams, and the app stays free for friends.',word:'yield',length:200,side:'left',deck:'model',camera:{side:'right',y:0,scale:1,rotate:0},phases:[{at:0,body:'Group funds sit in low-risk, high-yield instruments: government money market and T-bills. chipin keeps the yield and fronts every card charge from the pool.'},{at:.5,body:'Every tap of a chipin card earns interchange from the merchant. Two revenue streams, and the app stays free for friends.'}]},
+    {id:'projections',label:'Projections',title:'Year three:<br><span class="accent">$12.7M revenue.</span>',body:'15,000 active members in year one, 400,000 by year three. $100 average balance, $260 a month on the card.',script:'With 15 thousand active members in year one and 400 thousand by year three, chipin reaches 12.7 million dollars of revenue: 1.5 million from yield on a 40 million dollar float, and 11.2 million from interchange on 1.25 billion dollars of card spend. Contribution margin is positive from year one.',word:'$12.7M',length:200,side:'left',deck:'projections',camera:{side:'right',y:0,scale:1,rotate:0},phases:[{at:0,body:'15,000 active members in year one, 400,000 by year three. $100 average balance, $260 a month on the card.'},{at:.5,body:'$1.5M from yield on a $40M float, $11.2M from interchange on $1.25B of card spend. Contribution-margin positive from year one.'}]},
     {id:'outro',label:'Just chipin',title:'Just <span class="accent">chipin.</span>',body:'See? It’s easy when you chip in.',script:'See? It’s easy when you just Chipin.',word:'chipin',length:135,side:'center',camera:{side:'center',y:.14,scale:.82,rotate:0}}
   ];
   // Seconds are narration time, not a percentage of the page. Extra motion
@@ -37,9 +42,17 @@
     {time:52,scene:'receipt',progress:1/3,label:'Gemini reads the receipt'},
     {time:55,scene:'claims',progress:0,label:'Claim your items'},
     {time:60,scene:'clarity',progress:0,label:'Every charge, balance, and next period'},
-    {time:65,scene:'outro',progress:0,label:'Just chipin'}
+    {time:65,scene:'market',progress:0,label:'$2 trillion moves between friends'},
+    {time:71,scene:'market',progress:.5,label:'Our wedge: 25M people, $60B of shared spend'},
+    {time:76,scene:'competition',progress:0,label:'Everyone else settles up after'},
+    {time:82,scene:'competition',progress:.5,label:'Only chipin does all of it'},
+    {time:88,scene:'model',progress:0,label:'Deposits earn yield'},
+    {time:94,scene:'model',progress:.5,label:'Spending earns interchange'},
+    {time:100,scene:'projections',progress:0,label:'Three-year model'},
+    {time:106,scene:'projections',progress:.5,label:'$12.7M revenue in year three'},
+    {time:112,scene:'outro',progress:0,label:'Just chipin'}
   ];
-  const duration=68;
+  const duration=115;
   const motionStops=[
     [1.6,'intro',.75],[3,'groups',.3],[7.9,'groups',.88],
     [9.4,'budget',.34],[12,'budget',.5],[18.6,'invite',.88],
@@ -48,7 +61,11 @@
     [50.7,'receipt',.25],[54,'receipt',2/3],[54.8,'receipt',.95],
     [56.5,'claims',1/3],[58,'claims',2/3],[59.6,'claims',.95],
     [60.9,'clarity',.34],[62,'clarity',.6],[64,'clarity',.9],
-    [66,'outro',.34],[duration,'outro',1]
+    [66.5,'market',.34],[75,'market',.92],
+    [77.5,'competition',.34],[87,'competition',.92],
+    [89.5,'model',.34],[99,'model',.92],
+    [101.5,'projections',.34],[111,'projections',.92],
+    [113,'outro',.34],[duration,'outro',1]
   ];
   const timeline=[...cues,...motionStops.map(([time,scene,progress])=>({time,scene,progress}))]
     .map(stop=>({...stop,position:scenes.findIndex(scene=>scene.id===stop.scene)+stop.progress}))
@@ -61,7 +78,7 @@
   const stage=$('story-stage'),rig=$('phone-rig'),phone=$('story-phone'),track=$('story-track');
   const copy=$('scene-copy'),title=$('scene-title'),body=$('scene-body'),kicker=$('scene-kicker');
   const nav=$('chapter-nav'),bar=$('story-progress');
-  const receipt=$('receipt-prop'),fan=$('card-fan'),word=$('stage-word'),glow=$('ambient-glow');
+  const receipt=$('receipt-prop'),fan=$('card-fan'),word=$('stage-word'),glow=$('ambient-glow'),deck=$('deck-prop');
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
   const clamp=(v,min=0,max=1)=>Math.min(max,Math.max(min,v));
   const smooth=v=>{v=clamp(v);return v*v*(3-2*v);};
@@ -111,16 +128,37 @@
   function sendPhone(scene,progress,force=false){if(ready)phone.contentWindow.postMessage({type:'chipin-story',scene,progress,force},location.origin);}
   function cameraFor(scene,mobile,w,h){
     const c=scene.camera,anchorX=mobile?.5:.72,compact=h<=520&&w>=600,still=reduced.matches||compact,side=still?'right':c.side;
-    return {x:mobile?0:((side==='left'?.27:side==='center'?.5:.73)-anchorX)*w,y:mobile?0:(still?0:c.y*h),scale:mobile?1:(still?1:c.scale),rotate:mobile||still?0:c.rotate};
+    // Pitch chapters park the phone just off the edge of the stage so a data prop can take its place.
+    if(scene.deck)return mobile?{x:0,y:h*.6,scale:.9,rotate:0,opacity:0}:{x:((still?.73:1.1)-anchorX)*w,y:still?0:.08*h,scale:still?1:.9,rotate:still?0:10,opacity:0};
+    return {x:mobile?0:((side==='left'?.27:side==='center'?.5:.73)-anchorX)*w,y:mobile?0:(still?0:c.y*h),scale:mobile?1:(still?1:c.scale),rotate:mobile||still?0:c.rotate,opacity:1};
   }
   function paintCamera(scene,p,index){
     const w=innerWidth,h=innerHeight,mobile=w<=760;
     const base=Number.parseFloat(getComputedStyle(rig).getPropertyValue('--phone-base-scale'))||.85;
-    if(exploring){rig.style.transform=`translate3d(${mobile?0:-.22*w}px,${mobile?-.13*h:0}px,0) scale(${base})`;return;}
+    if(exploring){rig.style.transform=`translate3d(${mobile?0:-.22*w}px,${mobile?-.13*h:0}px,0) scale(${base})`;rig.style.opacity='1';return;}
     const current=cameraFor(scene,mobile,w,h),prev=index?cameraFor(scenes[index-1],mobile,w,h):{...current,y:current.y+60,scale:current.scale*.92,rotate:current.rotate+4};
     const t=reduced.matches?1:smooth(p/.34);
     rig.style.transform=`translate3d(${lerp(prev.x,current.x,t).toFixed(2)}px,${lerp(prev.y,current.y,t).toFixed(2)}px,0) rotate(${lerp(prev.rotate,current.rotate,t).toFixed(3)}deg) scale(${(base*lerp(prev.scale,current.scale,t)).toFixed(4)})`;
+    rig.style.opacity=lerp(prev.opacity,current.opacity,t).toFixed(3);
     if(glow)glow.style.transform=reduced.matches?'translateY(-50%)':`translate3d(${lerp(prev.x,current.x,t)*.32}px,calc(-50% + ${Math.sin((index+p)*.6)*35}px),0)`;
+  }
+  // Each pitch prop fades in with the chapter, then animates its figures across the chapter's progress.
+  function paintDeck(scene,p){
+    if(!deck)return;
+    const enter=smooth(p/.25),exit=1-smooth((p-.86)/.14);
+    deck.style.opacity=scene.deck?String(enter*exit):'0';
+    deck.dataset.panel=scene.deck||'';
+    deck.style.setProperty('--deck-enter',String(enter));
+    const reveal=scene.deck?smooth((p-.1)/.55):0,second=scene.deck?smooth((p-.5)/.3):0;
+    deck.style.setProperty('--deck-reveal',String(reveal));
+    deck.style.setProperty('--deck-second',String(second));
+    deck.style.transform=reduced.matches?'none':`translate3d(0,${(1-enter)*50}px,0) scale(${lerp(.94,1,enter)})`;
+    deck.querySelectorAll('[data-reveal-at]').forEach(el=>{el.classList.toggle('shown',scene.deck&&p>=Number(el.dataset.revealAt)-1e-7);});
+    deck.querySelectorAll('[data-count]').forEach(el=>{
+      const at=Number(el.dataset.revealAt||0),span=Number(el.dataset.countSpan||.22),k=scene.deck?smooth((p-at)/span):0;
+      const target=Number(el.dataset.count),decimals=Number(el.dataset.decimals||0);
+      el.textContent=(el.dataset.prefix||'')+(target*k).toLocaleString('en-US',{minimumFractionDigits:decimals,maximumFractionDigits:decimals})+(el.dataset.suffix||'');
+    });
   }
   function paintProps(scene,p){
     const receiptOn=scene.id==='receipt',earlyCards=scene.id==='groups'&&p>=.6,cardsOn=scene.id==='cards'||earlyCards;
@@ -133,7 +171,7 @@
     if(playing){playbackTime=clamp((performance.now()-clockStart)/1000,0,duration);if(playbackTime>=duration)playing=false;}
     if(timed&&!exploring){const position=positionAtTime(playbackTime);scrollToPosition(position);active=splitPosition(position);}else active=locate(scrollY);
     paintPlayback();const {index,progress:p}=active,scene=scenes[index];
-    if(exploring){paintCamera(scene,p,index);return;}
+    if(exploring){paintCamera(scene,p,index);if(deck)deck.style.opacity='0';return;}
     let phase=0;if(scene.phases)scene.phases.forEach((v,i)=>{if(p>=v.at-1e-7)phase=i;});
     if(lastScene!==index){document.body.dataset.scene=scene.id;document.body.dataset.tone=['cards','outro'].includes(scene.id)?'blue':'navy';document.body.dataset.copySide=reduced.matches?'left':scene.side;title.innerHTML=scene.title;kicker.textContent=scene.label;word.textContent=scene.word;dots.forEach((dot,i)=>{dot.classList.toggle('active',i===index);if(i===index)dot.setAttribute('aria-current','step');else dot.removeAttribute('aria-current');});lastPhase=-1;lastScene=index;}
     if(lastPhase!==phase){body.textContent=scene.phases?.[phase].body||scene.body;lastPhase=phase;}
@@ -144,7 +182,7 @@
     bar.style.width=`${((index+p)/scenes.length*100).toFixed(3)}%`;
     stage.style.setProperty('--scene-progress',p);
     dots[index].style.setProperty('--chapter-progress',p);
-    paintCamera(scene,p,index);paintProps(scene,p);sendPhone(scene.id,p,forcePhone);forcePhone=false;
+    paintCamera(scene,p,index);paintProps(scene,p);paintDeck(scene,p);sendPhone(scene.id,p,forcePhone);forcePhone=false;
     if(playing)schedule();
   }
   function schedule(){if(!frame)frame=requestAnimationFrame(render);}

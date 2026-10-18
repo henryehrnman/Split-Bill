@@ -171,3 +171,112 @@ body[data-tone="blue"] .scene-kicker:before{background:#dce7ff}
 #chapter-nav{position:static;transform:none}
 .gemini-word{display:inline-flex;align-items:center;gap:.1em;white-space:nowrap}
 .gemini-logo{display:block;width:.55em;height:.55em;object-fit:contain;flex-shrink:0;letter-spacing:normal}
+
+/* Pitch chapters: market, competition, business model, projections. The prop sits where the phone was. */
+#deck-prop{position:absolute;z-index:6;left:72%;top:50%;width:min(560px,46vw);margin-left:min(-280px,-23vw);transform:translate3d(0,0,0);opacity:0;pointer-events:none;will-change:transform,opacity;--deck-enter:0;--deck-reveal:0;--deck-second:0}
+#deck-prop>.deck-panel{display:none;position:relative;top:0;transform:translateY(-50%)}
+#deck-prop[data-panel="market"] .deck-market,#deck-prop[data-panel="model"] .deck-model{display:grid}
+#deck-prop[data-panel="competition"] .deck-competition,#deck-prop[data-panel="projections"] .deck-projections{display:block}
+#deck-prop [data-reveal-at]{opacity:0;transform:translateY(14px);transition:opacity .55s cubic-bezier(.2,.8,.2,1),transform .55s cubic-bezier(.2,.8,.2,1)}
+#deck-prop [data-reveal-at].shown{opacity:1;transform:none}
+.deck-stats{display:grid;grid-template-columns:1fr 1fr;gap:14px 22px}
+.deck-stat strong{display:block;font-size:clamp(22px,2.1vw,30px);font-weight:700;letter-spacing:-.045em;line-height:1;color:#eef3ff;font-variant-numeric:tabular-nums}
+.deck-stat span{display:block;margin-top:6px;font-size:11px;line-height:1.45;color:#a6b0c2;letter-spacing:-.01em}
+
+/* Market: concentric TAM / SAM / SOM rings beside a column of figures. */
+.deck-market{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);align-items:center;gap:26px}
+.deck-rings{position:relative;aspect-ratio:1;width:min(100%,330px)}
+.deck-ring{position:absolute;left:50%;bottom:0;border-radius:50%;border:1px solid #b3c7ef3a;background:radial-gradient(circle at 50% 30%,#2b3d66,#18243d 72%);box-shadow:0 24px 44px #03081b55,inset 0 1px 0 #ffffff14;transform:translateX(-50%) scale(.6)!important;transition:opacity .6s cubic-bezier(.2,.8,.2,1),transform .7s cubic-bezier(.2,.8,.2,1)}
+.deck-ring.shown{transform:translateX(-50%) scale(1)!important}
+.ring-tam{width:100%;height:100%}
+.ring-sam{width:58%;height:58%;background:radial-gradient(circle at 50% 30%,#3b5bb8,#2a4694 72%)}
+.ring-som{width:27%;height:27%;background:radial-gradient(circle at 50% 30%,#8eaaff,#5d82ff 72%);border-color:#c9d6ff80}
+.deck-ring strong{position:absolute;left:50%;transform:translateX(-50%);font-weight:700;letter-spacing:-.04em;color:#f6f7fa;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ring-tam strong{top:9%;font-size:clamp(22px,2.1vw,30px)}
+.ring-sam strong{top:12%;font-size:clamp(17px,1.5vw,22px)}
+.ring-som strong{top:50%;transform:translate(-50%,-50%);font-size:clamp(11px,1vw,14px);color:#0d1a3d}
+.ring-label{position:absolute;right:calc(100% + 12px);white-space:nowrap;font-size:10px;line-height:1.4;color:#a6b0c2;text-align:right}
+.ring-label b{display:block;color:#c3d3ff;font-weight:700;letter-spacing:.12em;font-size:9px}
+.ring-tam .ring-label{top:16%}
+.ring-sam .ring-label{top:26%}
+.ring-som .ring-label{top:50%;transform:translateY(-50%)}
+.deck-market .deck-stats{grid-template-columns:1fr}
+
+/* Competition: the feature matrix fills in row by row; chipin's column is lit. */
+.deck-competition{padding:18px 20px 16px;border:1px solid #b3c7ef30;border-radius:17px;background:#18243dee;box-shadow:0 24px 44px #03081b55}
+.deck-matrix{width:100%;border-collapse:collapse;font-size:11.5px;letter-spacing:-.01em}
+.deck-matrix th,.deck-matrix td{padding:7px 6px;text-align:center;vertical-align:middle;border-bottom:1px solid #b3c7ef14}
+.deck-matrix thead th{padding-bottom:10px;font-size:10px;font-weight:600;color:#a6b0c2;letter-spacing:.04em;line-height:1.2}
+.deck-matrix thead th.col-chipin{color:#eef3ff;font-size:13px;letter-spacing:-.03em;font-weight:700}
+.deck-matrix thead th.col-chipin img{vertical-align:-3px;margin-right:5px}
+.deck-matrix tbody th{text-align:left;font-weight:500;color:#dfe6f5;line-height:1.3;padding-right:10px}
+.deck-matrix tbody tr:last-child th,.deck-matrix tbody tr:last-child td{border-bottom:0}
+.deck-matrix td{font-size:14px;font-weight:700}
+.deck-matrix td.yes{color:#7e9fff}.deck-matrix td.part{color:#c9b36a}.deck-matrix td.no{color:#5e6a84}
+.deck-matrix td:nth-child(2){background:#7e9fff14;color:#9fb6ff}
+.deck-matrix thead th.col-chipin,.deck-matrix td:nth-child(2){box-shadow:inset 0 0 0 0 transparent}
+.deck-matrix td:nth-child(2){position:relative}
+.deck-footnote{margin:12px 0 0;font-size:9.5px;line-height:1.5;color:#8d99b3}
+
+/* Business model: deposits flow into the fund, then out as yield and interchange. */
+.deck-model{grid-template-columns:1fr 34px 1fr;grid-template-rows:auto 26px auto;align-items:center;gap:0 0;position:relative}
+.flow-node{padding:16px 18px;border:1px solid #b3c7ef30;border-radius:15px;background:#18243d;box-shadow:0 24px 44px #03081b55}
+.flow-kicker{display:block;font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#aab9d5;margin-bottom:8px}
+.flow-node strong{display:block;font-size:clamp(18px,1.6vw,24px);font-weight:700;letter-spacing:-.04em;line-height:1.05;color:#eef3ff;font-variant-numeric:tabular-nums}
+.flow-node small{display:block;margin-top:7px;font-size:10.5px;line-height:1.45;color:#a6b0c2}
+.flow-node em{display:inline-block;margin-top:10px;padding:4px 8px;border-radius:999px;background:#7e9fff22;color:#c3d3ff;font-style:normal;font-size:9.5px;font-weight:600;letter-spacing:.02em}
+.node-members{grid-column:1;grid-row:1}
+.node-fund{grid-column:3;grid-row:1;background:linear-gradient(135deg,#2a4694,#1b2d5c);border-color:#8eaaff50}
+.node-yield{grid-column:1;grid-row:3}
+.node-card{grid-column:3;grid-row:3;border-color:#8eaaff50}
+.flow-arrow{position:relative;height:2px;background:linear-gradient(90deg,#7e9fff00,#7e9fff);align-self:center}
+.flow-arrow:after{content:"";position:absolute;right:-1px;top:-4px;border:5px solid transparent;border-left-color:#7e9fff;border-right:0}
+.arrow-one{grid-column:2;grid-row:1}
+.arrow-two{grid-column:1/4;grid-row:2;height:26px;background:linear-gradient(#7e9fff,#7e9fff) 75% 0/2px 10px no-repeat,linear-gradient(#7e9fff,#7e9fff) 50% 10px/50% 2px no-repeat,linear-gradient(#7e9fff,#7e9fff) 25% 100%/2px 14px no-repeat,linear-gradient(#7e9fff,#7e9fff) 75% 100%/2px 14px no-repeat}
+.arrow-two:after{display:none}
+.arrow-three{display:none}
+.flow-pill{grid-column:1/4;grid-row:4;justify-self:center;margin-top:18px;padding:8px 14px;border-radius:999px;border:1px solid #b3c7ef30;background:#0c1322c0;color:#d5def0;font-size:11px;font-weight:500;letter-spacing:-.01em}
+
+/* Projections: three stacked bars grow in, then the year-three figures land. */
+.deck-chart{display:grid;grid-template-columns:repeat(3,1fr);align-items:end;gap:28px;height:min(300px,34vh);padding:0 10px}
+.chart-bar{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;transform:none!important}
+.chart-bar .bar-stack{display:flex;flex-direction:column;justify-content:flex-end;width:100%;max-width:120px;height:calc(var(--h)*(100% - 74px));min-height:6px;border-radius:12px 12px 6px 6px;overflow:hidden;transform-origin:bottom;transform:scaleY(0);transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.chart-bar.shown .bar-stack{transform:scaleY(1)}
+.bar-cards{flex:var(--share) 0 0;background:linear-gradient(180deg,#8eaaff,#4f78ff)}
+.bar-yield{flex:var(--share) 0 0;background:#c9d6ff}
+.chart-bar strong{order:-1;margin-bottom:8px;font-size:clamp(16px,1.5vw,22px);font-weight:700;letter-spacing:-.04em;color:#eef3ff;font-variant-numeric:tabular-nums;opacity:0;transition:opacity .4s .5s}
+.chart-bar.shown strong{opacity:1}
+.chart-bar>span{margin-top:10px;font-size:11px;line-height:1.35;color:#dfe6f5;text-align:center}
+.chart-bar>span small{font-size:10px;color:#a6b0c2}
+.chart-legend{display:flex;justify-content:center;gap:18px;margin-top:14px;font-size:10px;color:#a6b0c2}
+.chart-legend span{display:flex;align-items:center;gap:6px}
+.swatch{width:10px;height:10px;border-radius:3px;display:inline-block}.swatch-cards{background:#6f90ff}.swatch-yield{background:#c9d6ff}
+.deck-stats-row{grid-template-columns:repeat(3,1fr);margin-top:22px;padding-top:18px;border-top:1px solid #b3c7ef22}
+.deck-stats-row .deck-stat strong{font-size:clamp(18px,1.6vw,24px)}
+
+body[data-tone="blue"] #deck-prop{opacity:0!important}
+@media(max-width:1100px) and (min-width:761px){
+  #deck-prop{width:min(480px,48vw);margin-left:min(-240px,-24vw)}
+  .deck-matrix{font-size:10.5px}.deck-matrix td{font-size:12px}
+  .deck-chart{height:min(240px,30vh)}
+}
+@media(max-height:730px) and (min-width:761px){
+  #deck-prop{scale:.84}
+}
+@media(max-width:760px){
+  #deck-prop{left:var(--page-gutter);right:var(--page-gutter);width:auto;margin-left:0;top:auto;bottom:86px}
+  #deck-prop>.deck-panel{transform:none}
+  .deck-market{grid-template-columns:1fr;gap:16px}
+  .deck-rings{width:200px;margin:0 auto}
+  .ring-label{display:none}
+  .deck-market .deck-stats{grid-template-columns:1fr 1fr;gap:10px 14px}
+  .deck-stat strong{font-size:20px}.deck-stat span{font-size:10px}
+  .deck-competition{padding:12px}.deck-matrix{font-size:9.5px}.deck-matrix td{font-size:11px}.deck-matrix th,.deck-matrix td{padding:5px 3px}.deck-footnote{display:none}
+  .flow-node{padding:12px}.flow-node small{font-size:9.5px}
+  .deck-chart{height:200px;gap:14px}
+  .deck-stats-row{margin-top:14px;padding-top:12px}
+}
+@media(max-height:520px){#deck-prop{scale:.62}}
+@media(prefers-reduced-motion:reduce){
+  #deck-prop [data-reveal-at],.deck-ring,.chart-bar .bar-stack,.chart-bar strong{transition:none}
+}

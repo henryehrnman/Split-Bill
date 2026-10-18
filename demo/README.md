@@ -1,6 +1,6 @@
 # chipin video demo
 
-The 12-scene, scroll-driven site used for the chipin video, packaged here for pitch-deck capture and reuse. This is a self-contained copy of `story-preview` at `e5634cb`; its phone prototype originally came from `16a119f`. All runtime files and image assets live inside this directory, so it can be copied or cherry-picked on its own.
+The scroll-driven site used for the chipin video, now also the pitch deck: the 12 product scenes, then four pitch chapters (market, competition, business model, projections) before the close. The pitch figures and their sources are in `docs/PITCH.md`. This is a self-contained copy of `story-preview` at `e5634cb`; its phone prototype originally came from `16a119f`. All runtime files and image assets live inside this directory, so it can be copied or cherry-picked on its own.
 
 Run from the repository root:
 
@@ -14,7 +14,7 @@ For pitch-deck stills, use the chapter dots or left/right arrows to choose a sce
 
 ## Controls
 
-- **Space** starts/pause-resumes the 68-second narration timeline from your current position. The clock follows elapsed time rather than frame counts; the closing scene starts at 1:05 and holds through 1:08. At the end, Space starts again from zero. Playback labels, timestamps, replay, chapter count, and demo/explore controls are intentionally absent from the presentation.
+- **Space** starts/pause-resumes the 115-second timeline from your current position. The clock follows elapsed time rather than frame counts; the product story runs to 1:05, the pitch chapters run 1:05 to 1:52, and the closing scene starts at 1:52 and holds through 1:55. At the end, Space starts again from zero. Playback labels, timestamps, replay, chapter count, and demo/explore controls are intentionally absent from the presentation.
 - Playback controls the visuals only; no narration audio file is included. Start your narration alongside the story. `00:08 36` and `00:1533` are interpreted as **8.36 seconds** and **15.33 seconds**.
 - Scroll in either direction to play or rewind the story. Phone state is rebuilt from a canonical snapshot, so rewinding cannot duplicate purchases or contributions.
 - The page scrollbar is hidden; wheel, trackpad, touch, and keyboard scrolling remain available.
@@ -39,6 +39,10 @@ The supplied narration is preserved in the accessible chapter transcript in `sto
 | Snap the receipt | Receipt image, a staged Gemini scan, then six editable items. |
 | Claim your items | Personal selection, confirmation, and a per-person breakdown. |
 | Everyone is in sync | The app's existing group statistics menu with the original humanized Apartment history and spending by member. |
+| The market | The phone leaves; TAM / SAM / SOM rings ($2.0T US P2P flow, $60B shared spend by 18–34 groups, $1.25B chipin year 3) with counting figures. |
+| The competition | Feature matrix against Splitwise, Venmo, Cash App and Revolut/Monzo, filling in row by row; chipin's column is lit. |
+| How we make money | Deposits flow into the group fund, then out as 3.75% yield on the invested float and 0.9% net interchange on card taps. |
+| Projections | Three stacked revenue bars ($0.33M, $2.4M, $12.7M), then year-three float, card spend and contribution margin. |
 | Just chipin | Closing wordmark and Home showing $238.20 in settled personal spending, with pending charges directly below the spend card. |
 
 ### Narration cues
@@ -64,8 +68,16 @@ The supplied narration is preserved in the accessible chapter transcript in `sto
 | 0:52 | Gemini scan (item review at 0:54) |
 | 0:55 | Claim items (selection at 0:56.5; grouped results at 0:58) |
 | 1:00 | Charges, balances, and next period |
-| 1:05 | Closing scene |
-| 1:08 | Playback stops |
+| 1:05 | The market: $2 trillion moves between friends |
+| 1:11 | Our wedge: 25M people, $60B of shared spend |
+| 1:16 | The competition: everyone else settles up after |
+| 1:22 | Only chipin does all of it |
+| 1:28 | How we make money: deposits earn yield |
+| 1:34 | Spending earns interchange |
+| 1:40 | Projections: three-year model |
+| 1:46 | $12.7M revenue in year three |
+| 1:52 | Closing scene |
+| 1:55 | Playback stops |
 
 The piecewise time map preserves manual scrolling and aligns phone actions to narration independently of chapter height. `window.chipinStoryTimeline` exposes `play()`, `pause()`, `seekTime(seconds)`, `cues`, and `getState()` for rehearsing and checking cue positions.
 
