@@ -3,13 +3,19 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.45.4';
 import {handle} from './core.ts';
 import type {Links, State, Store} from './core.ts';
-import {claudeReader} from './receipt.ts';
+import {claudeReader, geminiReader} from './receipt.ts';
 
 const url = Deno.env.get('SUPABASE_URL')!;
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const demo = Deno.env.get('DEMO_MODE') === '1';
+const geminiKey = Deno.env.get('GEMINI_API_KEY');
 const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-const readReceipt = anthropicKey ? claudeReader({apiKey: anthropicKey, model: Deno.env.get('RECEIPT_MODEL') ?? 'claude-sonnet-5-5'}) : undefined;
+// Photo scans use Gemini (free tier) when its key is set, else Claude, else they are off and the sample scan remains.
+const readReceipt = geminiKey
+  ? geminiReader({apiKey: geminiKey, model: Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash-lite'})
+  : anthropicKey
+    ? claudeReader({apiKey: anthropicKey, model: Deno.env.get('RECEIPT_MODEL') ?? 'claude-sonnet-5-5'})
+    : undefined;
 const admin = createClient(url, serviceKey, {auth: {persistSession: false}});
 
 const cors = {
