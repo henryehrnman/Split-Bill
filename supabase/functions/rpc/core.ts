@@ -85,7 +85,8 @@ export function viewFor(db: Db, userId: string): Db {
   for (const g of groups) for (const m of g.members) people.add(m.userId);
   return {
     ...db,
-    users: db.users.filter(u => people.has(u.id)),
+    // An invitation must not reveal contacts that search deliberately masks.
+    users: db.users.filter(u => people.has(u.id)).map(u => u.id === userId ? u : {...u, email: '', phone: ''}),
     groups,
     cards: db.cards.filter(c => c.userId === userId),
     // A draft the cardholder has not sent yet is theirs alone.

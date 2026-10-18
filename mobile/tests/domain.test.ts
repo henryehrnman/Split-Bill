@@ -235,8 +235,8 @@ throws(() => d.purchase(db, 'u_henry', g.id, {merchant: 'TV', amount: free - 150
 throws(() => d.withdraw(db, 'u_henry', g.id, 100, t3), /once the Lunch split/);
 assert.equal(d.standing(g, 'u_jordan'), 'restricted');
 d.deposit(db, 'u_jordan', g.id, 2000, t3);
-assert.equal(d.spendLimit(db, g.id, 'u_jordan'), 500);
-throws(() => d.purchase(db, 'u_jordan', g.id, {merchant: 'Pizza', amount: 600}, t3), /own balance \(\$5\.00\)/);
+assert.equal(d.spendLimit(db, g.id, 'u_jordan'), 0, 'the unclaimed Lunch receipt holds its full $30, plus the pending Gas share');
+throws(() => d.purchase(db, 'u_jordan', g.id, {merchant: 'Pizza', amount: 600}, t3), /balance is held for pending splits/);
 d.setSingleOpenCharge(db, 'u_henry', g.id, true);
 throws(() => d.purchase(db, 'u_jordan', g.id, {merchant: 'Pizza', amount: 100}, t3), /Lunch before the next purchase/);
 
@@ -547,4 +547,84 @@ for (const legacy of [false, true]) {
   assert.deepEqual(db.ledger.filter(e => e.groupId === g.id), ledgerBeforeRollover, 'balances already above the lower target need no refill');
 }
 
-console.log('PASS domain: invite search, reviewed invitation deposits, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock and pooled-fund cap, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with held funds, active-only period refills, current and next-period budget targets, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');
+// Personal holds follow the active receipt; incomplete claims cannot erase a restricted member's hold.
+{
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Receipt holds', inviteIds: ['u_maya'], budget: 30000, periodDays: 1}, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, 15000);
+  for (const id of ['u_henry', 'u_maya']) d.addToWallet(db, id, d.cardFor(db, g.id, id)!.id, 'Apple Wallet');
+  d.setAutoDeposit(db, 'u_maya', g.id, false);
+  d.withdraw(db, 'u_maya', g.id, 5000, T0);
+  const now = T0 + d.DAY;
+  d.rollPeriods(db, now);
+  d.setSingleOpenCharge(db, 'u_henry', g.id, false);
+  assert.equal(d.standing(g, 'u_maya'), 'restricted');
+  assert.equal(d.memberOf(g, 'u_maya').balance, 10000);
+
+  const c = d.purchase(db, 'u_henry', g.id, {merchant: 'Dinner', amount: 10000}, now);
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 5000, 'a manual proposal still reserves its assigned share');
+  const r = d.scanReceipt(db, 'u_henry', c.id, now, {items: [{name: 'Maya meal', amount: 9000}, {name: 'Henry meal', amount: 1000}], tax: 0, tip: 0});
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 0, 'an unclaimed receipt holds the full charge');
+  assert.match(d.purchaseBlocker(db, g.id, 'u_maya')!, /balance is held for pending splits/);
+  assert.equal(d.reservedFunds(db, g.id), 10000, 'the group reserves the charge only once');
+  assert.equal(d.spendLimit(db, g.id, 'u_henry'), 15000, 'funded members retain all unreserved pooled funds');
+  const incomplete = JSON.parse(JSON.stringify(db));
+  throws(() => d.purchase(db, 'u_maya', g.id, {merchant: 'Too early', amount: 1}, now), /balance is held/);
+  assert.deepEqual(db, incomplete);
+
+  d.toggleClaim(db, 'u_maya', c.id, r.items[0].id);
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 0, 'one unclaimed item keeps the conservative hold');
+  d.toggleClaim(db, 'u_henry', c.id, r.items[1].id);
+  d.setLocked(db, 'u_maya', c.id, true, now, d.receiptApprovalKey(r));
+  assert.equal(c.status, 'pending');
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 1000, '$100 balance less the reviewed $90 receipt share leaves $10');
+  const complete = JSON.parse(JSON.stringify(db));
+  throws(() => d.purchase(db, 'u_maya', g.id, {merchant: 'Over the remaining balance', amount: 5000}, now), /own balance \(\$10\.00\)/);
+  assert.deepEqual(db, complete, 'rejected spending cannot add a charge or change the receipt, approvals, balances, or ledger');
+  const invalid: d.Db = JSON.parse(JSON.stringify(db));
+  d.chargeById(invalid, c.id).receipt!.tax = 1;
+  assert.equal(d.spendLimit(invalid, g.id, 'u_maya'), 0, 'an invalid saved receipt also retains the full hold');
+
+  d.updateReceipt(db, 'u_henry', c.id, {items: [{id: r.items[0].id, name: 'Maya meal', amount: 8000}, {id: r.items[1].id, name: 'Henry meal', amount: 2000}], tax: 0, tip: 0});
+  assert.deepEqual(r.locked, []);
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 2000, 'a correction updates the current receipt hold before anyone locks again');
+  d.toggleClaim(db, 'u_henry', c.id, r.items[0].id);
+  d.toggleClaim(db, 'u_maya', c.id, r.items[0].id);
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 10000, 'a complete receipt with no share for Maya holds none of her balance');
+
+  d.proposeSplit(db, 'u_henry', c.id, {method: 'amount', amounts: {u_henry: 7000, u_maya: 3000}}, now);
+  assert.equal(c.receipt, null);
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 7000, 'replacing the receipt restores the new manual proposal hold');
+  assert.equal(d.reservedFunds(db, g.id), 10000);
+}
+
+// Receipt holds include the same shared-item, tax, and tip pennies that settlement debits.
+{
+  const db = seed(T0);
+  const g = d.createGroup(db, 'u_henry', {name: 'Receipt hold pennies', inviteIds: ['u_maya'], budget: 30000, periodDays: 1}, T0);
+  d.respondInvite(db, 'u_maya', g.id, true, T0, 15000);
+  d.addToWallet(db, 'u_henry', d.cardFor(db, g.id, 'u_henry')!.id, 'Apple Wallet');
+  d.setAutoDeposit(db, 'u_maya', g.id, false);
+  d.withdraw(db, 'u_maya', g.id, 5000, T0);
+  const now = T0 + d.DAY;
+  d.rollPeriods(db, now);
+  d.setSingleOpenCharge(db, 'u_henry', g.id, false);
+  const c = d.purchase(db, 'u_henry', g.id, {merchant: 'Shared meal', amount: 1264}, now);
+  const r = d.scanReceipt(db, 'u_henry', c.id, now, {items: [{name: 'Shared', amount: 601}, {name: 'Solo', amount: 400}], tax: 83, tip: 180});
+  d.toggleClaim(db, 'u_maya', c.id, r.items[0].id);
+  d.toggleClaim(db, 'u_henry', c.id, r.items[0].id);
+  d.toggleClaim(db, 'u_maya', c.id, r.items[1].id);
+  // Maya: 300 shared + 400 solo + 58 tax + 126 tip = 884 cents, regardless of claim order.
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 9116);
+  assert.equal(d.spendLimit(db, g.id, 'u_henry'), 23736);
+  const key = d.receiptApprovalKey(r);
+  d.setLocked(db, 'u_maya', c.id, true, now, key);
+  d.setLocked(db, 'u_henry', c.id, true, now, key);
+  assert.equal(c.status, 'settled');
+  assert.deepEqual(d.currentProposal(c).shares, {u_henry: 380, u_maya: 884});
+  assert.deepEqual(bal(g), [14620, 9116]);
+  assert.equal(d.reservedFunds(db, g.id), 0);
+  assert.equal(d.spendLimit(db, g.id, 'u_maya'), 9116, 'settling swaps the hold for the exact debit without changing remaining buying power');
+}
+
+console.log('PASS domain: invite search, reviewed invitation deposits, invites accept/decline with valid defaults, invalid-purchase atomicity, withdraw lock and pooled-fund cap, unfunded-share restriction, debt recovery + suspension, cardholder first proposal + notifications, reviewed-proposal acceptance, optional single-open-charge lock with proposal and receipt holds, active-only period refills, current and next-period budget targets, receipt consent invalidation, disputed reservations, frozen withdrawals, chargeback without duplicate settlement.');
