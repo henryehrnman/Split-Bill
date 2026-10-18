@@ -173,6 +173,37 @@ function fixture(amount = 103, itemized = true) {
   assert.equal(JSON.stringify(f.db), before);
 }
 
+// Inline list actions follow editable rows, not receipt attachment or the sticky
+// manualEntry flag. The bottom actions remain available throughout local editing.
+for (const attached of [false, true]) {
+  const f = fixture(), before = JSON.stringify(f.db);
+  const draft = {...clone(f.state.proposalDetails[f.chargeId]), manualEntry: false};
+  draft.items = [];
+  draft.receipt = attached ? {kind: 'saved', name: 'Receipt', image: IMAGE} : null;
+  f.state.splitDrafts[f.chargeId] = draft;
+  f.context.state.draftSequence = 0;
+  f.state.stack.push({type: 'split-edit', id: f.chargeId});
+  const assertActions = (visible: boolean) => {
+    const card = f.context.runtime.itemEditor(f.context.pending[0], draft);
+    assert.equal(/data-action="cancel-edit"/.test(card), visible);
+    assert.equal(/data-action="confirm-item-list"/.test(card), visible);
+    const footer = f.context.runtime.splitFooter(f.chargeId, true);
+    assert.match(footer, /data-action="cancel-edit"[^>]*>Cancel/);
+    assert.match(footer, /data-action="submit-proposal"[^>]*>Propose changes/);
+  };
+  assertActions(false);
+  await f.click('add-item');
+  assert.equal(draft.items.length, 1);
+  assert.equal(draft.items[0].name, '');
+  assertActions(true);
+  await f.click('remove-item', {item: draft.items[0].id});
+  assert.equal(draft.items.length, 0);
+  assert.equal(draft.manualEntry, true);
+  assertActions(false);
+  assert.equal(f.calls.length, 0);
+  assert.equal(JSON.stringify(f.db), before);
+}
+
 // Both list-editor actions publish only the list; selection still has no inline actions.
 for (const action of ['confirm-item-list', 'submit-proposal']) {
   const f = fixture();
@@ -396,4 +427,141 @@ for (const unit of ['dollars', 'percent']) {
   assert.equal(JSON.stringify(f.db), before);
 }
 
-console.log('PASS phone runtime: inline list/shared selection actions, draft isolation and stale guards, settlement, receipt revisions, live custom preview/validation, canonical cents, and input preservation.');
+// Extract the actual public methods too: testing only the inner update misses
+// an accidental second render in the mounted instance's update wrapper.
+const mountedReturn = body.find(node => node.type === 'ReturnStatement'
+  && node.argument?.type === 'ObjectExpression');
+assert.ok(mountedReturn?.type === 'ReturnStatement' && mountedReturn.argument?.type === 'ObjectExpression');
+const mountedMethods = source.slice(mountedReturn.argument.start, mountedReturn.argument.end);
+function transitionFixture() {
+  const events: string[] = [];
+  const panes = {app: {innerHTML: 'current pane'}, modal: {innerHTML: 'current modal'}};
+  const transition = {
+    refresh: false, nextTab: null as string | null,
+    outgoing: {remove() { events.push('remove outgoing'); }},
+    incoming: {classList: {remove(name: string) { events.push(`remove class ${name}`); }}},
+    animations: [0, 1].map(index => ({cancel() { events.push(`cancel ${index}`); }})),
+  };
+  const context: any = {
+    activeTabTransition: transition, disposed: false, busy: false, focusedForm: false,
+    state: {tab: 'groups', stack: [], splitDrafts: {kept: true}, selectionDrafts: {kept: true}},
+    adopt(next: {version: number}) { events.push(`adopt ${next.version}`); },
+    routeChanged() { events.push('route'); },
+    safeRender() { events.push('refresh'); },
+    render() { events.push(`render ${context.state.tab}`); },
+    syncRoute() { events.push(`sync ${context.state.tab}`); },
+    saveScroll() { events.push('save scroll'); },
+    document: {activeElement: {closest() { return {}; }}},
+    root: {contains() { return context.focusedForm; },
+      querySelector: (selector: string) => selector === '#app' ? panes.app : panes.modal},
+    listeners: {abort() { events.push('abort'); }},
+    toastTimer: 1, searchTimer: 2,
+    clearTimeout(timer: number) { events.push(`clear timer ${timer}`); },
+  };
+  runInNewContext(['update', 'nav', 'finishTabTransition'].map(declaration).join('\n')
+    + `\nthis.mounted=${mountedMethods};this.lifecycle={update,nav,finishTabTransition};`, context);
+  return {context, transition, events, panes};
+}
+
+// Public and inner update each adopt, reconcile the URL, and render exactly once.
+{
+  const f = transitionFixture();
+  f.context.activeTabTransition = null;
+  for (const update of [f.context.lifecycle.update, f.context.mounted.update]) {
+    f.events.length = 0;
+    update({version: 7});
+    assert.deepEqual(f.events, ['adopt 7', 'route', 'refresh']);
+  }
+  f.events.length = 0;
+  f.context.busy = true;
+  f.context.mounted.update({version: 8});
+  assert.deepEqual(f.events, ['adopt 8']);
+  f.events.length = 0;
+  f.context.busy = false;
+  f.context.focusedForm = true;
+  f.context.mounted.update({version: 9});
+  assert.deepEqual(f.events, ['adopt 9', 'route']);
+  f.events.length = 0;
+  f.context.disposed = true;
+  f.context.mounted.update({version: 10});
+  assert.deepEqual(f.events, []);
+}
+
+// A snapshot/URL echo during the same tab swipe must leave both panes intact.
+{
+  const f = transitionFixture(), screen = {scrollTop: 73};
+  Object.assign(f.context, {
+    current: () => ({type: 'groups'}), routeKey: () => 'groups:',
+    renderedRouteKey: 'groups:', renderRevision: 4,
+    $: (selector: string) => selector === '#app' ? f.panes.app : screen,
+  });
+  runInNewContext(declaration('render') + '\nthis.renderDuringTransition=render;', f.context);
+  f.context.renderDuringTransition();
+  f.context.renderDuringTransition();
+  assert.equal(f.transition.refresh, true);
+  assert.equal(f.context.activeTabTransition, f.transition);
+  assert.equal(f.context.renderRevision, 4);
+  assert.equal(f.panes.app.innerHTML, 'current pane');
+  assert.equal(screen.scrollTop, 73);
+  assert.deepEqual(f.events, [], 'Deferral must not cancel animations, remove panes or render');
+}
+
+// Rapid taps keep the active pane until completion, then flush only the latest
+// different tab. A queued navigation takes precedence over a deferred refresh.
+{
+  const f = transitionFixture();
+  const before = JSON.stringify(f.context.state);
+  f.context.lifecycle.nav('spending');
+  f.context.lifecycle.nav('groups');
+  f.context.lifecycle.nav('home');
+  assert.equal(f.transition.nextTab, 'home');
+  assert.equal(JSON.stringify(f.context.state), before);
+  assert.deepEqual(f.events, []);
+  f.transition.refresh = true;
+  f.context.lifecycle.finishTabTransition(true);
+  assert.equal(f.context.activeTabTransition, null);
+  assert.equal(f.context.state.tab, 'home');
+  assert.deepEqual(f.events, ['remove outgoing', 'remove class tab-incoming', 'cancel 0', 'cancel 1',
+    'save scroll', 'render home', 'sync home']);
+  f.context.lifecycle.finishTabTransition(true);
+  assert.equal(f.events.length, 7, 'Finishing twice must not repeat cleanup or navigation');
+}
+
+// No queued change (including a last tap on the current tab) flushes at most one refresh.
+for (const queued of [null, 'groups']) {
+  const f = transitionFixture();
+  f.transition.nextTab = queued;
+  f.transition.refresh = true;
+  f.context.lifecycle.finishTabTransition(true);
+  assert.deepEqual(f.events, ['remove outgoing', 'remove class tab-incoming', 'cancel 0', 'cancel 1', 'refresh']);
+  assert.equal(f.context.state.tab, 'groups');
+}
+
+// Disposal still removes both transition artifacts/animation handles, but cannot
+// flush queued navigation or redraw content after the mounted host is cleared.
+{
+  const f = transitionFixture();
+  f.transition.nextTab = 'home';
+  f.transition.refresh = true;
+  f.context.mounted.destroy();
+  assert.equal(f.context.disposed, true);
+  assert.equal(f.context.activeTabTransition, null);
+  assert.equal(f.panes.app.innerHTML, '');
+  assert.equal(f.panes.modal.innerHTML, '');
+  assert.deepEqual(f.events, ['abort', 'clear timer 1', 'clear timer 2',
+    'remove outgoing', 'remove class tab-incoming', 'cancel 0', 'cancel 1']);
+  f.context.mounted.update({version: 11});
+  f.context.lifecycle.finishTabTransition(true);
+  assert.equal(f.events.length, 7);
+  assert.equal(f.context.state.tab, 'groups');
+}
+{
+  const f = transitionFixture();
+  f.context.disposed = true;
+  f.transition.nextTab = 'home';
+  f.transition.refresh = true;
+  f.context.lifecycle.finishTabTransition(true);
+  assert.deepEqual(f.events, ['remove outgoing', 'remove class tab-incoming', 'cancel 0', 'cancel 1']);
+}
+
+console.log('PASS phone runtime: item actions and draft isolation, custom preview/validation and canonical cents, input preservation, one-render updates, queued tab transitions, and disposal cleanup.');

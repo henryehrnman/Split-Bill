@@ -173,6 +173,16 @@
 .phone-host .app > .root-header { flex-shrink: 0; margin: 0; min-height: 42px; padding: 26px 24px 0; }
 .phone-host .app > .root-header + .screen { padding-top: 25px; }
 .phone-host .app > .root-header + .home-screen { padding-top: 22px; }
+.phone-host .screen.tab-outgoing {
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
+}
+.phone-host .screen.tab-outgoing,
+.phone-host .screen.tab-incoming {
+  background: var(--bg);
+  will-change: transform;
+}
 @media (max-width: 760px) { .phone-host .app > .root-header { padding-top: 23px; } }
 @media (max-width: 360px) { .phone-host .app > .root-header { padding-left: 18px; padding-right: 18px; } }
 @container app (max-height: 780px) {
