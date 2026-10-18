@@ -2,24 +2,24 @@
 (() => {
   'use strict';
   const scenes = [
-    {id:'problem',label:'The problem',title:'Someone always<br><span class="accent">fronts the bill.</span>',body:'Dinner, groceries, the Airbnb. One person pays, then spends a week chasing three friends for their share.',script:'Every group has the same problem. Someone fronts the bill, and then spends the next week chasing everyone else for their share.',word:'IOU',length:200,side:'left',deck:'problem',camera:{side:'right',y:0,scale:1,rotate:0},phases:[{at:0,body:'Dinner, groceries, the Airbnb. One person pays, then spends a week chasing three friends for their share.'},{at:.5,body:'Venmo, Zelle and Cash App move money after the fact. None of them pays the bill together, holds a shared budget, or lets the group decide the split.'}]},
-    {id:'intro',label:'Meet chipin',title:'Meet <span class="accent">chipin.</span>',body:'A little less settling up. A lot more living.',script:'Narrator: Meet chipin.',word:'together',length:125,side:'left',camera:{side:'right',y:.035,scale:.94,rotate:8}},
-    {id:'groups',label:'One shared fund',title:'Your people.<br>One <span class="accent">shared fund.</span>',body:'The whole apartment. The ski trip. Whatever brings you together.',script:'One shared fund for the whole apartment, ski trip, or whatever other group you’re a part of, and a card for every member.',word:'together',length:150,side:'left',camera:{side:'right',y:0,scale:1,rotate:-4}},
-    {id:'budget',label:'Agree on a budget',title:'Make a plan.<br><span class="accent">Together.</span>',body:'$500 every month. Four people. A shared budget everyone agrees to.',script:'Here’s how it works. The group agrees on a shared budget, say $500 every month.',word:'$500',length:155,side:'right',camera:{side:'left',y:.015,scale:1.06,rotate:3}},
-    {id:'invite',label:'Invite & chip in',title:'An invitation.<br><span class="accent">No surprises.</span>',body:'Everyone sees exactly what they’re agreeing to. Then each person chips in $125.',script:'Everyone gets invited, sees exactly what they’re agreeing to, and chips in an equal share.',word:'$125',length:150,side:'right',camera:{side:'left',y:0,scale:1,rotate:-3}},
-    {id:'cards',label:'A card for everyone',title:'One fund.<br><span class="accent">A card each.</span>',body:'Now everyone has a card on that fund.',script:'Now everyone has a card on that fund.',word:'everyone',length:145,side:'left',camera:{side:'right',y:.045,scale:.95,rotate:5}},
-    {id:'pay',label:'Just pay',title:'Whoever’s there<br><span class="accent">just pays.</span>',body:'No fronting the bill. No “I’ll Venmo you later.”',script:'No fronting the bill, no “I’ll Venmo you later.” Whoever’s at the store just pays.',word:'paid',length:175,side:'left',camera:{side:'right',y:.035,scale:1.03,rotate:0},phases:[{at:0,body:'No fronting the bill. No “I’ll Venmo you later.”'},{at:.5,body:'$64 paid from the shared fund. $436 left to spend.'}]},
-    {id:'split',label:'Split your way',title:'Pay together.<br><span class="accent">Split your way.</span>',body:'The buyer proposes the split. Equal shares by default, custom amounts when life isn’t equal.',script:'When you make a purchase, funds withdraw from the group amount and the split is proposed by the buyer. By default, it’s an even split with everyone, but you can customize the amounts that each individual owes to adapt each transaction to your group.',word:'your way',length:210,side:'left',camera:{side:'right',y:.07,scale:1.13,rotate:-2},phases:[{at:0,body:'The purchase is already paid. Start with an even $16 share for everyone.'},{at:.5,body:'Or propose $24, $16, $12, and $12. The same purchase, split to fit your group.'}]},
-    {id:'henry',label:'Meet Henry',title:'Or, be<br><span class="accent">like Henry.</span>',body:'Dinner at Din Tai Fung. Henry pays with the group card.',script:'Alternatively, if you’re too lazy to decide on a split yourselves, you can be like Henry. Henry paid with the group card at Din Tai Fung.',word:'Henry',length:170,side:'left',camera:{side:'right',y:.04,scale:.98,rotate:5},phases:[{at:0,body:'Dinner at Din Tai Fung. Henry pays with the group card.'},{at:.5,body:'Dinner is paid. Now for the part nobody wants to calculate.'}]},
-    {id:'receipt',label:'Snap the receipt',title:'Snap it.<br><span class="accent">Let <span class="gemini-word">Gemini<img class="gemini-logo" src="assets/gemini-logo.png" alt="" width="512" height="512"></span> read it.</span>',body:'A photo of the receipt becomes an itemized list.',script:'Then, instead of worrying about how much everyone owes, he snapped a photo of the receipt. Gemini reads the receipt and lists out line items.',word:'snap',length:240,side:'right',camera:{side:'left',y:.06,scale:1.07,rotate:-4},phases:[{at:0,body:'One photo. Every dish, ready to review.'},{at:1/3,body:'Gemini reads the receipt and identifies each line item.'},{at:2/3,body:'Review the items, tax, and tip. Everything adds up to $154.20.'}]},
-    {id:'claims',label:'Claim your items',title:'Claim yours.<br><span class="accent">Keep moving.</span>',body:'Everyone opens their own app and selects what they had.',script:'Then, we all go into our apps, claim what’s ours, and move on.',word:'yours',length:240,side:'right',camera:{side:'left',y:.045,scale:1.08,rotate:2},phases:[{at:0,body:'Everyone opens their own app and selects what they had.'},{at:1/3,body:'Xiaolongbao and cucumber salad? Tap. Tap. Confirm your selection.'},{at:2/3,body:'A clear breakdown for each person, with tax and tip included.'}]},
-    {id:'clarity',label:'See the whole picture',title:'No guessing.<br><span class="accent">Everyone’s in sync.</span>',body:'Every charge. Every balance. What’s coming up next month.',script:'Everyone sees every charge, every balance, and what’s coming up next period.',word:'in sync',length:180,side:'left',camera:{side:'right',y:0,scale:1,rotate:-3}},
+    {landing:0.7,id:'problem',label:'The problem',title:'Someone always<br><span class="accent">fronts the bill.</span>',body:'One person pays for dinner, groceries or the Airbnb, then spends a week chasing everyone for their share. Venmo, Zelle and Cash App only move money after the fact: nobody pays together, there is no agreed budget, and the split is one person’s math.',script:'Every group has the same problem. Someone fronts the bill, and then spends the next week chasing everyone else for their share.',word:'IOU',length:200,side:'left',deck:'problem',camera:{side:'right',y:0,scale:1,rotate:0}},
+    {landing:0.5,id:'intro',label:'Meet chipin',title:'Meet <span class="accent">chipin.</span>',body:'A little less settling up. A lot more living.',script:'Narrator: Meet chipin.',word:'together',length:125,side:'left',camera:{side:'right',y:.035,scale:.94,rotate:8}},
+    {landing:0.74,id:'groups',label:'One shared fund',title:'Your people.<br>One <span class="accent">shared fund.</span>',body:'The whole apartment. The ski trip. Whatever brings you together.',script:'One shared fund for the whole apartment, ski trip, or whatever other group you’re a part of, and a card for every member.',word:'together',length:150,side:'left',camera:{side:'right',y:0,scale:1,rotate:-4}},
+    {landing:0.6,id:'budget',label:'Agree on a budget',title:'Make a plan.<br><span class="accent">Together.</span>',body:'$500 every month. Four people. A shared budget everyone agrees to.',script:'Here’s how it works. The group agrees on a shared budget, say $500 every month.',word:'$500',length:155,side:'right',camera:{side:'left',y:.015,scale:1.06,rotate:3}},
+    {landing:0.74,id:'invite',label:'Invite & chip in',title:'An invitation.<br><span class="accent">No surprises.</span>',body:'Everyone sees exactly what they’re agreeing to. Then each person chips in $125.',script:'Everyone gets invited, sees exactly what they’re agreeing to, and chips in an equal share.',word:'$125',length:150,side:'right',camera:{side:'left',y:0,scale:1,rotate:-3}},
+    {landing:0.55,id:'cards',label:'A card for everyone',title:'One fund.<br><span class="accent">A card each.</span>',body:'Now everyone has a card on that fund.',script:'Now everyone has a card on that fund.',word:'everyone',length:145,side:'left',camera:{side:'right',y:.045,scale:.95,rotate:5}},
+    {landing:0.62,id:'pay',label:'Just pay',title:'Whoever’s there<br><span class="accent">just pays.</span>',body:'No fronting the bill. No “I’ll Venmo you later.”',script:'No fronting the bill, no “I’ll Venmo you later.” Whoever’s at the store just pays.',word:'paid',length:175,side:'left',camera:{side:'right',y:.035,scale:1.03,rotate:0},phases:[{at:0,body:'No fronting the bill. No “I’ll Venmo you later.”'},{at:.5,body:'$64 paid from the shared fund. $436 left to spend.'}]},
+    {landing:0.62,id:'split',label:'Split your way',title:'Pay together.<br><span class="accent">Split your way.</span>',body:'The buyer proposes the split. Equal shares by default, custom amounts when life isn’t equal.',script:'When you make a purchase, funds withdraw from the group amount and the split is proposed by the buyer. By default, it’s an even split with everyone, but you can customize the amounts that each individual owes to adapt each transaction to your group.',word:'your way',length:210,side:'left',camera:{side:'right',y:.07,scale:1.13,rotate:-2},phases:[{at:0,body:'The purchase is already paid. Start with an even $16 share for everyone.'},{at:.5,body:'Or propose $24, $16, $12, and $12. The same purchase, split to fit your group.'}]},
+    {landing:0.62,id:'henry',label:'Meet Henry',title:'Or, be<br><span class="accent">like Henry.</span>',body:'Dinner at Din Tai Fung. Henry pays with the group card.',script:'Alternatively, if you’re too lazy to decide on a split yourselves, you can be like Henry. Henry paid with the group card at Din Tai Fung.',word:'Henry',length:170,side:'left',camera:{side:'right',y:.04,scale:.98,rotate:5},phases:[{at:0,body:'Dinner at Din Tai Fung. Henry pays with the group card.'},{at:.5,body:'Dinner is paid. Now for the part nobody wants to calculate.'}]},
+    {landing:0.76,id:'receipt',label:'Snap the receipt',title:'Snap it.<br><span class="accent">Let <span class="gemini-word">Gemini<img class="gemini-logo" src="assets/gemini-logo.png" alt="" width="512" height="512"></span> read it.</span>',body:'A photo of the receipt becomes an itemized list.',script:'Then, instead of worrying about how much everyone owes, he snapped a photo of the receipt. Gemini reads the receipt and lists out line items.',word:'snap',length:240,side:'right',camera:{side:'left',y:.06,scale:1.07,rotate:-4},phases:[{at:0,body:'One photo. Every dish, ready to review.'},{at:1/3,body:'Gemini reads the receipt and identifies each line item.'},{at:2/3,body:'Review the items, tax, and tip. Everything adds up to $154.20.'}]},
+    {landing:0.76,id:'claims',label:'Claim your items',title:'Claim yours.<br><span class="accent">Keep moving.</span>',body:'Everyone opens their own app and selects what they had.',script:'Then, we all go into our apps, claim what’s ours, and move on.',word:'yours',length:240,side:'right',camera:{side:'left',y:.045,scale:1.08,rotate:2},phases:[{at:0,body:'Everyone opens their own app and selects what they had.'},{at:1/3,body:'Xiaolongbao and cucumber salad? Tap. Tap. Confirm your selection.'},{at:2/3,body:'A clear breakdown for each person, with tax and tip included.'}]},
+    {landing:0.6,id:'clarity',label:'See the whole picture',title:'No guessing.<br><span class="accent">Everyone’s in sync.</span>',body:'Every charge. Every balance. What’s coming up next month.',script:'Everyone sees every charge, every balance, and what’s coming up next period.',word:'in sync',length:180,side:'left',camera:{side:'right',y:0,scale:1,rotate:-3}},
     // Pitch chapters. The phone leaves the stage and a data prop takes its place.
-    {id:'market',label:'The market',title:'$2 trillion<br><span class="accent">moves between friends.</span>',body:'US mobile P2P payments: $2.0 trillion in 2025, 170 million people, $7,200 each per year. Most of it is friends paying friends back.',script:'US mobile peer-to-peer payments moved two trillion dollars in 2025, across 170 million people. Most of it is one friend paying another back. Our wedge is the 25 million 18-to-34-year-olds in standing groups: roommates, couples, friends who travel. About 60 billion dollars of card spend a year.',word:'$2T',length:190,side:'left',deck:'market',camera:{side:'right',y:0,scale:1,rotate:0},phases:[{at:0,body:'US mobile P2P payments: $2.0 trillion in 2025, 170 million people, $7,200 each per year. Most of it is friends paying friends back.'},{at:.5,body:'Our wedge: 25 million 18-to-34-year-olds in standing groups. Roommates, couples, friends who travel. About $60 billion of shared card spend a year.'}]},
-    {id:'competition',label:'The competition',title:'They split the bill.<br><span class="accent">We split the card.</span>',body:'Splitwise, Venmo and Cash App settle up after someone has already paid. chipin removes the fronting and the repayment.',script:'Everyone else helps you settle up after one person has already paid. Splitwise and Venmo keep a ledger. Cash App has a pot. The two shared-card products are Europe-only. chipin is the only one where every member has a card on one fund, the split is agreed afterward, and everyone involved accepts it.',word:'ahead',length:200,side:'left',deck:'competition',camera:{side:'right',y:0,scale:1,rotate:0},phases:[{at:0,body:'Splitwise, Venmo and Cash App settle up after someone has already paid. chipin removes the fronting and the repayment.'},{at:.5,body:'The only product where every member has a card on one shared fund, the split is agreed after the purchase, and everyone involved accepts it.'}]},
-    {id:'model',label:'How we make money',title:'Deposits earn.<br><span class="accent">Spending earns.</span>',body:'Group funds sit in low-risk, high-yield instruments: government money market and T-bills. chipin keeps the yield and fronts every card charge from the pool.',script:'Here’s how we make money. Group deposits sit in low-risk, high-yield instruments, government money market funds and Treasury bills, and chipin keeps the yield while fronting every card charge from the pool. Every tap of a chipin card also earns interchange from the merchant. Two revenue streams, and the app stays free for friends.',word:'yield',length:200,side:'left',deck:'model',camera:{side:'right',y:0,scale:1,rotate:0},phases:[{at:0,body:'Group funds sit in low-risk, high-yield instruments: government money market and T-bills. chipin keeps the yield and fronts every card charge from the pool.'},{at:.5,body:'Every tap of a chipin card earns interchange from the merchant. Two revenue streams, and the app stays free for friends.'}]},
-    {id:'projections',label:'Projections',title:'Year three:<br><span class="accent">$12.7M revenue.</span>',body:'15,000 active members in year one, 400,000 by year three. $100 average balance, $260 a month on the card.',script:'With 15 thousand active members in year one and 400 thousand by year three, chipin reaches 12.7 million dollars of revenue: 1.5 million from yield on a 40 million dollar float, and 11.2 million from interchange on 1.25 billion dollars of card spend. Contribution margin is positive from year one.',word:'$12.7M',length:200,side:'left',deck:'projections',camera:{side:'right',y:0,scale:1,rotate:0},phases:[{at:0,body:'15,000 active members in year one, 400,000 by year three. $100 average balance, $260 a month on the card.'},{at:.5,body:'$1.5M from yield on a $40M float, $11.2M from interchange on $1.25B of card spend. Contribution-margin positive from year one.'}]},
-    {id:'outro',label:'Just chipin',title:'Just <span class="accent">chipin.</span>',body:'See? It’s easy when you chip in.',script:'See? It’s easy when you just Chipin.',word:'chipin',length:135,side:'center',camera:{side:'center',y:.14,scale:.82,rotate:0}}
+    {landing:0.72,id:'market',label:'The market',title:'$2 trillion<br><span class="accent">moves between friends.</span>',body:'US mobile P2P moved $2.0 trillion in 2025 across 170 million people, most of it friends paying friends back. Our wedge: 25 million 18-to-34-year-olds in standing groups, about $60 billion of shared card spend a year.',script:'US mobile peer-to-peer payments moved two trillion dollars in 2025, across 170 million people. Most of it is one friend paying another back. Our wedge is the 25 million 18-to-34-year-olds in standing groups: roommates, couples, friends who travel. About 60 billion dollars of card spend a year.',word:'$2T',length:190,side:'left',deck:'market',camera:{side:'right',y:0,scale:1,rotate:0}},
+    {landing:0.72,id:'competition',label:'The competition',title:'They split the bill.<br><span class="accent">We split the card.</span>',body:'Splitwise, Venmo and Cash App settle up after someone has already paid. chipin is the only product where every member has a card on one shared fund, the split is agreed after the purchase, and everyone involved accepts it.',script:'Everyone else helps you settle up after one person has already paid. Splitwise and Venmo keep a ledger. Cash App has a pot. The two shared-card products are Europe-only. chipin is the only one where every member has a card on one fund, the split is agreed afterward, and everyone involved accepts it.',word:'ahead',length:200,side:'left',deck:'competition',camera:{side:'right',y:0,scale:1,rotate:0}},
+    {landing:0.74,id:'model',label:'How we make money',title:'Deposits earn.<br><span class="accent">Spending earns.</span>',body:'Group funds sit in low-risk, high-yield instruments, government money market and T-bills, and chipin keeps the yield while fronting every card charge from the pool. Every tap also earns interchange from the merchant. Two revenue streams; the app stays free for friends.',script:'Here’s how we make money. Group deposits sit in low-risk, high-yield instruments, government money market funds and Treasury bills, and chipin keeps the yield while fronting every card charge from the pool. Every tap of a chipin card also earns interchange from the merchant. Two revenue streams, and the app stays free for friends.',word:'yield',length:200,side:'left',deck:'model',camera:{side:'right',y:0,scale:1,rotate:0}},
+    {landing:0.74,id:'projections',label:'Projections',title:'Year three:<br><span class="accent">$12.7M revenue.</span>',body:'15,000 active members in year one, 400,000 by year three: $1.5M from yield on a $40M float and $11.2M from interchange on $1.25B of card spend. Contribution-margin positive from year one.',script:'With 15 thousand active members in year one and 400 thousand by year three, chipin reaches 12.7 million dollars of revenue: 1.5 million from yield on a 40 million dollar float, and 11.2 million from interchange on 1.25 billion dollars of card spend. Contribution margin is positive from year one.',word:'$12.7M',length:200,side:'left',deck:'projections',camera:{side:'right',y:0,scale:1,rotate:0}},
+    {landing:0.6,id:'outro',label:'Just chipin',title:'Just <span class="accent">chipin.</span>',body:'See? It’s easy when you chip in.',script:'See? It’s easy when you just Chipin.',word:'chipin',length:135,side:'center',camera:{side:'center',y:.14,scale:.82,rotate:0}}
   ];
   // Seconds are narration time, not a percentage of the page. Extra motion
   // stops let the phone arrive, hold, then perform an action on the spoken cue.
@@ -151,30 +151,34 @@
     rig.style.opacity=lerp(prev.opacity,current.opacity,t).toFixed(3);
     if(glow)glow.style.transform=reduced.matches?'translateY(-50%)':`translate3d(${lerp(prev.x,current.x,t)*.32}px,calc(-50% + ${Math.sin((index+p)*.6)*35}px),0)`;
   }
-  // Each pitch prop fades in with the chapter, then animates its figures across the chapter's progress.
+  // Each pitch prop fades in with the chapter. Its figures cascade in on a clock once their threshold is crossed,
+  // so an instant jump to the slide still plays a tidy entrance rather than a scroll-speed blur.
+  let deckBusy=false;
   function paintDeck(scene,p){
     if(!deck)return;
-    const enter=smooth(p/.25),exit=1-smooth((p-.86)/.14);
+    const enter=smooth(p/.25),exit=1-smooth((p-.86)/.14),now=performance.now();
     deck.style.opacity=scene.deck?String(enter*exit):'0';
     deck.dataset.panel=scene.deck||'';
-    deck.style.setProperty('--deck-enter',String(enter));
-    const reveal=scene.deck?smooth((p-.1)/.55):0,second=scene.deck?smooth((p-.5)/.3):0;
-    deck.style.setProperty('--deck-reveal',String(reveal));
-    deck.style.setProperty('--deck-second',String(second));
     deck.style.transform=reduced.matches?'none':`translate3d(0,${(1-enter)*50}px,0) scale(${lerp(.94,1,enter)})`;
-    deck.querySelectorAll('[data-reveal-at]').forEach(el=>{el.classList.toggle('shown',scene.deck&&p>=Number(el.dataset.revealAt)-1e-7);});
+    deckBusy=false;
+    deck.querySelectorAll('[data-reveal-at]').forEach(el=>{
+      const on=!!scene.deck&&p>=Number(el.dataset.revealAt)-1e-7;
+      if(on&&!el.classList.contains('shown'))el.style.transitionDelay=reduced.matches?'0s':`${(Number(el.dataset.revealAt)*1.1).toFixed(2)}s`;
+      if(!on)el.style.transitionDelay='0s';
+      el.classList.toggle('shown',on);
+    });
     deck.querySelectorAll('[data-count]').forEach(el=>{
-      const at=Number(el.dataset.revealAt||0),span=Number(el.dataset.countSpan||.22),k=scene.deck?smooth((p-at)/span):0;
+      const at=Number(el.dataset.revealAt||0),on=!!scene.deck&&p>=at-1e-7;
       const target=Number(el.dataset.count),decimals=Number(el.dataset.decimals||0);
+      let k=0;
+      if(!on)delete el.dataset.startedAt;
+      else{
+        if(!el.dataset.startedAt)el.dataset.startedAt=String(now+(reduced.matches?0:at*1100));
+        k=reduced.matches?1:smooth((now-Number(el.dataset.startedAt))/900);
+        if(k<1)deckBusy=true;
+      }
       el.textContent=(el.dataset.prefix||'')+(target*k).toLocaleString('en-US',{minimumFractionDigits:decimals,maximumFractionDigits:decimals})+(el.dataset.suffix||'');
     });
-  }
-  function paintProps(scene,p){
-    const receiptOn=scene.id==='receipt',earlyCards=scene.id==='groups'&&p>=.6,cardsOn=scene.id==='cards'||earlyCards;
-    const enter=smooth(p/.25),exit=1-smooth((p-.82)/.18);
-    if(receipt){receipt.style.opacity=receiptOn?String(enter*exit):'0';receipt.style.transform=reduced.matches?'none':`translate3d(${(1-enter)*80}px,${(1-enter)*90}px,0) rotate(${lerp(17,-8,enter)}deg) scale(${lerp(.85,1,enter)})`;receipt.dataset.scanning=receiptOn&&p>=1/3-1e-7&&p<2/3-1e-7?'true':'false';}
-    const cardEnter=earlyCards?smooth((p-.6)/.12):enter;
-    if(fan){fan.style.opacity=cardsOn?String(cardEnter*exit):'0';fan.style.setProperty('--fan-spread',cardsOn?String(cardEnter):'0');fan.style.transform=reduced.matches?'none':`translateY(${(1-cardEnter)*60}px) rotate(${(1-cardEnter)*8}deg)`;}
   }
   function render(){frame=0;if(!bounds.length)return;
     if(playing){playbackTime=clamp((performance.now()-clockStart)/1000,0,duration);if(playbackTime>=duration)playing=false;}
@@ -192,28 +196,27 @@
     stage.style.setProperty('--scene-progress',p);
     dots[index].style.setProperty('--chapter-progress',p);
     paintCamera(scene,p,index);paintProps(scene,p);paintDeck(scene,p);sendPhone(scene.id,p,forcePhone);forcePhone=false;
-    if(playing)schedule();
+    if(playing||deckBusy)schedule();
   }
   function schedule(){if(!frame)frame=requestAnimationFrame(render);}
   function seek(index,p=.32){index=clamp(index,0,scenes.length-1);if(exploring)setExplore(false);manualOverride();scrollTo({top:bounds[index].start+(bounds[index].end-bounds[index].start)*clamp(p),behavior:reduced.matches?'instant':'smooth'});}
-  // Arrow keys step cue to cue, not scene to scene, so every beat inside a chapter gets its turn. The page
-  // scrolls smoothly between cues, which plays the motion stops and prop animations on the way.
-  function currentTime(){if(timed)return playbackTime;const p=locate(scrollY);return timeAtPosition(p.index+p.progress);}
-  function seekCue(direction){
+  // Arrow keys step one slide at a time and land on the frame where the slide is complete: the phone has arrived
+  // and every figure on a pitch prop is in place. The jump is instant, so nothing in between flashes past; the
+  // slide's own entrance (copy, phone, prop cascade) plays on arrival.
+  function seekSlide(direction){
     if(exploring)setExplore(false);
-    const now=currentTime(),gap=.05;
-    // A cue at the top of a scene is where the phone starts crossing the stage and the copy is still hidden;
-    // stop where the arrival has finished instead, so each press lands on a readable frame. If the scene's
-    // next cue sits right there anyway, go straight to it rather than showing two near-identical frames.
-    const landing=.3;
-    const landingOf=cue=>{if(!cue)return null;if(cue.progress===0){const next=cues[cues.indexOf(cue)+1];if(next&&next.scene===cue.scene&&next.progress<=landing+.06)return landingOf(next);const index=scenes.findIndex(scene=>scene.id===cue.scene);return {index,progress:Math.max(splitPosition(positionAtTime(cue.time)).progress,landing)};}return splitPosition(positionAtTime(cue.time));};
-    const timeOf=spot=>timeAtPosition(spot.index+spot.progress);
-    let spot;
-    if(direction>0){const cue=cues.find(cue=>timeOf(landingOf(cue))>now+gap);spot=cue?landingOf(cue):splitPosition(positionAtTime(duration));}
-    else{const cue=[...cues].reverse().find(cue=>timeOf(landingOf(cue))<now-gap);spot=cue?landingOf(cue):{index:0,progress:0};}
+    const from=timed?splitPosition(positionAtTime(playbackTime)):locate(scrollY);
+    const index=clamp(from.index+direction,0,scenes.length-1),scene=scenes[index];
+    if(index===from.index&&Math.abs(from.progress-(scene.landing??.6))<.02)return;
     manualOverride();
-    const {index,progress}=spot,b=bounds[index];
-    scrollTo({top:b.start+(b.end-b.start)*progress,behavior:reduced.matches?'instant':'smooth'});
+    const b=bounds[index];
+    scrollTo({top:b.start+(b.end-b.start)*(scene.landing??.6),behavior:'instant'});
+    arrive(scene);
+  }
+  function arrive(scene){
+    if(reduced.matches)return;
+    if(!scene.deck&&rig.animate)rig.animate([{transform:'translateY(26px)',opacity:0,composite:'add'},{transform:'translateY(0)',opacity:1,composite:'add'}],{duration:420,easing:'cubic-bezier(.2,.8,.2,1)'});
+    if(copy.animate)copy.animate([{transform:'translateY(14px)',composite:'add'},{transform:'translateY(0)',composite:'add'}],{duration:420,easing:'cubic-bezier(.2,.8,.2,1)'});
   }
   function setExplore(enabled){
     if(enabled===exploring)return;if(enabled)pause();exploring=enabled;document.body.dataset.mode=enabled?'explore':'story';
@@ -223,7 +226,7 @@
     if(ready)phone.contentWindow.postMessage({type:'chipin-story-explore',enabled},location.origin);
     schedule();
   }
-  nav.addEventListener('click',e=>{const button=e.target.closest('[data-chapter]');if(button)seek(Number(button.dataset.chapter));});
+  nav.addEventListener('click',e=>{const button=e.target.closest('[data-chapter]');if(button){const index=Number(button.dataset.chapter);seek(index,scenes[index].landing??.6);}});
   addEventListener('scroll',onScroll,{passive:true});addEventListener('resize',measure,{passive:true});
   addEventListener('wheel',manualOverride,{passive:true});addEventListener('touchstart',manualOverride,{passive:true});
   addEventListener('keydown',e=>{
@@ -233,7 +236,7 @@
       if(e.target.closest?.('button,a,summary,[role="button"]'))return;
       e.preventDefault();if(!e.repeat)togglePlayback();return;
     }
-    if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();if(!e.repeat)seekCue(e.key==='ArrowRight'?1:-1);}
+    if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();if(!e.repeat)seekSlide(e.key==='ArrowRight'?1:-1);}
     else if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'].includes(e.key))manualOverride();
   });
   document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
@@ -242,5 +245,5 @@
   phone.addEventListener('load',phoneReady);
   reduced.addEventListener('change',()=>{lastScene=-1;measure();});
   document.body.dataset.mode='story';measure();
-  window.chipinStoryTimeline={scenes,cues,duration,seek,seekCue,seekTime,setExplore,play,pause,togglePlayback,positionAtTime,timeAtPosition,getState:()=>({...active,exploring,playing,time:playbackTime,duration})};
+  window.chipinStoryTimeline={scenes,cues,duration,seek,seekSlide,seekTime,setExplore,play,pause,togglePlayback,positionAtTime,timeAtPosition,getState:()=>({...active,exploring,playing,time:playbackTime,duration})};
 })();
