@@ -35,6 +35,8 @@ function requiredBoolean(value: unknown): boolean {
 const methods: Record<string, Method> = {
   fetch: () => undefined,
   searchUsers: ({db, actor}, [query, exclude]) => d.searchUsers(db, String(query ?? ''), [actor, ...(Array.isArray(exclude) ? exclude : [])]).map(u => searchResult(u, String(query ?? ''))),
+  updateProfile: ({db, actor}, [input]) => d.updateProfile(db, actor, input),
+  updateGroup: ({db, actor}, [groupId, input]) => d.updateGroup(db, actor, groupId, input),
   createGroup: ({db, actor, t}, [input]) => void d.createGroup(db, actor, input, t),
   respondInvite: ({db, actor, t}, [groupId, accept, expectedContribution, initialContributionLimit]) => d.respondInvite(db, actor, groupId, requiredBoolean(accept), t, expectedContribution, initialContributionLimit),
   deposit: ({db, actor, t}, [groupId, amount]) => d.deposit(db, actor, groupId, amount, t),
@@ -54,12 +56,15 @@ const methods: Record<string, Method> = {
   setChargeNote: ({db, actor, t}, [chargeId, text]) => d.setChargeNote(db, actor, chargeId, text, t),
   // The second argument here is the model's read, never the client's: handle() swaps the photo out first.
   scanReceipt: ({db, actor, t}, [chargeId, read]) => void d.scanReceipt(db, actor, chargeId, t, read),
+  parseReceipt: ({db, actor}, [chargeId, read]) => d.parseReceipt(db, actor, chargeId, read),
+  confirmReceiptList: ({db, actor, t}, [chargeId, input, expectedEditKey]) => d.confirmReceiptList(db, actor, chargeId, input, t, expectedEditKey),
+  confirmItemSelection: ({db, actor, t}, [chargeId, itemIds, expectedReceiptListKey]) => d.confirmItemSelection(db, actor, chargeId, itemIds, expectedReceiptListKey, t),
   updateReceipt: ({db, actor}, [chargeId, input]) => d.updateReceipt(db, actor, chargeId, input),
   toggleClaim: ({db, actor}, [chargeId, itemId]) => d.toggleClaim(db, actor, chargeId, itemId),
   setLocked: ({db, actor, t}, [chargeId, locked, expectedReceiptKey]) => d.setLocked(db, actor, chargeId, requiredBoolean(locked), t, expectedReceiptKey),
   suggestItemEdit: ({db, actor, t}, [chargeId, itemId, targetId]) => d.suggestItemEdit(db, actor, chargeId, itemId, targetId, t),
   respondItemEdit: ({db, actor, t}, [chargeId, editId, accept]) => d.respondItemEdit(db, actor, chargeId, editId, requiredBoolean(accept), t),
-  proposeSplit: ({db, actor, t}, [chargeId, input]) => d.proposeSplit(db, actor, chargeId, input, t),
+  proposeSplit: ({db, actor, t}, [chargeId, input, options]) => d.proposeSplit(db, actor, chargeId, input, t, options),
   sendDefaultSplit: ({db, actor, t}, [chargeId]) => d.sendDefaultSplit(db, actor, chargeId, t),
   acceptSplit: ({db, actor, t}, [chargeId, expectedProposalId]) => d.acceptSplit(db, actor, chargeId, t, expectedProposalId),
   fileChargeback: ({db, actor, t}, [chargeId]) => d.fileChargeback(db, actor, chargeId, t),
@@ -154,7 +159,9 @@ export async function handle(store: Store, authId: string | null, body: any, opt
   if (!isCreate && !Object.hasOwn(methods, method)) return fail(400, 'Unknown method.', 'bad_method');
   if (DEMO_ONLY.has(method) && !opts.demo) return fail(403, 'Demo controls are off.', 'demo_off');
   if (!authId && !opts.demo) return fail(401, 'Sign in first.', 'unauthenticated');
-  if (method !== 'scanReceipt' && JSON.stringify(args).length > MAX_ARGS) return fail(413, 'That request is too large.', 'too_large');
+  const photoMethod = method === 'scanReceipt' || method === 'parseReceipt';
+  const maxArgs = method === 'confirmReceiptList' || method === 'updateGroup' ? MAX_ARGS + d.MAX_SHARED_IMAGE_LENGTH : MAX_ARGS;
+  if (!photoMethod && JSON.stringify(args).length > maxArgs) return fail(413, 'That request is too large.', 'too_large');
 
   // Who is calling: the JWT decides. Never the body, except the demo escape hatch.
   const actorIn = (db: Db, links: Links) => {
@@ -165,10 +172,25 @@ export async function handle(store: Store, authId: string | null, body: any, opt
   };
 
   let callArgs = args;
-  if (method === 'scanReceipt') {
+  if (photoMethod) {
     const read = await readPhoto(store, opts, clock, actorIn, args);
     if ('status' in read) return read;
     callArgs = [args[0], read.read];
+    if (method === 'parseReceipt') {
+      // Read-only draft: even tick changes stay private, and the post-OCR reload
+      // rejects a charge that settled while the model was reading the photo.
+      const loaded = await store.load();
+      const draft = clone(loaded?.db ?? seed(clock()));
+      const actor = actorIn(draft, loaded?.links ?? {});
+      if (!actor) return fail(403, 'Finish setting up your profile.', 'no_profile');
+      try {
+        d.tick(draft, clock() + draft.clockOffset);
+        return ok(d.parseReceipt(draft, actor, String(args[0]), read.read));
+      } catch (error) {
+        if (error instanceof d.ApiError) return fail(400, error.message, 'rule');
+        throw error;
+      }
+    }
   }
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {

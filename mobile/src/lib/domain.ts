@@ -6,7 +6,7 @@ import type {ReceiptDraft} from './fakeOcr.ts';
 
 export type Wallet = 'Apple Wallet' | 'Google Wallet';
 export type User = {id: UserId; name: string; initials: string; tone: number; handle: string; email: string; phone: string};
-export type DefaultSplit = {method: 'equal'} | {method: 'percent'; percents: Record<UserId, number>};
+export type DefaultSplit = {method: 'equal'} | {method: 'items'} | {method: 'percent'; percents: Record<UserId, number>};
 export type Member = {
   userId: UserId;
   status: 'invited' | 'joined';
@@ -22,6 +22,7 @@ export type Member = {
 export type Group = {
   id: string;
   name: string;
+  photo?: string;
   createdBy: UserId;
   createdAt: number;
   // null while forming; legacy groups may omit this until their final invitation is resolved.
@@ -38,7 +39,7 @@ export type Group = {
 export type Card = {id: string; groupId: string; userId: UserId; last4: string; wallet: Wallet | null; frozen: boolean};
 export type ItemEdit = {id: string; itemId: string; targetId: UserId; action: 'add' | 'remove'; authorId: UserId; createdAt: number};
 // draft holds a photo read that didn't add up to the charge, for the payer to fix; it is never claimable.
-export type Receipt = {items: ReceiptItem[]; tax: number; tip: number; itemized: boolean; scannedAt: number; locked: UserId[]; edits: ItemEdit[]; draft?: ReceiptDraft};
+export type Receipt = {items: ReceiptItem[]; tax: number; tip: number; itemized: boolean; scannedAt: number; locked: UserId[]; edits: ItemEdit[]; draft?: ReceiptDraft; exclusive?: boolean; image?: string; revision?: string};
 export type Proposal = {id: string; authorId: UserId | null; createdAt: number; input: SplitInput; shares: Shares; acceptedBy: UserId[]};
 export type Charge = {
   id: string;
@@ -51,6 +52,7 @@ export type Charge = {
   // null while the cardholder is still choosing the first proposal; nobody else sees or acts on it yet.
   sentAt: number | null;
   receipt: Receipt | null;
+  preferredSplit?: 'items';
   proposals: Proposal[];
   settledAt?: number;
   dispute?: {reason: string; at: number};
@@ -358,6 +360,7 @@ export function setFailTopUps(db: Db, actor: UserId, groupId: string, on: boolea
 export function setDefaultSplit(db: Db, actor: UserId, groupId: string, split: DefaultSplit) {
   const g = groupById(db, groupId);
   joinedMember(g, actor);
+  if (!split || !['equal', 'percent', 'items'].includes(split.method)) fail('Choose a supported default split.');
   if (split.method === 'percent') {
     const result = computeSplit(memberIds(g), 10000, {method: 'percent', percents: split.percents});
     if (result.error) fail(result.error);
@@ -432,6 +435,7 @@ export function purchase(db: Db, actor: UserId, groupId: string, input: {merchan
     status: 'pending',
     sentAt: null,
     receipt: null,
+    ...(g.defaultSplit.method === 'items' && {preferredSplit: 'items' as const}),
     proposals: [{id: nextId(db, 'prop'), authorId: null, createdAt: now, input: first, shares: result.shares, acceptedBy: []}],
   };
   db.charges.unshift(charge);
@@ -501,6 +505,7 @@ function claimable(c: Charge) {
 export function receiptApprovalKey(receipt: Receipt): string {
   return JSON.stringify({
     scannedAt: receipt.scannedAt,
+    ...(receipt.revision && {revision: receipt.revision}),
     items: receipt.items.map(({id, name, amount, people}) => ({id, name, amount, people: [...people].sort()})),
     tax: receipt.tax,
     tip: receipt.tip,
@@ -518,10 +523,123 @@ export function scanReceipt(db: Db, actor: UserId, chargeId: string, now: number
   return c.receipt;
 }
 
+export type ReceiptListInput = {items: {id: string; name: string; amount: number}[]; tax: number; tip: number; image?: string | null};
+export type SplitProposalOptions = {acceptOwnShare?: boolean; expectedEditKey?: string};
+
+// Images live in the existing shared JSON row. Keep them small and restrict them
+// to raster data; SVG and remote URLs are not accepted as shared content.
+export const MAX_SHARED_IMAGE_LENGTH = 256_000;
+function sharedImage(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string' || value.length > MAX_SHARED_IMAGE_LENGTH
+    || !/^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)) return fail('Choose a compressed JPEG, PNG, WebP or GIF image up to 190 KB.');
+  return value;
+}
+
+export function receiptListKey(receipt: Receipt): string {
+  return JSON.stringify({revision: receipt.revision ?? receipt.scannedAt,
+    items: receipt.items.map(({id, name, amount}) => ({id, name, amount})),
+    tax: receipt.tax, tip: receipt.tip, exclusive: !!receipt.exclusive,
+    draft: receipt.draft ?? null});
+}
+
+export function chargeEditKey(charge: Charge): string {
+  return charge.receipt ? `receipt:${receiptListKey(charge.receipt)}` : `proposal:${currentProposal(charge).id}`;
+}
+
+function requireEditKey(charge: Charge, expected: string | undefined) {
+  if (typeof expected !== 'string' || expected !== chargeEditKey(charge)) throw new StaleStateError('The split changed. Review the latest version before saving.');
+}
+
+function validatedReceiptList(charge: Charge, input: ReceiptListInput): ReceiptListInput {
+  if (!input || !Array.isArray(input.items) || !input.items.length || input.items.length > 60) fail('Keep between 1 and 60 items.');
+  const ids = new Set<string>();
+  const items = input.items.map(item => {
+    if (!item || typeof item.id !== 'string' || !item.id.trim() || item.id.length > 100 || ids.has(item.id)) fail('Every item needs its own identity.');
+    ids.add(item.id);
+    if (typeof item.name !== 'string' || !item.name.trim() || item.name.trim().length > 60 || !Number.isSafeInteger(item.amount) || item.amount <= 0) fail('Give every item a name and a positive amount.');
+    return {id: item.id, name: item.name.trim(), amount: item.amount};
+  });
+  if (![input.tax, input.tip].every(value => Number.isSafeInteger(value) && value >= 0)) fail('Tax and tip must be valid amounts.');
+  const total = items.reduce((sum, item) => sum + item.amount, 0) + input.tax + input.tip;
+  if (!Number.isSafeInteger(total) || total !== charge.amount) fail(`Items, tax and tip must total ${money(charge.amount)}.`);
+  return {items, tax: input.tax, tip: input.tip, image: sharedImage(input.image)};
+}
+
+export function parseReceipt(db: Db, actor: UserId, chargeId: string, read?: unknown) {
+  const {c} = openCharge(db, actor, chargeId);
+  return read === undefined ? ocr(c.merchant, c.amount, c.id) : fromScan(read, c.merchant, c.amount, c.id);
+}
+
+export function confirmReceiptList(db: Db, actor: UserId, chargeId: string, input: ReceiptListInput, now: number, expectedEditKey: string) {
+  const {c, g} = openCharge(db, actor, chargeId);
+  requireEditKey(c, expectedEditKey);
+  const checked = validatedReceiptList(c, input);
+  const previous = c.receipt;
+  const contents = (receipt: Receipt | ReceiptListInput) => JSON.stringify({items: receipt.items.map(({id, name, amount}) => ({id, name, amount})), tax: receipt.tax, tip: receipt.tip, image: receipt.image ?? null});
+  // Returning to an unchanged list must not revoke anyone's choices or approval.
+  if (previous && !previous.draft && contents(previous) === contents(checked)) return;
+  c.receipt = {items: checked.items.map(item => ({...item, people: []})), tax: checked.tax, tip: checked.tip,
+    itemized: true, scannedAt: now, revision: nextId(db, 'receipt'), locked: [], edits: [], exclusive: true,
+    ...(checked.image && {image: checked.image})};
+  c.sentAt ??= now;
+  notify(db, c, memberIds(g).filter(id => id !== actor), () => `${userById(db, actor).name} updated the ${c.merchant} items. Select and confirm your items.`, now);
+}
+
+export function confirmItemSelection(db: Db, actor: UserId, chargeId: string, itemIds: string[], expectedReceiptListKey: string, now: number) {
+  const {c} = openCharge(db, actor, chargeId);
+  if (!c.receipt) throw new StaleStateError('The receipt was replaced. Review the latest split.');
+  const r = claimable(c);
+  if (typeof expectedReceiptListKey !== 'string' || expectedReceiptListKey !== receiptListKey(r)) throw new StaleStateError('The item list changed. Review the latest items before confirming.');
+  if (!Array.isArray(itemIds) || itemIds.some(id => typeof id !== 'string') || new Set(itemIds).size !== itemIds.length) fail('Choose each item only once.');
+  const selected = new Set(itemIds);
+  if (itemIds.some(id => !r.items.some(item => item.id === id))) throw new StaleStateError('An item was removed. Review the latest list.');
+  if (r.exclusive && r.items.some(item => selected.has(item.id) && item.people.some(id => id !== actor))) throw new StaleStateError('An item was selected by someone else. Review the latest list.');
+  const changed = r.items.some(item => selected.has(item.id) !== item.people.includes(actor));
+  r.items = r.items.map(item => ({...item, people: selected.has(item.id) ? [...new Set([...item.people, actor])] : item.people.filter(id => id !== actor)}));
+  // Shared legacy items can change other people's shares; only that older workflow
+  // invalidates peer consent. Exclusive boards have stable per-item prices.
+  if (changed && !r.exclusive) r.locked = [];
+  r.locked = [...new Set([...r.locked, actor])];
+  confirmItemsIfReady(db, c, now);
+}
+
+export function updateGroup(db: Db, actor: UserId, groupId: string, input: {name: string; photo?: string | null}) {
+  const g = groupById(db, groupId);
+  joinedMember(g, actor);
+  if (!input || typeof input.name !== 'string' || !input.name.trim() || input.name.trim().length > 60) fail('Enter a group name of 1 to 60 characters.');
+  const preset = typeof input.photo === 'string' && /^\/phone-assets\/(?:apartment|weekend|roadtrip)\.jpg$/.test(input.photo);
+  const photo = input.photo === undefined ? g.photo : preset ? input.photo! : sharedImage(input.photo);
+  g.name = input.name.trim();
+  if (photo) g.photo = photo;
+  else delete g.photo;
+}
+
+export function updateProfile(db: Db, actor: UserId, input: {name: string}) {
+  const user = userById(db, actor);
+  if (!input || typeof input.name !== 'string' || !input.name.trim() || input.name.trim().length > 60) fail('Enter a name of 1 to 60 characters.');
+  const name = input.name.trim().replace(/\s+/g, ' '), parts = name.split(' ');
+  user.name = name;
+  user.initials = ((parts[0][0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : parts[0][1] ?? '')).toUpperCase();
+}
+
 // Fixing scan mistakes changes everyone's totals, so all locks are released.
 export function updateReceipt(db: Db, actor: UserId, chargeId: string, input: {items: {id: string; name: string; amount: number}[]; tax: number; tip: number}) {
   const {c} = openCharge(db, actor, chargeId);
   const r = board(c);
+  if (r.exclusive) {
+    const checked = validatedReceiptList(c, {...input, image: r.image});
+    const same = checked.tax === r.tax && checked.tip === r.tip && JSON.stringify(checked.items) === JSON.stringify(r.items.map(({id, name, amount}) => ({id, name, amount})));
+    if (same) return;
+    r.items = checked.items.map(item => ({...item, people: []}));
+    r.tax = checked.tax;
+    r.tip = checked.tip;
+    r.revision = nextId(db, 'receipt');
+    r.locked = [];
+    r.edits = [];
+    delete r.draft;
+    return;
+  }
   if (!input.items.length) fail('Keep at least one item.');
   if (input.items.some(i => !i.name.trim() || !Number.isSafeInteger(i.amount) || i.amount <= 0)) fail('Give every item a name and a positive amount.');
   if (![input.tax, input.tip].every(v => Number.isSafeInteger(v) && v >= 0)) fail('Tax and tip must be valid amounts.');
@@ -541,8 +659,9 @@ export function toggleClaim(db: Db, actor: UserId, chargeId: string, itemId: str
   const r = claimable(c);
   if (r.locked.includes(actor)) fail('Unlock your selection to change it.');
   const item = r.items.find(i => i.id === itemId) ?? fail('Item not found.');
+  if (r.exclusive && item.people.some(id => id !== actor)) fail('This item was selected by someone else.');
   item.people = item.people.includes(actor) ? item.people.filter(p => p !== actor) : [...item.people, actor];
-  r.locked = [];
+  r.locked = r.exclusive ? r.locked.filter(id => id !== actor) : [];
 }
 
 export function setLocked(db: Db, actor: UserId, chargeId: string, locked: boolean, now: number, expectedReceiptKey?: string) {
@@ -569,11 +688,12 @@ export function respondItemEdit(db: Db, actor: UserId, chargeId: string, editId:
   const r = claimable(c);
   const edit = r.edits.find(e => e.id === editId) ?? fail('That edit is no longer pending.');
   if (edit.targetId !== actor) fail('Only the person this edit affects can respond to it.');
+  const item = r.items.find(i => i.id === edit.itemId);
+  if (accept && item && r.exclusive && edit.action === 'add' && item.people.some(id => id !== actor)) fail('This item was selected by someone else.');
   r.edits = r.edits.filter(e => e.id !== editId);
   if (accept) {
-    const item = r.items.find(i => i.id === edit.itemId);
     if (item) item.people = edit.action === 'add' ? [...new Set([...item.people, actor])] : item.people.filter(p => p !== actor);
-    r.locked = [];
+    r.locked = r.exclusive ? r.locked.filter(id => id !== actor) : [];
   }
   confirmItemsIfReady(db, c, now);
 }
@@ -582,20 +702,25 @@ function confirmItemsIfReady(db: Db, c: Charge, now: number) {
   if (!itemBoardStatus(c).ready) return;
   const r = c.receipt!;
   const g = groupById(db, c.groupId);
-  const input: SplitInput = {method: 'items', items: r.items.map(i => ({...i, people: [...i.people]})), tax: r.tax, tip: r.tip};
+  const input: SplitInput = {method: 'items', items: r.items.map(i => ({...i, people: [...i.people]})), tax: r.tax, tip: r.tip, ...(r.exclusive && {taxAllocation: 'item' as const})};
   const result = computeSplit(memberIds(g), c.amount, input);
   if (result.error) return;
   c.proposals.push({id: nextId(db, 'prop'), authorId: null, createdAt: now, input, shares: result.shares, acceptedBy: requiredApprovers({shares: result.shares} as Proposal)});
   settle(db, c, now);
 }
 
-export function proposeSplit(db: Db, actor: UserId, chargeId: string, input: SplitInput, now: number) {
+export function proposeSplit(db: Db, actor: UserId, chargeId: string, input: SplitInput, now: number, options?: SplitProposalOptions) {
   const {c, g} = openCharge(db, actor, chargeId);
+  if (options !== undefined) {
+    if (!options || typeof options !== 'object' || (options.acceptOwnShare !== undefined && typeof options.acceptOwnShare !== 'boolean')) fail('Choose whether to accept your share.');
+    if (options.acceptOwnShare === false || options.expectedEditKey !== undefined) requireEditKey(c, options.expectedEditKey);
+  }
   const result = computeSplit(memberIds(g), c.amount, input);
   if (result.error) fail(result.error);
+  if (options?.acceptOwnShare === false && !c.receipt && JSON.stringify(currentProposal(c).input) === JSON.stringify(input) && !isDraft(c)) return;
   // Sending a new proposal replaces the item workflow, including every receipt approval.
   c.receipt = null;
-  c.proposals.push({id: nextId(db, 'prop'), authorId: actor, createdAt: now, input, shares: result.shares, acceptedBy: [actor]});
+  c.proposals.push({id: nextId(db, 'prop'), authorId: actor, createdAt: now, input, shares: result.shares, acceptedBy: options?.acceptOwnShare === false ? [] : [actor]});
   announce(db, c, now);
 }
 

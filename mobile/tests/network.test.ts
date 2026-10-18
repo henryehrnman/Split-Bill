@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {createRpcClient, RpcError} from '../src/lib/http.ts';
 import type {RpcState} from '../src/lib/http.ts';
-import {receiptApprovalKey} from '../src/lib/domain.ts';
+import {chargeEditKey, receiptListKey, receiptApprovalKey} from '../src/lib/domain.ts';
 import type {User} from '../src/lib/domain.ts';
 import {handle} from '../../supabase/functions/rpc/core.ts';
 import type {State, Store} from '../../supabase/functions/rpc/core.ts';
@@ -578,4 +578,64 @@ test('concurrent clients preserve both writes through the server compare-and-set
   const final = await alice.state('fetch');
   assert.deepEqual(final.db.groups[0].members.map(m => [m.userId, m.balance]), [[aliceId, 10101], [bobId, 10203]]);
   assert.equal(h.state!.db.ledger.filter(entry => entry.groupId === groupId && entry.kind === 'deposit').length, 4, 'each activation contribution and each later explicit deposit is recorded once');
+});
+
+
+test('exclusive item confirmation replays a collision without stealing another member or clearing their approval', async () => {
+  const h = harness();
+  const {alice, bob, aliceId, bobId, chargeId} = await pendingCharge(h);
+  const current = (await alice.state('fetch')).db.charges.find(c => c.id === chargeId)!;
+  const published = await alice.state('confirmReceiptList', [chargeId, {items: [{id: 'first', name: 'First meal', amount: 3000}, {id: 'second', name: 'Second meal', amount: 6000}], tax: 1, tip: 0}, chargeEditKey(current)]);
+  const key = receiptListKey(published.db.charges.find(c => c.id === chargeId)!.receipt!);
+  h.beforeSave(async () => { await bob.state('confirmItemSelection', [chargeId, ['first'], key]); });
+  await assert.rejects(alice.state('confirmItemSelection', [chargeId, ['first'], key]), error => error instanceof RpcError && error.status === 409 && error.code === 'stale');
+  assert(h.conflicts >= 1, 'the rejected confirmation really raced with a committed peer');
+  const afterRace = (await alice.state('fetch')).db.charges.find(c => c.id === chargeId)!;
+  assert.deepEqual(afterRace.receipt!.items.map(item => item.people), [[bobId], []]);
+  assert.deepEqual(afterRace.receipt!.locked, [bobId]);
+  const settled = await alice.state('confirmItemSelection', [chargeId, ['second'], key]);
+  const charge = settled.db.charges.find(c => c.id === chargeId)!;
+  assert.equal(charge.status, 'settled');
+  assert.deepEqual(charge.proposals.at(-1)!.shares, {[aliceId]: 6001, [bobId]: 3000});
+  assert.equal(h.state!.db.ledger.filter(entry => entry.chargeId === chargeId && entry.kind === 'charge').length, 2);
+});
+
+test('receipt publication rejects stale editor saves, preserves unchanged confirmations, and persists deletion across fetch', async () => {
+  const h = harness();
+  const {alice, bob, aliceId, chargeId} = await pendingCharge(h);
+  const c = (await alice.state('fetch')).db.charges.find(c => c.id === chargeId)!;
+  const input = {items: [{id: 'one', name: 'One', amount: 3000}, {id: 'two', name: 'Two', amount: 6000}], tax: 1, tip: 0, image: 'data:image/png;base64,QUJD'};
+  const first = (await alice.state('confirmReceiptList', [chargeId, input, chargeEditKey(c)])).db.charges.find(c => c.id === chargeId)!;
+  const oldEdit = chargeEditKey(first), oldList = receiptListKey(first.receipt!);
+  await alice.state('confirmItemSelection', [chargeId, ['one'], oldList]);
+  const same = (await bob.state('confirmReceiptList', [chargeId, input, oldEdit])).db.charges.find(c => c.id === chargeId)!;
+  assert.deepEqual(same.receipt!.locked, [aliceId]);
+  const replacement = {items: [{id: 'two', name: 'Only remaining item', amount: 9001}], tax: 0, tip: 0, image: null};
+  await bob.state('confirmReceiptList', [chargeId, replacement, oldEdit]);
+  const before = clone(h.state);
+  await assert.rejects(alice.state('confirmReceiptList', [chargeId, input, oldEdit]), error => error instanceof RpcError && error.code === 'stale');
+  await assert.rejects(alice.state('confirmItemSelection', [chargeId, ['one'], oldList]), error => error instanceof RpcError && error.code === 'stale');
+  assert.deepEqual(h.state, before);
+  const latest = (await alice.state('fetch')).db.charges.find(c => c.id === chargeId)!;
+  assert.deepEqual(latest.receipt!.items.map(item => [item.id, item.people]), [['two', []]]);
+  assert.deepEqual(latest.receipt!.locked, []);
+  assert.equal(latest.receipt!.image, undefined);
+});
+
+test('phone proposals require separate acceptance and profile/group edits use JWT identity', async () => {
+  const h = harness();
+  const {alice, bob, aliceId, bobId, chargeId, groupId} = await pendingCharge(h);
+  const charlie = h.client('jwt-charlie');
+  await charlie.state('createUser', [{name: 'Charlie', handle: 'charlie.test', email: 'charlie@t.dev', phone: ''}]);
+  await assert.rejects(charlie.state('updateGroup', [groupId, {name: 'Not my group'}]), error => error instanceof RpcError && error.status === 400);
+  const renamed = await bob.state('updateGroup', [groupId, {name: 'Our group', photo: 'data:image/jpeg;base64,QUJD'}]);
+  assert.equal(renamed.db.groups[0].name, 'Our group');
+  const forged = h.client('jwt-alice', bobId);
+  const changed = await forged.state('updateProfile', [{name: 'Alice Updated'}]);
+  assert.equal(changed.db.users.find(user => user.id === aliceId)!.name, 'Alice Updated');
+  assert.equal(changed.db.users.find(user => user.id === bobId)!.name, 'Bob Tester');
+  const c = changed.db.charges.find(charge => charge.id === chargeId)!;
+  const result = await alice.state('proposeSplit', [chargeId, {method: 'amount', amounts: {[aliceId]: 1001, [bobId]: 8000}}, {acceptOwnShare: false, expectedEditKey: chargeEditKey(c)}]);
+  assert.deepEqual(result.db.charges.find(charge => charge.id === chargeId)!.proposals.at(-1)!.acceptedBy, []);
+  assert.equal(result.db.charges.find(charge => charge.id === chargeId)!.status, 'pending');
 });

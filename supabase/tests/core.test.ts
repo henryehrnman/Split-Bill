@@ -334,3 +334,47 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
 }
 
 console.log('server core tests passed');
+
+
+// Private receipt parsing never publishes state, even when tick or OCR would change it.
+{
+  const s = memory();
+  const demo = {...opts, demo: true};
+  await call(s, null, 'fetch', [], demo, {actor: 'u_henry'});
+  let reads = 0;
+  const photo = {mediaType: 'image/jpeg', data: 'QUJD'};
+  const reader = async () => { reads++; return {items: [{name: 'Private OCR item', amount: 14000}], tax: 1020, tip: 400}; };
+  const before = JSON.parse(JSON.stringify(s.state));
+  const saves = s.saves;
+  const parsed = await call(s, null, 'parseReceipt', ['chg_o', photo], {...demo, readReceipt: reader}, {actor: 'u_henry'});
+  assert.equal(parsed.status, 200);
+  assert.equal((parsed.body as any).items[0].name, 'Private OCR item');
+  assert.equal((parsed.body as any).itemized, true);
+  assert.equal(reads, 1);
+  assert.equal(s.saves, saves);
+  assert.deepEqual(s.state, before, 'canceling a private photo edit cannot mutate the shared board');
+  const denied = await call(s, null, 'parseReceipt', ['chg_o', photo], {...demo, readReceipt: reader}, {actor: 'u_connor'});
+  assert.equal(denied.status, 400);
+  assert.equal(reads, 1, 'outsiders cannot make a model call');
+  const noPhoto = await call(s, null, 'parseReceipt', ['chg_o'], demo, {actor: 'u_henry'});
+  assert.equal(noPhoto.status, 200);
+  assert.equal(s.saves, saves);
+  assert.deepEqual(s.state, before);
+}
+
+// An OCR response that arrives after its charge settled cannot revive or replace it.
+{
+  const s = memory();
+  const demo = {...opts, demo: true};
+  await call(s, null, 'fetch', [], demo, {actor: 'u_henry'});
+  const reader = async () => {
+    s.state!.db.charges.find(c => c.id === 'chg_o')!.status = 'settled';
+    return {items: [{name: 'Late read', amount: 15420}], tax: 0, tip: 0};
+  };
+  const saves = s.saves;
+  const parsed = await call(s, null, 'parseReceipt', ['chg_o', {mediaType: 'image/png', data: 'QUJD'}], {...demo, readReceipt: reader}, {actor: 'u_henry'});
+  assert.equal(parsed.status, 400);
+  assert.equal(s.saves, saves);
+  assert.equal(s.state!.db.charges.find(c => c.id === 'chg_o')!.receipt, null);
+}
+console.log('phone receipt parse tests passed');

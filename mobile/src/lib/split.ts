@@ -8,7 +8,7 @@ export type SplitInput =
   | {method: 'equal'; participants: UserId[]}
   | {method: 'percent'; percents: Record<UserId, number>}
   | {method: 'amount'; amounts: Record<UserId, number>}
-  | {method: 'items'; items: ReceiptItem[]; tax: number; tip: number};
+  | {method: 'items'; items: ReceiptItem[]; tax: number; tip: number; taxAllocation?: 'item'};
 
 export type SplitResult = {
   shares: Shares;
@@ -70,6 +70,12 @@ export function computeSplit(members: UserId[], total: number, input: SplitInput
   if (itemTotal + tax + tip !== total) {
     return fail(`Items, tax and tip add up to ${money(itemTotal + tax + tip)}, but the charge was ${money(total)}.`);
   }
+  // New exclusive boards attach tax/tip cents to immutable item prices. Existing
+  // shared-item proposals keep their historical member-level rounding.
+  if (input.taxAllocation === 'item') {
+    const allocation = receiptItemAllocations(members, {items, tax, tip});
+    return {shares: allocation.shares, error: '', breakdown: allocation.breakdown};
+  }
   const taxes = allocate(tax, base);
   const tips = allocate(tip, base);
   return {
@@ -77,4 +83,44 @@ export function computeSplit(members: UserId[], total: number, input: SplitInput
     error: '',
     breakdown: Object.fromEntries(members.map((m, i) => [m, {items: base[i], tax: taxes[i], tip: tips[i]}])),
   };
+}
+
+// Integer remainders preserve mathematical ties (for example 10 * [1,1,4] / 6).
+// BigInt keeps the result exact even when the safe cent inputs have a large product.
+function allocateItemExtras(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((value, weight) => value + BigInt(weight), 0n);
+  if (sum === 0n) return weights.map(() => 0);
+  const products = weights.map(weight => BigInt(total) * BigInt(weight));
+  const out = products.map(product => Number(product / sum));
+  const order = products.map((product, index) => ({index, remainder: product % sum}))
+    .sort((a, b) => a.remainder === b.remainder ? a.index - b.index : a.remainder > b.remainder ? -1 : 1);
+  for (let i = 0, remaining = total - out.reduce((value, part) => value + part, 0); i < remaining; i++) out[order[i].index]++;
+  return out;
+}
+
+// Supports a partially claimed board: unclaimed items retain their own extras,
+// so another member's selection never changes the cents you already approved.
+export function receiptItemAllocations(members: UserId[], receipt: {items: ReceiptItem[]; tax: number; tip: number}) {
+  const weights = receipt.items.map(item => item.amount);
+  const taxes = allocateItemExtras(receipt.tax, weights);
+  const tips = allocateItemExtras(receipt.tip, weights);
+  const shares = zero(members);
+  const breakdown = Object.fromEntries(members.map(id => [id, {items: 0, tax: 0, tip: 0}]));
+  let unclaimed = 0;
+  const items = receipt.items.map((item, index) => {
+    const row = {...item, tax: taxes[index], tip: tips[index], total: item.amount + taxes[index] + tips[index]};
+    if (!item.people.length) unclaimed += row.total;
+    else {
+      const owners = members.map(id => item.people.includes(id) ? 1 : 0);
+      const amounts = allocate(item.amount, owners), tax = allocate(row.tax, owners), tip = allocate(row.tip, owners);
+      members.forEach((id, i) => {
+        breakdown[id].items += amounts[i];
+        breakdown[id].tax += tax[i];
+        breakdown[id].tip += tip[i];
+        shares[id] += amounts[i] + tax[i] + tip[i];
+      });
+    }
+    return row;
+  });
+  return {items, shares, breakdown, unclaimed};
 }

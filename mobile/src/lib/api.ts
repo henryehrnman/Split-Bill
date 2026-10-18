@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as d from './domain';
 import type {Db, DefaultSplit, Wallet} from './domain';
 import type {SplitInput, UserId} from './split';
+import type {ScannedReceipt} from './fakeOcr';
 import {seed} from './seed';
 import {accessToken, backendIdentity} from './auth';
 import {apiUrl, publishableKey} from './config';
@@ -67,6 +68,8 @@ function mutate(fn: (x: Db, t: number) => void): Promise<Db> {
 const fakeApi = {
   fetch: () => mutate(() => {}),
   searchUsers: async (actor: UserId, query: string, exclude: UserId[]) => d.searchUsers(await load(), query, [actor, ...exclude]),
+  updateProfile: (actor: UserId, input: {name: string}) => mutate(x => d.updateProfile(x, actor, input)),
+  updateGroup: (actor: UserId, groupId: string, input: {name: string; photo?: string | null}) => mutate(x => d.updateGroup(x, actor, groupId, input)),
   createGroup: (actor: UserId, input: {name: string; inviteIds: UserId[]; budget: number; periodDays: number; initialContributionLimit?: number}) => mutate((x, t) => void d.createGroup(x, actor, input, t)),
   respondInvite: (actor: UserId, groupId: string, accept: boolean, expectedContribution?: number, initialContributionLimit?: number) => mutate((x, t) => d.respondInvite(x, actor, groupId, accept, t, expectedContribution, initialContributionLimit)),
   deposit: (actor: UserId, groupId: string, amount: number) => mutate((x, t) => d.deposit(x, actor, groupId, amount, t)),
@@ -81,12 +84,15 @@ const fakeApi = {
   purchase: (actor: UserId, groupId: string, input: {merchant: string; amount: number}) => mutate((x, t) => void d.purchase(x, actor, groupId, input, t)),
   setChargeNote: (actor: UserId, chargeId: string, text: string) => mutate((x, t) => d.setChargeNote(x, actor, chargeId, text, t)),
   scanReceipt: (actor: UserId, chargeId: string, _photo?: ReceiptPhoto) => mutate((x, t) => void d.scanReceipt(x, actor, chargeId, t)),
+  parseReceipt: async (actor: UserId, chargeId: string, _photo?: ReceiptPhoto): Promise<ScannedReceipt> => d.parseReceipt(await load(), actor, chargeId),
+  confirmReceiptList: (actor: UserId, chargeId: string, input: d.ReceiptListInput, expectedEditKey: string) => mutate((x, t) => d.confirmReceiptList(x, actor, chargeId, input, t, expectedEditKey)),
+  confirmItemSelection: (actor: UserId, chargeId: string, itemIds: string[], expectedReceiptListKey: string) => mutate((x, t) => d.confirmItemSelection(x, actor, chargeId, itemIds, expectedReceiptListKey, t)),
   updateReceipt: (actor: UserId, chargeId: string, input: {items: {id: string; name: string; amount: number}[]; tax: number; tip: number}) => mutate(x => d.updateReceipt(x, actor, chargeId, input)),
   toggleClaim: (actor: UserId, chargeId: string, itemId: string) => mutate(x => d.toggleClaim(x, actor, chargeId, itemId)),
   setLocked: (actor: UserId, chargeId: string, locked: boolean, expectedReceiptKey?: string) => mutate((x, t) => d.setLocked(x, actor, chargeId, locked, t, expectedReceiptKey)),
   suggestItemEdit: (actor: UserId, chargeId: string, itemId: string, targetId: UserId) => mutate((x, t) => d.suggestItemEdit(x, actor, chargeId, itemId, targetId, t)),
   respondItemEdit: (actor: UserId, chargeId: string, editId: string, accept: boolean) => mutate((x, t) => d.respondItemEdit(x, actor, chargeId, editId, accept, t)),
-  proposeSplit: (actor: UserId, chargeId: string, input: SplitInput) => mutate((x, t) => d.proposeSplit(x, actor, chargeId, input, t)),
+  proposeSplit: (actor: UserId, chargeId: string, input: SplitInput, options?: d.SplitProposalOptions) => mutate((x, t) => d.proposeSplit(x, actor, chargeId, input, t, options)),
   sendDefaultSplit: (actor: UserId, chargeId: string) => mutate((x, t) => d.sendDefaultSplit(x, actor, chargeId, t)),
   acceptSplit: (actor: UserId, chargeId: string, expectedProposalId: string) => mutate((x, t) => d.acceptSplit(x, actor, chargeId, t, expectedProposalId)),
   fileChargeback: (actor: UserId, chargeId: string) => mutate((x, t) => d.fileChargeback(x, actor, chargeId, t)),
@@ -142,6 +148,15 @@ export const api: typeof fakeApi = new Proxy(fakeApi, {
       if (backendIdentity().demoMode) return (local as (...values: unknown[]) => unknown)(...args);
       if (demoOnly.has(property)) return Promise.reject(new RpcError('This control is available only in demo mode.', 403, 'demo_only'));
       if (property !== 'fetch' && args[0] !== remoteViewerId()) return Promise.reject(new RpcError('Your account changed. Refresh and try again.', 401, 'session_changed'));
+      if (property === 'parseReceipt') {
+        const identity = backendIdentity();
+        return photoRpc.request<ScannedReceipt>('parseReceipt', args.slice(1)).then(receipt => {
+          if (identity !== backendIdentity()) throw new RpcError('Your session changed.', 401, 'session_changed');
+          if (!receipt || !Array.isArray(receipt.items) || !receipt.items.length || !Number.isSafeInteger(receipt.tax) || !Number.isSafeInteger(receipt.tip)
+            || receipt.items.some(item => !item || typeof item.id !== 'string' || typeof item.name !== 'string' || !Number.isSafeInteger(item.amount) || item.amount <= 0)) throw new RpcError('The server returned an invalid receipt.');
+          return receipt;
+        });
+      }
       if (property === 'searchUsers') {
         const identity = backendIdentity();
         return rpc.request<d.User[]>('searchUsers', args.slice(1)).then(users => {
