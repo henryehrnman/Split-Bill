@@ -6,7 +6,7 @@ For the hackathon presentation on October 18, 2026: a 90-second pitch, then a 3-
 
 - Two phones, each with the hosted URL added to the Home Screen (Safari → Share → Add to Home Screen) and signed in to its own account. Phone A is the presenter (pays); Phone B is a second member. Create the accounts ahead of time with **Create account** (email, password, name, handle); note both handles.
 - Don't create the group ahead of time. Each run (rehearsals included) starts with a new group so no open charge is left over. The server can't be reset (`DEMO_MODE` is off), so old rehearsal groups simply stay in the accounts; pick the new one.
-- Open both phones on Home and check that the "Live updates reconnecting" line isn't showing.
+- Open both phones on Home and check that each shows "Live updates on" (not "reconnecting").
 - Have the backup video ready, and a laptop with the same URL open.
 
 ## 90-second pitch
@@ -24,21 +24,24 @@ For the hackathon presentation on October 18, 2026: a 90-second pitch, then a 3-
 | 0:30 | B | Home shows the invitation with the group details. Tap **Join · deposit $150.00**. | "Each person sees the terms before joining and deposits their equal share." |
 | 0:50 | A | **Card** tab → pick **Apple Wallet** (simulated setup). | "Every member has their own card on the shared fund." |
 | 1:05 | A | Under "Make a purchase (demo)", tap **Juniper · $154.20** (stands in for tapping the card at a restaurant). | "Dinner just came out of the group fund." |
-| 1:15 | A | **Split** tab → **Use sample receipt** (or **Take photo** if the receipt model is on). The claim board appears and is sent to the group. | "The receipt becomes items. Tax and tip follow what each person had." |
-| 1:35 | B | Home shows the pending split under the fund. Open **Split**, tap their name on Rigatoni, Branzino and Tiramisu, share the Burrata, **Lock in my items**. | "Phone B updated live. Everyone claims their own items." |
-| 2:05 | A | Claim the rest, tap B's name on one item to suggest a change; B approves it. Then **Lock in my items**. | "You can suggest an edit to someone else's items, but only they can approve it." |
-| 2:30 | both | The split confirms on its own. Show the balances on Home and the charge on **Activity**. | "Everyone agreed, so it settled. The card is free for the next purchase." |
-| 2:45 | A | — | Close with the line below. |
+| 1:15 | A | **Split** tab → **By item** (a new charge opens on Percent / amount) → **Use sample receipt** (or **Take photo** once live photo reads are confirmed). The claim board appears and is sent to the group. | "The receipt becomes items. Tax and tip follow what each person had." |
+| 1:30 | B | Home shows the pending split under the fund. Open **Split** and tap B's name on Rigatoni, Branzino, Tiramisu and Burrata. Don't lock yet. | "Phone B updated live. Everyone claims their own items." |
+| 1:55 | A | Tap A's name on Margherita pizza, Sparkling water and Burrata (now shared). Tap B's name on Margherita pizza to suggest B shared it; B taps **Accept**. | "You can suggest an edit to someone else's items, but only they can approve it." |
+| 2:20 | both | Once every item is claimed and no edit is pending, each phone taps **Lock in my items**. | "Everyone locks in their own selection." |
+| 2:35 | both | The split confirms on its own. Show the balances on Home and the charge on **Activity**. | "Everyone agreed, so it settled. The card is free for the next purchase." |
+| 2:50 | A | — | Close with the line below. |
+
+Lock in last. Any claim change, and any accepted edit, unlocks everyone, so a lock made before the board is final has to be redone.
 
 **Closing line:** "Money and cards are simulated tonight by design. Real cards need Stripe Issuing approval, Apple's wallet approval, and a partner bank for pooled funds. The rules engine that would approve real taps is the same code you just watched run on the server."
 
-**Shorter path if time runs low:** after 1:05 skip the receipt. Tap **Send default** on Phone A, then **Accept split** on Phone B; the even split settles straight away.
+**Shorter path if time runs low:** after 1:05 skip the receipt. On Phone A the Split tab opens on Percent / amount; tap **Send default**, then **Accept split** on Phone B, and the even split settles straight away.
 
 ## If something goes wrong
 
 - **The server is slow or down:** sign out and tap **Explore the demo** on the sign-in screen (or **Try demo mode** on Profile). It runs entirely in the browser with seeded users. Tap the "Demo · Name" badge to switch between people instead of passing phones. In the seed data, Maya's Juniper charge is already pending.
-- **Phone B doesn't update:** tap "Live updates reconnecting · Tap to refresh" if it shows; otherwise close and reopen the app, which reloads the group.
-- **The photo read doesn't add up:** the receipt becomes a single line to fix by hand. Switch to **Use sample receipt** and keep going.
+- **Phone B doesn't update:** tap the "Live updates … · Tap to refresh" line under the page title.
+- **The photo read doesn't add up or fails:** the receipt becomes a single line, and the sample receipt is no longer offered for that charge. Either tap **Fix receipt** and type the items, or switch to **Percent / amount** and use the shorter path.
 - **Nothing works:** play the backup video.
 
 ## Backup video
