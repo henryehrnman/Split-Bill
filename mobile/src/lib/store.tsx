@@ -81,7 +81,11 @@ function AccountStore({children}: {children: React.ReactNode}) {
         const meta = session?.user.user_metadata;
         if (!meta?.name || !meta?.handle) { if (current()) setNeedsProfile(true); return; }
         try { next = await createProfile({name: meta.name, handle: meta.handle, phone: meta.phone ?? '', email: session?.user.email ?? ''}); }
-        catch (profileError) { if (current()) setNeedsProfile(true); throw profileError; }
+        catch (profileError) {
+          // Another tab may have created this account's profile after our fetch.
+          if (profileError instanceof RpcError && profileError.code === 'has_profile') next = await api.fetch();
+          else { if (current()) setNeedsProfile(true); throw profileError; }
+        }
       }
       apply(next);
     } catch (error) {

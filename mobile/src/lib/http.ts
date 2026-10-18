@@ -36,7 +36,7 @@ export function createRpcClient(options: Options) {
 
   async function request<T>(method: string, args: unknown[] = []): Promise<T> {
     const controller = new AbortController();
-    const timeoutError = new RpcError('The request timed out. Check your connection and try again.', 0, 'timeout');
+    const timeoutError = new RpcError('The request timed out. Refresh to check whether it finished before trying again.', 0, 'timeout');
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {

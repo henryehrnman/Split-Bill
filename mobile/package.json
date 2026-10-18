@@ -32,7 +32,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types tests/split.test.ts && node --experimental-strip-types tests/domain.test.ts && node --experimental-strip-types tests/http.test.ts"
+    "test": "node --experimental-strip-types tests/split.test.ts && node --experimental-strip-types tests/domain.test.ts && node --experimental-strip-types tests/http.test.ts",
+    "test:network": "node ../scripts/copy-shared.mjs && node --experimental-strip-types tests/network.test.ts"
   },
   "private": true
 }

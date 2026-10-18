@@ -74,13 +74,13 @@ export default function AuthScreen({onSignIn, onSignUp, onDemo, configurationErr
       }
     }
     if (needsProfile) {
-      if (!profile.name || profile.name.length > 80) {
-        setError('Enter your name using 1–80 characters.');
+      if (!profile.name || profile.name.length > 60) {
+        setError('Enter your name using 1–60 characters.');
         nameRef.current?.focus();
         return;
       }
-      if (!/^[a-z0-9._-]{3,24}$/.test(profile.handle)) {
-        setError('Use 3–24 letters, numbers, dots, underscores, or hyphens for your handle.');
+      if (!/^[a-z0-9._]{3,30}$/.test(profile.handle)) {
+        setError('Use 3–30 letters, numbers, dots, or underscores for your handle.');
         handleRef.current?.focus();
         return;
       }
@@ -151,8 +151,8 @@ export default function AuthScreen({onSignIn, onSignUp, onDemo, configurationErr
             </View>
           )}
 
-          {configurationError && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={s.error}>{configurationError}</Text>}
-          {sessionError && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={s.error}>{sessionError}</Text>}
+          {!!configurationError && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={s.error}>{configurationError}</Text>}
+          {!!sessionError && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={s.error}>{sessionError}</Text>}
           {profileOnly && !onCompleteProfile && <Text accessibilityRole="alert" style={s.error}>Profile setup is unavailable. You can still explore the demo.</Text>}
           {!!error && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={s.error}>{error}</Text>}
           {!!success && <Text accessibilityLiveRegion="polite" style={s.success}>{success}</Text>}
@@ -167,10 +167,10 @@ export default function AuthScreen({onSignIn, onSignUp, onDemo, configurationErr
 
           {needsProfile && (
             <>
-              <Field inputRef={nameRef} label="Name" value={name} onChangeText={setName} editable={!busy} autoComplete="name" autoCapitalize="words" maxLength={80} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => handleRef.current?.focus()} />
-              <Field inputRef={handleRef} label="Handle" value={handle} onChangeText={value => setHandle(value.toLowerCase())} editable={!busy} autoCapitalize="none" autoCorrect={false} autoComplete="off" maxLength={24} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => phoneRef.current?.focus()} />
-              <Text style={s.hint}>3–24 letters, numbers, dots, underscores, or hyphens.</Text>
-              <Field inputRef={phoneRef} label="Phone (optional)" value={phone} onChangeText={setPhone} editable={!busy} keyboardType="phone-pad" autoComplete="tel" maxLength={32} returnKeyType="done" onSubmitEditing={() => void submit()} />
+              <Field inputRef={nameRef} label="Name" value={name} onChangeText={setName} editable={!busy} autoComplete="name" autoCapitalize="words" maxLength={60} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => handleRef.current?.focus()} />
+              <Field inputRef={handleRef} label="Handle" value={handle} onChangeText={value => setHandle(value.toLowerCase())} editable={!busy} autoCapitalize="none" autoCorrect={false} autoComplete="off" maxLength={30} returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => phoneRef.current?.focus()} />
+              <Text style={s.hint}>3–30 letters, numbers, dots, or underscores.</Text>
+              <Field inputRef={phoneRef} label="Phone (optional)" value={phone} onChangeText={setPhone} editable={!busy} keyboardType="phone-pad" autoComplete="tel" maxLength={30} returnKeyType="done" onSubmitEditing={() => void submit()} />
             </>
           )}
 
