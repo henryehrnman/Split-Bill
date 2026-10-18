@@ -93,7 +93,10 @@ Not yet; it's a weekend build. What's real: a live app at https://chipin-app.ver
 People with standing shared costs: roommates and couples first (groceries, utilities, household), then trips and teams.
 
 **Who pays, and for what?**
-Revenue from card interchange on group spend (the group spends from our card instead of one person's), plus a premium tier for larger groups, trips and extra features. Users don't pay to repay friends; that step disappears.
+Revenue from card interchange on group spend (the group spends from our card instead of one person's) and yield on the money groups keep in their fund, plus a premium tier for larger groups, trips and extra features. Users don't pay to repay friends; that step disappears. The figures and assumptions are in `docs/PITCH.md`.
+
+**You keep the interest on my money?**
+Yes, and we say so up front. Members can withdraw their full balance whenever no split is pending, and the fund sits in low-risk government money-market funds and T-bills at a partner bank. PayPal, Venmo and Cash App earn on customer balances the same way. It's what lets chipin stay free: no fees to pay a friend back, no instant-transfer fees.
 
 **What did you learn and change this weekend?**
 - Rebuilt the product around a standing group fund after the schema discussion on Saturday.
