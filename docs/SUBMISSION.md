@@ -20,7 +20,7 @@ A group sets a budget for a period, such as $300 every two weeks, and invites pe
 
 After the purchase, the payer sends the first split: equal, by percent, by amount, or item by item. A receipt photo becomes line items, tax, and tip. Each person claims what they had, can suggest a change to someone else's items, and locks in their own selection. The split settles only when every item is claimed, everyone who claimed has locked, and no edit is pending. Tax and tip follow each person's items, and every cent is allocated.
 
-An approved budget change takes effect at the next period, whether it is a raise or a cut. If a split is not agreed within 7 days, the group freezes. Balances, activity, and the next period's funding stay visible to the members.
+An approved budget change takes effect at the next period, whether it is a raise or a cut. If a split is not agreed within 7 days, the group freezes. Balances, activity, and the next period's funding stay visible to the members. Any joined member can leave one shared note on a sent charge, up to 280 characters. It is edited in Activity and shown on the split. A note never changes an amount or an approval.
 
 Payments are simulated. The rules that would approve a real tap are the ones running on the server.
 
@@ -30,11 +30,11 @@ Split Bill is a shared group fund with a virtual card per member. Three people a
 
 The backend is Supabase. Auth handles accounts. One Postgres row holds the app state, and writes use compare-and-set. A single Edge Function runs the same TypeScript rules the app uses offline (`domain.ts`), so every invite, split, refill, and settlement is checked on the server for the signed-in caller. Realtime pings refresh every member's screen without sending other groups' data.
 
-Receipt photos go to a Gemini vision model. The read becomes the claim board only when the items, tax, and tip equal the charge. Otherwise it is one line to fix by hand. Accepting an invite or a split requires the amount or version the person actually reviewed, so a stale screen cannot agree to a different number.
+Receipt photos go to a Gemini vision model. The read becomes the claim board only when the items, tax, and tip equal the charge. If they don't, Gemini's lines stay as a draft nobody can claim, and the board opens only after a person saves a read that matches. Accepting an invite or a split requires the amount or version the person actually reviewed, so a stale screen cannot agree to a different number.
 
 ### Challenges we ran into
 
-A receipt scan that is almost right is worse than a blank one. We only keep the model's items when they add up to the card charge. Anything else stays editable, and people still claim their own lines. The model drafts. It never moves money or agrees for anyone.
+A receipt scan that is almost right is worse than a blank one. If the items do not add up to the card charge, they stay a draft nobody can claim until a person saves a match. People still claim their own lines. The model drafts. It never moves money or agrees for anyone.
 
 Agreement has to match what each person saw. An invite accepted at an old amount, or a split accepted after the proposal changed, is rejected. The member refreshes and reviews again.
 

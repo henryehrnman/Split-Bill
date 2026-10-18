@@ -22,7 +22,7 @@ Money in the hackathon build is simulated. Deposits, cards, wallets, and debt re
 
 After a purchase, the payer can photograph the receipt. The photo goes to Gemini (`gemini-3.5-flash-lite` by default) once, after the server has checked that this person is allowed to scan that open charge. The model returns items, tax, and tip as JSON.
 
-Then a boring check runs. If the items, tax, and tip do not add up to the card charge, the receipt becomes one editable line. A client cannot submit its own read. People fix the line by hand, or they split by percent or amount instead.
+Then a boring check runs. If the items, tax, and tip do not add up to the card charge, Gemini's lines stay as a draft. Nobody can claim them. The payer opens Fix receipt already filled in, with the read total next to the charge. Everyone else sees that the items don't match, and can review them. A discount folds into the item above it. The save has to equal the charge, and only then does the claim board open. A client cannot submit its own read.
 
 When the numbers match, the items become a claim board. Each person claims what they had. Someone can suggest that another person shared an item, and only that person can accept the suggestion. Everyone locks their own selection. Tax and tip follow the items. The split settles to the cent, on both phones, without a manual refresh.
 

@@ -26,7 +26,10 @@ A partner bank for pooled funds and a card issuer for consumer cards (Stripe Iss
 Receipt photos go to Google Gemini (vision), which returns structured JSON: line items, tax and tip. That becomes a claim board where each person taps what they had. It took about 3 seconds in our live test and read every item exactly.
 
 **What if the AI is wrong?**
-We never trust it blindly. The server checks that items plus tax plus tip equal the actual card charge. If they don't, the receipt becomes one editable line and people fix it by hand before claiming. The AI drafts; it never agrees to a split or moves money for anyone.
+We never trust it blindly. The server checks that items plus tax plus tip equal the actual card charge. If they don't, Gemini's lines stay as a draft. Nobody can claim until a person saves a version that equals the charge. The payer fixes the pre-filled items; everyone else can review them. A discount folds into the item above it. The AI drafts; it never agrees to a split or moves money for anyone.
+
+**Can someone add a note?**
+Any joined member can leave one shared note on a sent charge, up to 280 characters. They edit it in Activity. The split shows it read-only. A note never changes an amount or an approval.
 
 **How does this help commerce?**
 For merchants, a group check becomes one card payment instead of splitting at the register. Checkout is faster, the group keeps spending on a card it already has in its wallet, and the post-purchase split no longer costs anyone a favour or a Venmo request.
