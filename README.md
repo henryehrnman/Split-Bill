@@ -79,9 +79,9 @@ The shared server is deployed. Supabase project `uiwbsedibgvwaklmwjna` is runnin
 
 Point a shared-server build at it with `mobile/.env.local` or the hosted build environment: `EXPO_PUBLIC_API_URL=https://uiwbsedibgvwaklmwjna.supabase.co/functions/v1/rpc`, `EXPO_PUBLIC_SUPABASE_URL=https://uiwbsedibgvwaklmwjna.supabase.co`, and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the Supabase dashboard (Settings → API Keys).
 
-The hosted web app is [https://splitbill-hackathon.vercel.app](https://splitbill-hackathon.vercel.app). It is the web build pointed at this server. Shared accounts work there, and Profile still has the local demo. Two signed-in clients have been checked against the server (invite, equal split, sample-receipt claim board, and a live update).
+The hosted web app is [https://splitbill-hackathon.vercel.app](https://splitbill-hackathon.vercel.app). It is the web build pointed at this server. Shared accounts work there, and Profile still has the local demo. Two signed-in clients have been checked against the server (invite, equal split, sample-receipt claim board, and a live update). On October 18, 2026 two signed-in browsers completed the hosted itemized claim board: a sample receipt, separate claims, a suggested edit the other person accepted, both people locking in, and a live settle with no manual refresh.
 
-Not yet verified: two physical phones against this deployed server, the itemized claim board in a browser, the Home Screen install on a physical iPhone, Android, user testing.
+Not yet verified: two physical phones against this deployed server, the Home Screen install on a physical iPhone, Android, user testing.
 
 ## Architecture
 
