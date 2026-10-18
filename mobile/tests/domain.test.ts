@@ -33,7 +33,7 @@ Object.assign(db, {groups: [], cards: [], charges: [], budgetProposals: [], ledg
 // Invite search by handle, email or phone.
 assert.deepEqual(d.searchUsers(db, '@maya', ['u_henry']).map(u => u.id), ['u_maya']);
 assert.deepEqual(d.searchUsers(db, '555-0177', []).map(u => u.id), ['u_jordan']);
-assert.equal(d.searchUsers(db, 'example.com', ['u_henry']).length, 4);
+assert.equal(d.searchUsers(db, 'example.com', ['u_henry']).length, 5);
 
 // Formation and early joining move no money; activation collects the final equal shares.
 throws(() => d.createGroup(db, 'u_henry', {name: 'Solo', inviteIds: [], budget: 30000, periodDays: 14}, T0), /Invite at least one/);

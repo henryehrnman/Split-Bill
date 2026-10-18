@@ -12,7 +12,7 @@ export type ReceiptPhoto = {data: string; mediaType: string};
 
 // Fake backend: same call shape a real HTTP client will have later, with every rule
 // enforced in domain.ts and data persisted on this device.
-const STORAGE_KEY = 'splitbill.fake-backend.v6';
+const STORAGE_KEY = 'splitbill.fake-backend.v7';
 const LATENCY_MS = 120;
 
 let db: Db | null = null;
