@@ -62,6 +62,20 @@ const profile = (n: string) => ({name: n + ' Tester', handle: n.toLowerCase() + 
   const annDb = (g.body as any).db;
   assert.equal(annDb.groups.length, 1);
   assert.deepEqual(annDb.users.map((u: any) => u.id).sort(), [annId, boId].sort());
+  const annProfile = (a.body as any).db.users.find((u: any) => u.id === annId);
+  const boProfile = (b.body as any).db.users.find((u: any) => u.id === boId);
+  // Creating an invitation cannot turn a masked search result into full contact details.
+  assert.deepEqual(annDb.users.find((u: any) => u.id === annId), annProfile);
+  assert.deepEqual(annDb.users.find((u: any) => u.id === boId), {...boProfile, email: '', phone: ''});
+  const invited = (await call(s, 'auth-bo', 'fetch')).body as any;
+  assert.deepEqual(invited.db.users.find((u: any) => u.id === boId), boProfile);
+  assert.deepEqual(invited.db.users.find((u: any) => u.id === annId), {...annProfile, email: '', phone: ''});
+  assert.equal((await call(s, 'auth-bo', 'respondInvite', [annDb.groups[0].id, true, 10000])).status, 200);
+  const joined = (await call(s, 'auth-ann', 'fetch')).body as any;
+  assert.deepEqual(joined.db.users.find((u: any) => u.id === boId), {...boProfile, email: '', phone: ''});
+  // Redaction affects responses only, leaving exact contact search and each user's profile intact.
+  assert.deepEqual(s.state!.db.users.find(u => u.id === annId), annProfile);
+  assert.deepEqual(s.state!.db.users.find(u => u.id === boId), boProfile);
   const cz = await call(s, 'auth-cy', 'createUser', [profile('Cy')]);
   const cyDb = (cz.body as any).db;
   assert.equal(cyDb.groups.length, 0);
