@@ -12,12 +12,11 @@ Open **http://localhost:4174**. The original demo remains at **http://localhost:
 
 ## Controls
 
-- **Space** or **Play story** starts/pause-resumes the 68-second narration timeline from your current position. The clock follows elapsed time rather than frame counts; the closing scene starts at 1:05 and holds through 1:08. At the end, Play starts again from zero.
+- **Space** starts/pause-resumes the 68-second narration timeline from your current position. The clock follows elapsed time rather than frame counts; the closing scene starts at 1:05 and holds through 1:08. At the end, Space starts again from zero. Playback labels, timestamps, replay, chapter count, and demo/explore controls are intentionally absent from the presentation.
 - Playback controls the visuals only; no narration audio file is included. Start your narration alongside the story. `00:08 36` and `00:1533` are interpreted as **8.36 seconds** and **15.33 seconds**.
 - Scroll in either direction to play or rewind the story. Phone state is rebuilt from a canonical snapshot, so rewinding cannot duplicate purchases or contributions.
-- Scrolling, chapter navigation, Explore mode, or hiding the browser tab pauses playback. Resuming continues from that position; resizing preserves narration time. Space keeps its normal behavior in form fields and on other buttons/links.
-- Chapter dots and the left/right arrow keys jump between scenes. Replay returns to the beginning, paused.
-- **Explore the app** pauses the timeline and enables the phone's ordinary controls. **Back to story** or Escape restores the scripted scene.
+- Scrolling, chapter navigation, or hiding the browser tab pauses playback. Resuming continues from that position; resizing preserves narration time. Space keeps its normal behavior in form fields and on other buttons/links.
+- Chapter dots and the left/right arrow keys jump between scenes. The chipin wordmark returns to the beginning.
 - The layout adapts to mobile screens. Reduced-motion mode removes large camera moves, rotations, and scan animation while retaining every scene.
 
 ## Narration and scenes
@@ -36,8 +35,8 @@ The supplied narration is preserved in the accessible chapter transcript in `sto
 | Be like Henry | Henry pays $154.20 at Din Tai Fung; buying power becomes $281.80. |
 | Snap the receipt | Receipt image, a staged Gemini scan, then six editable items. |
 | Claim your items | Personal selection, confirmation, and a per-person breakdown. |
-| Everyone is in sync | Both charges, group money, personal balances, and next period. |
-| Just chipin | Closing wordmark and phone. |
+| Everyone is in sync | The app's existing group statistics menu, with spending by member and charge history. |
+| Just chipin | Closing wordmark and Home showing $24 in settled personal spending. |
 
 ### Narration cues
 
@@ -67,11 +66,13 @@ The supplied narration is preserved in the accessible chapter transcript in `sto
 
 The piecewise time map preserves manual scrolling and aligns phone actions to narration independently of chapter height. `window.chipinStoryTimeline` exposes `play()`, `pause()`, `seekTime(seconds)`, `cues`, and `getState()` for rehearsing and checking cue positions.
 
-The receipt contains $120 of food, $10.20 tax, and $24 tip. Exclusive item claims allocate $46.26 / $43.69 / $28.27 / $35.98 to Connor / Henry / Maya / Jordan. Purchases reduce buying power once; split edits and approvals do not debit the card again. The inherited demo keeps personal balances separate until settlement.
+The receipt contains $120 of food, $10.20 tax, and $24 tip. Exclusive item claims allocate $46.26 / $43.69 / $28.27 / $35.98 to Connor / Henry / Saahil / Nathan. Purchases reduce buying power once; split edits and approvals do not debit the card again. The final two scenes use a settled store-purchase snapshot: Connor's $24 share appears in monthly spending, while dinner remains pending and buying power stays $281.80. Earlier scenes restore the unsettled snapshot when rewound.
 
 This is a scripted product presentation: the receipt and its extraction are fixtures, and no Gemini, wallet, payment, or backend request runs. Google Fonts is the only optional external asset request. All phone and receipt assets are local or generated inline.
 
 Photo, icon, merchant-mark, and bird-logo sources are recorded in the [original preview's asset notes](../design-preview/README.md). The original Feather license is retained in the copied app source.
+
+The transparent Gemini sparkle in scene nine is downloaded unchanged from [Google's official asset](https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png), referenced by [Gemini](https://gemini.google.com/), and served locally as `assets/gemini-logo.png`.
 
 ## Editing
 

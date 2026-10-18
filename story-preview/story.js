@@ -10,7 +10,7 @@
     {id:'pay',label:'Just pay',title:'Whoever’s there<br><span class="accent">just pays.</span>',body:'No fronting the bill. No “I’ll Venmo you later.”',script:'No fronting the bill, no “I’ll Venmo you later.” Whoever’s at the store just pays.',word:'paid',length:175,side:'left',camera:{side:'right',y:.035,scale:1.03,rotate:0},phases:[{at:0,body:'No fronting the bill. No “I’ll Venmo you later.”'},{at:.5,body:'$64 paid from the shared fund. $436 left to spend.'}]},
     {id:'split',label:'Split your way',title:'Pay together.<br><span class="accent">Split your way.</span>',body:'The buyer proposes the split. Equal shares by default, custom amounts when life isn’t equal.',script:'When you make a purchase, funds withdraw from the group amount and the split is proposed by the buyer. By default, it’s an even split with everyone, but you can customize the amounts that each individual owes to adapt each transaction to your group.',word:'your way',length:210,side:'left',camera:{side:'right',y:.07,scale:1.13,rotate:-2},phases:[{at:0,body:'The purchase is already paid. Start with an even $16 share for everyone.'},{at:.5,body:'Or propose $24, $16, $12, and $12. The same purchase, split to fit your group.'}]},
     {id:'henry',label:'Meet Henry',title:'Or, be<br><span class="accent">like Henry.</span>',body:'Dinner at Din Tai Fung. Henry pays with the group card.',script:'Alternatively, if you’re too lazy to decide on a split yourselves, you can be like Henry. Henry paid with the group card at Din Tai Fung.',word:'Henry',length:170,side:'left',camera:{side:'right',y:.04,scale:.98,rotate:5},phases:[{at:0,body:'Dinner at Din Tai Fung. Henry pays with the group card.'},{at:.5,body:'Dinner is paid. Now for the part nobody wants to calculate.'}]},
-    {id:'receipt',label:'Snap the receipt',title:'Snap it.<br><span class="accent">Let Gemini read it.</span>',body:'A photo of the receipt becomes an itemized list.',script:'Then, instead of worrying about how much everyone owes, he snapped a photo of the receipt. Gemini reads the receipt and lists out line items.',word:'snap',length:240,side:'right',camera:{side:'left',y:.06,scale:1.07,rotate:-4},phases:[{at:0,body:'One photo. Every dish, ready to review.'},{at:1/3,body:'Gemini reads the receipt and identifies each line item.'},{at:2/3,body:'Review the items, tax, and tip. Everything adds up to $154.20.'}]},
+    {id:'receipt',label:'Snap the receipt',title:'Snap it.<br><span class="accent">Let <span class="gemini-word">Gemini<img class="gemini-logo" src="assets/gemini-logo.png" alt="" width="512" height="512"></span> read it.</span>',body:'A photo of the receipt becomes an itemized list.',script:'Then, instead of worrying about how much everyone owes, he snapped a photo of the receipt. Gemini reads the receipt and lists out line items.',word:'snap',length:240,side:'right',camera:{side:'left',y:.06,scale:1.07,rotate:-4},phases:[{at:0,body:'One photo. Every dish, ready to review.'},{at:1/3,body:'Gemini reads the receipt and identifies each line item.'},{at:2/3,body:'Review the items, tax, and tip. Everything adds up to $154.20.'}]},
     {id:'claims',label:'Claim your items',title:'Claim yours.<br><span class="accent">Keep moving.</span>',body:'Everyone opens their own app and selects what they had.',script:'Then, we all go into our apps, claim what’s ours, and move on.',word:'yours',length:240,side:'right',camera:{side:'left',y:.045,scale:1.08,rotate:2},phases:[{at:0,body:'Everyone opens their own app and selects what they had.'},{at:1/3,body:'Xiaolongbao and cucumber salad? Tap. Tap. Confirm your selection.'},{at:2/3,body:'A clear breakdown for each person, with tax and tip included.'}]},
     {id:'clarity',label:'See the whole picture',title:'No guessing.<br><span class="accent">Everyone’s in sync.</span>',body:'Every charge. Every balance. What’s coming up next month.',script:'Everyone sees every charge, every balance, and what’s coming up next period.',word:'in sync',length:180,side:'left',camera:{side:'right',y:0,scale:1,rotate:-3}},
     {id:'outro',label:'Just chipin',title:'Just <span class="accent">chipin.</span>',body:'See? It’s easy when you chip in.',script:'See? It’s easy when you just Chipin.',word:'chipin',length:135,side:'center',camera:{side:'center',y:.14,scale:.82,rotate:0}}
@@ -54,13 +54,13 @@
     .map(stop=>({...stop,position:scenes.findIndex(scene=>scene.id===stop.scene)+stop.progress}))
     .sort((a,b)=>a.time-b.time);
   scenes[1].phases=[{at:0,body:scenes[1].body},{at:.6,body:'One shared fund, with a card for every member.'}];
-  scenes[3].phases=[{at:0,body:'Invite Henry, Maya, and Jordan to the apartment fund.'},{at:1/3,body:'Everyone reviews the $500 monthly budget and their $125 contribution before agreeing.'},{at:2/3,body:'$125 each. Four approved contributions. $500 ready to spend.'}];
+  scenes[3].phases=[{at:0,body:'Invite Henry, Saahil, and Nathan to the apartment fund.'},{at:1/3,body:'Everyone reviews the $500 monthly budget and their $125 contribution before agreeing.'},{at:2/3,body:'$125 each. Four approved contributions. $500 ready to spend.'}];
   scenes[6].phases=[{at:0,body:'The purchase is already paid. The buyer proposes how to split it.'},{at:.24,body:'An even split by default: $16 for each of the four members.'},{at:.5,body:scenes[6].phases[1].body}];
   scenes[7].phases[0].body='There’s an easier way to work out dinner. Meet Henry.';
   const $ = id => document.getElementById(id);
   const stage=$('story-stage'),rig=$('phone-rig'),phone=$('story-phone'),track=$('story-track');
   const copy=$('scene-copy'),title=$('scene-title'),body=$('scene-body'),kicker=$('scene-kicker');
-  const nav=$('chapter-nav'),bar=$('story-progress'),count=$('scene-count');
+  const nav=$('chapter-nav'),bar=$('story-progress');
   const receipt=$('receipt-prop'),fan=$('card-fan'),word=$('stage-word'),glow=$('ambient-glow');
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
   const clamp=(v,min=0,max=1)=>Math.min(max,Math.max(min,v));
@@ -87,15 +87,8 @@
   function timeAtPosition(position){return interpolate(clamp(position,0,scenes.length),'position','time');}
   function splitPosition(position){const index=Math.min(scenes.length-1,Math.floor(position));return {index,progress:position-index};}
   function scrollToPosition(position){const {index,progress}=splitPosition(position),b=bounds[index];expectedScroll=b.start+(b.end-b.start)*progress;if(Math.abs(scrollY-expectedScroll)>.5)scrollTo({top:expectedScroll,behavior:'instant'});}
-  function formatTime(time){return `${Math.floor(time/60)}:${String(Math.floor(time%60)).padStart(2,'0')}`;}
   function paintPlayback(){
-    const toggle=$('playback-toggle'),label=$('playback-label'),icon=$('playback-icon'),timer=$('playback-time');
     document.body.dataset.playing=String(playing);
-    if(toggle){toggle.setAttribute('aria-pressed',String(playing));toggle.setAttribute('aria-label',playing?'Pause story':'Play story');}
-    const labelText=playing?'Pause story':'Play story',iconText=playing?'Ⅱ':'▶',timeText=`${formatTime(playbackTime)} / ${formatTime(duration)}`;
-    if(label&&label.textContent!==labelText)label.textContent=labelText;
-    if(icon&&icon.textContent!==iconText)icon.textContent=iconText;
-    if(timer&&timer.textContent!==timeText)timer.textContent=timeText;
   }
   function pause(){if(playing)playbackTime=clamp((performance.now()-clockStart)/1000,0,duration);playing=false;paintPlayback();schedule();}
   function play(){
@@ -142,7 +135,7 @@
     paintPlayback();const {index,progress:p}=active,scene=scenes[index];
     if(exploring){paintCamera(scene,p,index);return;}
     let phase=0;if(scene.phases)scene.phases.forEach((v,i)=>{if(p>=v.at-1e-7)phase=i;});
-    if(lastScene!==index){document.body.dataset.scene=scene.id;document.body.dataset.tone=['cards','outro'].includes(scene.id)?'blue':'navy';document.body.dataset.copySide=reduced.matches?'left':scene.side;title.innerHTML=scene.title;kicker.textContent=scene.label;word.textContent=scene.word;count.textContent=`${String(index+1).padStart(2,'0')} / ${String(scenes.length).padStart(2,'0')}`;dots.forEach((dot,i)=>{dot.classList.toggle('active',i===index);if(i===index)dot.setAttribute('aria-current','step');else dot.removeAttribute('aria-current');});lastPhase=-1;lastScene=index;}
+    if(lastScene!==index){document.body.dataset.scene=scene.id;document.body.dataset.tone=['cards','outro'].includes(scene.id)?'blue':'navy';document.body.dataset.copySide=reduced.matches?'left':scene.side;title.innerHTML=scene.title;kicker.textContent=scene.label;word.textContent=scene.word;dots.forEach((dot,i)=>{dot.classList.toggle('active',i===index);if(i===index)dot.setAttribute('aria-current','step');else dot.removeAttribute('aria-current');});lastPhase=-1;lastScene=index;}
     if(lastPhase!==phase){body.textContent=scene.phases?.[phase].body||scene.body;lastPhase=phase;}
     // Copy changes in the quiet interval while the phone crosses the stage.
     const fadeIn=index===0?1:smooth((p-.06)/.15),fadeOut=index===scenes.length-1?1:1-smooth((p-.88)/.12);
@@ -158,17 +151,13 @@
   function seek(index,p=.32){index=clamp(index,0,scenes.length-1);if(exploring)setExplore(false);manualOverride();scrollTo({top:bounds[index].start+(bounds[index].end-bounds[index].start)*clamp(p),behavior:reduced.matches?'instant':'smooth'});}
   function setExplore(enabled){
     if(enabled===exploring)return;if(enabled)pause();exploring=enabled;document.body.dataset.mode=enabled?'explore':'story';
-    $('explore-toggle').textContent=enabled?'Back to story':'Explore the app';$('explore-toggle').setAttribute('aria-pressed',String(enabled));
     phone.tabIndex=enabled?0:-1;
     if(enabled){savedPosition=locate(scrollY);document.body.style.overflow='hidden';}
-    else{document.body.style.overflow='';const b=bounds[savedPosition.index];scrollTo({top:b.start+(b.end-b.start)*savedPosition.progress,behavior:'instant'});forcePhone=true;lastScene=-1;$('explore-toggle').focus({preventScroll:true});}
+    else{document.body.style.overflow='';const b=bounds[savedPosition.index];scrollTo({top:b.start+(b.end-b.start)*savedPosition.progress,behavior:'instant'});forcePhone=true;lastScene=-1;dots[savedPosition.index].focus({preventScroll:true});}
     if(ready)phone.contentWindow.postMessage({type:'chipin-story-explore',enabled},location.origin);
     schedule();
   }
   nav.addEventListener('click',e=>{const button=e.target.closest('[data-chapter]');if(button)seek(Number(button.dataset.chapter));});
-  $('replay').addEventListener('click',()=>seekTime(0));
-  $('playback-toggle')?.addEventListener('click',togglePlayback);
-  $('explore-toggle').addEventListener('click',()=>setExplore(!exploring));
   addEventListener('scroll',onScroll,{passive:true});addEventListener('resize',measure,{passive:true});
   addEventListener('wheel',manualOverride,{passive:true});addEventListener('touchstart',manualOverride,{passive:true});
   addEventListener('keydown',e=>{
@@ -186,6 +175,6 @@
   addEventListener('message',e=>{if(e.source!==phone.contentWindow||e.origin!==location.origin)return;if(e.data?.type==='chipin-story-ready')phoneReady();if(e.data?.type==='chipin-story-exit-explore')setExplore(false);});
   phone.addEventListener('load',phoneReady);
   reduced.addEventListener('change',()=>{lastScene=-1;measure();});
-  document.body.dataset.mode='story';$('explore-toggle').setAttribute('aria-pressed','false');measure();
+  document.body.dataset.mode='story';measure();
   window.chipinStoryTimeline={scenes,cues,duration,seek,seekTime,setExplore,play,pause,togglePlayback,positionAtTime,timeAtPosition,getState:()=>({...active,exploring,playing,time:playbackTime,duration})};
 })();

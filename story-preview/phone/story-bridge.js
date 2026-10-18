@@ -16,8 +16,8 @@
   const ROSTER = [
     { id: 'member-0', name: 'Connor', initials: 'CZ', tone: '' },
     { id: 'member-1', name: 'Henry', initials: 'H', tone: 'sam' },
-    { id: 'member-2', name: 'Maya', initials: 'ML', tone: 'maya' },
-    { id: 'member-3', name: 'Jordan', initials: 'JK', tone: 'jordan' }
+    { id: 'member-2', name: 'Saahil', initials: 'S', tone: 'maya' },
+    { id: 'member-3', name: 'Nathan', initials: 'N', tone: 'jordan' }
   ];
   const ITEMS = [
     ['xiaolongbao', 'Pork xiaolongbao', 24], ['wontons', 'Spicy wontons', 26],
@@ -33,10 +33,12 @@
     groups: [
       { id: 'apartment', name: 'Apartment', icon: 'home', tone: '', members: 4,
         balance: 0, power: 0, total: 0, budget: 500, period: 'Every month',
-        forming: true, defaultSplit: 'equal', people: clone(ROSTER) },
+        forming: true, defaultSplit: 'equal', people: clone(ROSTER),
+        memberBalances: Object.fromEntries(ROSTER.map(person => [person.id, 0])) },
       { id: 'ski', name: 'Ski trip', icon: 'truck', tone: 'purple', members: 4,
         balance: 0, power: 0, total: 0, budget: 600, period: 'Every month',
-        forming: true, photo: 'assets/roadtrip.jpg', people: clone(ROSTER) }
+        forming: true, photo: 'assets/roadtrip.jpg', people: clone(ROSTER),
+        memberBalances: Object.fromEntries(ROSTER.map(person => [person.id, 0])) }
     ],
     people: ROSTER, pending: [], charges: [],
     invites: [{ id: 'apartment', name: 'Apartment', from: 'Connor', icon: 'home',
@@ -72,7 +74,8 @@
     state.stack = ['home', 'groups', 'spending'].includes(type) ? [] : [{ type, id }];
   }
   function fundGroup() {
-    Object.assign(gById('apartment'), { forming: false, balance: 125, power: 500 });
+    Object.assign(gById('apartment'), { forming: false, balance: 125, power: 500,
+      memberBalances: Object.fromEntries(ROSTER.map(person => [person.id, 125])) });
     state.invites.apartment = 'accepted';
   }
   function buy(merchant, amount, id, payer) {
@@ -91,6 +94,30 @@
     const result = submitSplitProposal(charge.id);
     if (result.error) throw new Error(result.error);
     delete state.splitDrafts[charge.id];
+  }
+  // The final storyboard snapshot includes an agreed, settled store purchase.
+  // The copied preview has no settlement action: project that fixture into its
+  // existing settled ledger, without charging the already-paid card again.
+  function recordStoreSettlement(charge) {
+    const allocation = currentAllocation(charge), members = chargePeople(charge);
+    const cents = allocation.map(moneyCents), total = moneyCents(charge.total);
+    if (cents.some(value => value === null) || cents.reduce((sum, value) => sum + value, 0) !== total) {
+      throw new Error('The scripted settlement must reconcile to the purchase.');
+    }
+    const group = gById(charge.group);
+    const balances = Object.fromEntries(members.map((person, index) => [person.id,
+      (moneyCents(group.memberBalances[person.id]) - cents[index]) / 100]));
+    if (Object.values(balances).some(value => value < 0)) throw new Error('The scripted settlement exceeds a member balance.');
+    charges.unshift({ id: charge.id, name: charge.name, merchant: charge.merchant,
+      group: charge.group, icon: charge.icon, date: 'Oct 17', amount: allocation[0],
+      groupAmount: charge.total, memberShares: Object.fromEntries(members.map((person, index) => [person.id, allocation[index]])) });
+    pending.splice(pending.findIndex(item => item.id === charge.id), 1);
+    group.memberBalances = balances;
+    group.balance = balances['member-0'];
+    group.total = spendingTotal(9, group.id);
+    for (const key of ['approved', 'proposals', 'publishedMethods', 'proposalDetails', 'splitDrafts', 'selectionDrafts', 'itemConfirmations']) {
+      delete state[key][charge.id];
+    }
   }
   function receiptDraft(charge, scanned) {
     state.splitDrafts[charge.id] = {
@@ -133,7 +160,8 @@
     if (scene === 'groups') route('groups');
     if (scene === 'budget') route(phase ? 'budget' : 'create', 'apartment');
     if (scene === 'invite') { state.displayName = phase === 2 ? 'Connor' : 'Henry'; route(phase === 2 ? 'members' : 'invitations', 'apartment'); }
-    if (scene === 'cards' || scene === 'clarity') route('group', 'apartment');
+    if (scene === 'cards') route('group', 'apartment');
+    if (scene === 'clarity') route('statistics', 'apartment');
     if (scene === 'pay' || scene === 'henry') {
       state.displayName = scene === 'henry' ? 'Henry' : 'Connor';
       state.paymentResult = phase ? (scene === 'henry' ? dinner.id : store.id) : null;
@@ -155,6 +183,7 @@
         } else route('split', dinner.id);
       }
     }
+    if (scene === 'clarity' || scene === 'outro') recordStoreSettlement(store);
     state.notice = pending.length > 0;
     render(false, { resetScroll: true });
     decorate(scene, phase);
@@ -184,7 +213,7 @@
       const form = document.querySelector('[data-form="create"]');
       form.querySelector('[name="name"]').value = 'Apartment';
       form.querySelector('[name="budget"]').value = '500';
-      form.querySelector('[name="members"]').value = 'Henry, Maya, Jordan';
+      form.querySelector('[name="members"]').value = 'Henry, Saahil, Nathan';
       form.querySelector('[name="period"]').value = 'Every month';
     }
     if (scene === 'budget' && phase === 1) {
@@ -230,10 +259,6 @@
     if (scene === 'claims' && phase === 2) {
       const banner = document.querySelector('.status-banner');
       if (banner) banner.innerHTML = `${icon('check-circle')}<span>Everyone confirmed their items.</span>`;
-    }
-    if (scene === 'clarity') {
-      const group = gById('apartment');
-      screen().innerHTML = `${backbar('Group overview')}<div class="story-clarity-heading">${stamp(group)}<h1>Apartment</h1></div><section class="story-fund-total"><span>Group buying power</span><strong>${money(group.power)}</strong><small>After $218.20 in purchases</small></section><div class="section-heading"><h2>Your charges</h2><span class="pill pending">2 pending</span></div>${groupHistoryRows(group.id)}<section class="card-section story-balances"><h2>Member balances</h2>${ROSTER.map(person => `<div class="row"><span>${esc(person.name)}</span><strong>$125.00</strong></div>`).join('')}<p class="form-footnote">Balances update when pending splits settle.</p></section><section class="story-next-period">${icon('calendar')}<div><strong>Next period · November 1</strong><small>$500 budget · $125 per person</small></div><span class="pill success">Agreed</span></section>`;
     }
   }
 
@@ -301,6 +326,8 @@
   window.chipinStory = Object.freeze({
     setScene, setExplore, reset: () => { exploring = false; setScene('intro', 0, true); },
     getState: () => ({ ...active, exploring, buyingPower: gById('apartment').power,
+      personalSpending: spendingTotal(9), memberBalances: clone(gById('apartment').memberBalances),
+      settled: clone(charges),
       pending: pending.map(charge => ({ id: charge.id, total: charge.total, allocation: [...currentAllocation(charge)] })) })
   });
   setScene('intro', 0, true);
